@@ -63,6 +63,9 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// </summary>
     public void Start()
     {
+        // Dispose the previous CTS (created at field-init or by a prior Start call)
+        // before replacing it so the object is not leaked.
+        _cts.Dispose();
         _cts        = new CancellationTokenSource();
         _renderTask = RenderLoopAsync(_cts.Token);
         _renderer.Start();
