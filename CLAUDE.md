@@ -34,10 +34,17 @@ dotnet restore
 client/
 ├── CLAUDE.md
 ├── LICENSE
-└── .gitignore
+├── .gitignore
+├── Whirtle.Client.sln
+├── src/
+│   └── Whirtle.Client/          # Main application
+│       ├── Whirtle.Client.csproj
+│       └── Program.cs
+└── tests/
+    └── Whirtle.Client.Tests/    # Unit tests (xUnit)
+        ├── Whirtle.Client.Tests.csproj
+        └── ProgramTests.cs
 ```
-
-Source code, solution files (`.sln`), and project files (`.csproj`) will be added here as the project grows.
 
 ## Development Notes
 
