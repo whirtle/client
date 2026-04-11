@@ -13,9 +13,14 @@ namespace Whirtle.Client.Transport;
 /// </summary>
 internal sealed class AcceptedWebSocket : IClientWebSocket
 {
-    private readonly WebSocket _ws;
+    private readonly WebSocket   _ws;
+    private readonly IDisposable? _owner; // e.g. TcpClient that owns the stream
 
-    public AcceptedWebSocket(WebSocket ws) => _ws = ws;
+    public AcceptedWebSocket(WebSocket ws, IDisposable? owner = null)
+    {
+        _ws    = ws;
+        _owner = owner;
+    }
 
     public WebSocketState State => _ws.State;
 
@@ -40,5 +45,9 @@ internal sealed class AcceptedWebSocket : IClientWebSocket
         CancellationToken    cancellationToken)
         => _ws.CloseOutputAsync(closeStatus, statusDescription, cancellationToken);
 
-    public void Dispose() => _ws.Dispose();
+    public void Dispose()
+    {
+        _ws.Dispose();
+        _owner?.Dispose(); // closes the underlying TcpClient / NetworkStream
+    }
 }

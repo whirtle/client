@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Whirtle.Client.UI.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Whirtle.Client.UI.Pages"
+    Background="Transparent">
+
+    <Page.Resources>
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background"      Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush"     Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius"    Value="8" />
+            <Setter Property="Padding"         Value="20,16" />
+        </Style>
+
+        <Style x:Key="SettingLabelStyle" TargetType="TextBlock"
+               BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel
+            Padding="24"
+            Spacing="16"
+            MaxWidth="660"
+            HorizontalAlignment="Left">
+
+            <TextBlock
+                Text="Settings"
+                Style="{ThemeResource TitleLargeTextBlockStyle}"
+                Margin="0,0,0,8" />
+
+            <!-- ═══ IDENTITY ══════════════════════════════════════════════════ -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Identity" Style="{ThemeResource SubtitleTextBlockStyle}" />
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Client name" Style="{StaticResource SettingLabelStyle}" />
+                        <TextBox
+                            PlaceholderText="e.g. Living Room"
+                            Text="{x:Bind ViewModel.ClientName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Client ID" Style="{StaticResource SettingLabelStyle}" />
+                        <TextBox
+                            IsReadOnly="True"
+                            Text="{x:Bind ViewModel.ClientId, Mode=OneWay}"
+                            FontFamily="Cascadia Mono, Consolas, Courier New"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock
+                            Text="Automatically generated. Used to identify this player to the server."
+                            Style="{ThemeResource CaptionTextBlockStyle}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ AUDIO ═════════════════════════════════════════════════════ -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Audio" Style="{ThemeResource SubtitleTextBlockStyle}" />
+
+                    <!-- Output device preference -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Preferred output device" Style="{StaticResource SettingLabelStyle}" />
+                        <ComboBox
+                            ItemsSource="{x:Bind ViewModel.AudioDevices}"
+                            SelectedItem="{x:Bind ViewModel.SelectedAudioDevice, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch"
+                            MinWidth="280">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE7F3;" FontSize="14" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <!-- Format preference -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Preferred stream format" Style="{StaticResource SettingLabelStyle}" />
+                        <RadioButtons
+                            SelectedIndex="{x:Bind ViewModel.AudioFormatIndex, Mode=TwoWay}">
+                            <RadioButton Content="Opus  (recommended — low-latency compressed)" />
+                            <RadioButton Content="FLAC  (lossless compressed)" />
+                            <RadioButton Content="PCM   (uncompressed raw audio)" />
+                        </RadioButtons>
+                    </StackPanel>
+
+                    <!-- Static delay -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Static delay (ms)" Style="{StaticResource SettingLabelStyle}" />
+                        <NumberBox
+                            Minimum="-2000"
+                            Maximum="5000"
+                            SmallChange="10"
+                            LargeChange="100"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind ViewModel.StaticDelayMs, Mode=TwoWay}" />
+                        <TextBlock
+                            Text="Positive values delay this client relative to the group (room correction)."
+                            Style="{ThemeResource CaptionTextBlockStyle}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ CONNECTION ════════════════════════════════════════════════ -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Connection" Style="{ThemeResource SubtitleTextBlockStyle}" />
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Connection mode" Style="{StaticResource SettingLabelStyle}" />
+                        <RadioButtons
+                            SelectedIndex="{x:Bind ViewModel.ConnectionModeIndex, Mode=TwoWay}">
+                            <RadioButton Content="Server-initiated  (advertise via mDNS; server connects)" />
+                            <RadioButton Content="Client-initiated  (discover or manually enter server URL)" />
+                        </RadioButtons>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ DIAGNOSTICS ═══════════════════════════════════════════════ -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Diagnostics" Style="{ThemeResource SubtitleTextBlockStyle}" />
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Log level" Style="{StaticResource SettingLabelStyle}" />
+                        <ComboBox
+                            ItemsSource="{x:Bind ViewModel.LogLevelOptions}"
+                            SelectedItem="{x:Bind ViewModel.LogLevel, Mode=TwoWay}"
+                            MinWidth="200" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>
