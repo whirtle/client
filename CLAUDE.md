@@ -35,7 +35,7 @@ client/
 ├── CLAUDE.md
 ├── LICENSE
 ├── .gitignore
-├── Whirtle.Client.sln
+├── Whirtle.Client.slnx
 ├── src/
 │   └── Whirtle.Client/          # Main application
 │       ├── Whirtle.Client.csproj

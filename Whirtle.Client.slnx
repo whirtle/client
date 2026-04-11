@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Whirtle.Client/Whirtle.Client.csproj" />
+  <Project Path="tests/Whirtle.Client.Tests/Whirtle.Client.Tests.csproj" />
+</Solution>
