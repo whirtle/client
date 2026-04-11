@@ -239,22 +239,33 @@ internal static class DnsMessage
 
     private static string ReadName(byte[] data, ref int pos)
     {
-        var  parts  = new List<string>();
-        bool jumped = false;
-        int  saved  = 0;
+        var  parts   = new List<string>();
+        bool jumped  = false;
+        int  saved   = 0;
+        var  visited = new HashSet<int>();
 
         while (true)
         {
+            if (pos >= data.Length)
+                throw new InvalidOperationException("DNS name read past end of buffer.");
+
             byte len = data[pos++];
             if (len == 0) break;
 
             if ((len & 0xC0) == 0xC0)
             {
+                if (pos >= data.Length)
+                    throw new InvalidOperationException("DNS compression pointer truncated.");
                 int ptr = ((len & 0x3F) << 8) | data[pos++];
+                if (!visited.Add(ptr))
+                    throw new InvalidOperationException("Circular DNS compression pointer.");
                 if (!jumped) { saved = pos; jumped = true; }
                 pos = ptr;
                 continue;
             }
+
+            if (pos + len > data.Length)
+                throw new InvalidOperationException("DNS label extends past end of buffer.");
 
             parts.Add(Encoding.ASCII.GetString(data, pos, len));
             pos += len;

@@ -124,6 +124,50 @@ public class DnsMessageTests
         Assert.Null(DnsMessage.TryParse([0xFF, 0xFE]));
     }
 
+    [Fact]
+    public void TryParse_CircularPointer_ReturnsNull()
+    {
+        // Build a minimal DNS response header followed by a PTR answer whose
+        // RDATA contains a compression pointer that points back to itself.
+        var data = new byte[]
+        {
+            0x00, 0x00, // ID
+            0x84, 0x00, // Flags: QR=1, AA=1
+            0x00, 0x00, // QDCOUNT
+            0x00, 0x01, // ANCOUNT = 1
+            0x00, 0x00, // NSCOUNT
+            0x00, 0x00, // ARCOUNT
+            // Answer name: single label "x" + null terminator
+            0x01, 0x78, 0x00,
+            0x00, 0x0C,         // TYPE = PTR
+            0x00, 0x01,         // CLASS = IN
+            0x00, 0x00, 0x11, 0x94, // TTL
+            0x00, 0x02,         // RDLENGTH = 2
+            // RDATA: compression pointer that points back to itself (offset 22)
+            0xC0, 0x16,
+        };
+
+        Assert.Null(DnsMessage.TryParse(data));
+    }
+
+    [Fact]
+    public void TryParse_TruncatedPointer_ReturnsNull()
+    {
+        // Compression pointer byte with no following byte
+        var data = new byte[]
+        {
+            0x00, 0x00, 0x84, 0x00,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+            0x01, 0x78, 0x00,
+            0x00, 0x0C, 0x00, 0x01,
+            0x00, 0x00, 0x11, 0x94,
+            0x00, 0x01,
+            0xC0, // pointer first byte with no second byte
+        };
+
+        Assert.Null(DnsMessage.TryParse(data));
+    }
+
     // ── Helper ────────────────────────────────────────────────────────────────
 
     private static byte[] BuildSample() =>
