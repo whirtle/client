@@ -83,12 +83,50 @@ public sealed class ProtocolClient : IAsyncDisposable
             await d.DisposeAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Yields all incoming frames — both JSON protocol messages and binary artwork data —
+    /// until the connection closes or a <see cref="GoodbyeMessage"/> is received.
+    /// Use this instead of <see cref="ReceiveAsync"/> once the session is fully established.
+    /// Do not call both concurrently; they share the same underlying transport stream.
+    /// </summary>
+    public async IAsyncEnumerable<IncomingFrame> ReceiveAllAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await foreach (var data in _transport.ReceiveAsync(cancellationToken))
+        {
+            if (data.Length == 0) continue;
+
+            if (data[0] == (byte)'{')
+            {
+                var msg = _serializer.Deserialize(data);
+                if (msg is GoodbyeMessage) yield break;
+                yield return new ProtocolFrame(msg);
+            }
+            else
+            {
+                yield return new ArtworkFrame(data, DetectMimeType(data));
+            }
+        }
+    }
+
     // Deserializes the raw byte stream without Goodbye filtering,
     // so HandshakeAsync can inspect all message types including errors.
+    // Binary (non-JSON) frames are skipped — they are artwork and should
+    // be consumed via ReceiveAllAsync instead.
     private async IAsyncEnumerable<Message> ReceiveRawAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await foreach (var data in _transport.ReceiveAsync(cancellationToken))
+        {
+            if (data.Length == 0 || data[0] != (byte)'{') continue;
             yield return _serializer.Deserialize(data);
+        }
     }
+
+    private static string DetectMimeType(byte[] data) =>
+        data.Length >= 2 && data[0] == 0xFF && data[1] == 0xD8
+            ? "image/jpeg"
+            : data.Length >= 4 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47
+                ? "image/png"
+                : "application/octet-stream";
 }
