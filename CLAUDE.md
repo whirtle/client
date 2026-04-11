@@ -2,7 +2,9 @@
 
 ## Project Overview
 
-Whirtle Client is the client-side component of the Whirtle system. It is a .NET/C# project licensed under GPLv3.
+Whirtle is a Sendspin client for Windows.
+
+The Sendspin protocol is documented at https://www.sendspin-audio.com/spec/.
 
 ## Tech Stack
 
@@ -88,7 +90,14 @@ client/
 - Follow standard C# naming conventions: `PascalCase` for types and members, `camelCase` for local variables and parameters.
 - Keep `bin/`, `obj/`, and other build artifacts out of version control (covered by `.gitignore`).
 
+## C# style notes
+Use _ as leading character on instance variables.
+
 ## Git Workflow
 
 - Development happens on feature branches; merge to `main` via pull request.
 - Write clear, descriptive commit messages.
+
+## Before pushing
+
+Run all unit tests.

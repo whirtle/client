@@ -52,3 +52,5 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+/.vs/Whirtle.Client/CopilotIndices/18.4.114.215
+/.vs/Whirtle.Client.slnx
