@@ -167,7 +167,8 @@ public sealed class PlaybackEngine : IAsyncDisposable
         if (_buffer.Count >= MinBufferFrames)
         {
             _renderer.SetMuted(false);
-            TransitionTo(PlaybackState.Buffering); // will quickly advance to Synchronized
+            _state = PlaybackState.Buffering; // will quickly advance to Synchronized
+            await NotifySynchronizedAsync().ConfigureAwait(false);
             return;
         }
 
@@ -194,17 +195,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
         }
     }
 
-    private void TransitionTo(PlaybackState next)
-    {
-        var prev = _state;
-        _state = next;
-
-        if (prev == PlaybackState.Error && next == PlaybackState.Buffering)
-        {
-            // Fire-and-forget notification back to server
-            _ = NotifySynchronizedAsync();
-        }
-    }
+    private void TransitionTo(PlaybackState next) => _state = next;
 
     private async Task NotifySynchronizedAsync()
     {
