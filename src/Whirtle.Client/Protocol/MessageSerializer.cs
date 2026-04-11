@@ -34,25 +34,26 @@ internal sealed class MessageSerializer
     /// </summary>
     private static byte[] NormalizeTypeDiscriminator(byte[] data)
     {
-        using var doc = JsonDocument.Parse(data);
-        var root = doc.RootElement;
-
-        if (!root.TryGetProperty("type", out var typeProp))
-            return data;
-
-        var typeValue = typeProp.GetString();
+        // Fast path: use Utf8JsonReader (stack-only, no heap allocation) to find
+        // the "type" value and check whether it is already lowercase.  This avoids
+        // the JsonDocument allocation on every message — the vast majority of servers
+        // send lowercase type discriminators so this branch is almost always taken.
+        var typeValue = ReadTypeValue(data);
         if (typeValue is null)
             return data;
 
         var lower = typeValue.ToLowerInvariant();
         if (lower == typeValue)
-            return data; // already lowercase — skip allocation
+            return data;
 
+        // Slow path (non-lowercase discriminator): rebuild the JSON object with
+        // the lowercased value.  JsonDocument is only allocated here.
+        using var doc    = JsonDocument.Parse(data);
         using var ms     = new MemoryStream(data.Length);
         using var writer = new Utf8JsonWriter(ms);
 
         writer.WriteStartObject();
-        foreach (var prop in root.EnumerateObject())
+        foreach (var prop in doc.RootElement.EnumerateObject())
         {
             if (prop.NameEquals("type"))
                 writer.WriteString("type", lower);
@@ -63,5 +64,31 @@ internal sealed class MessageSerializer
         writer.Flush();
 
         return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Scans <paramref name="data"/> with a <see cref="Utf8JsonReader"/> to locate
+    /// the top-level <c>"type"</c> property and return its string value.
+    /// Returns <see langword="null"/> when the property is absent or has a non-string
+    /// value.  Any parse errors are treated as "not found" — the caller's subsequent
+    /// <see cref="JsonSerializer.Deserialize"/> will surface the real error.
+    /// </summary>
+    private static string? ReadTypeValue(byte[] data)
+    {
+        try
+        {
+            var reader = new Utf8JsonReader(data, isFinalBlock: true, state: default);
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.PropertyName &&
+                    reader.ValueTextEquals("type"u8))
+                {
+                    return reader.Read() ? reader.GetString() : null;
+                }
+            }
+        }
+        catch { /* malformed JSON — let Deserialize report the error */ }
+
+        return null;
     }
 }
