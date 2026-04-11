@@ -17,7 +17,7 @@ internal sealed class FakeMulticastSocket : IMulticastSocket
     public void EnqueueResponse(byte[] datagram, IPEndPoint? from = null)
         => _inbound.Writer.TryWrite(new UdpReceiveResult(
                datagram,
-               from ?? new IPEndPoint(IPAddress.Loopback, MdnsDiscovery.MdnsPort)));
+               from ?? new IPEndPoint(IPAddress.Loopback, 5353)));
 
     public void Close() => _inbound.Writer.TryComplete();
 

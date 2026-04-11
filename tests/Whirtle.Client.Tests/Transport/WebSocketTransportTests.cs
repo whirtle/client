@@ -28,7 +28,7 @@ public class WebSocketTransportTests
         var transport = new WebSocketTransport(new FakeClientWebSocket());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => transport.SendAsync(new byte[] { 1, 2, 3 }).AsTask());
+            () => transport.SendAsync(new byte[] { 1, 2, 3 }));
     }
 
     [Fact]

@@ -58,7 +58,7 @@ public class AudioDeviceEnumeratorTests
     [Fact]
     public void GetDefault_NoDefaultFlagged_ReturnsFallbackFirst()
     {
-        var enumerator = new FakeAudioDeviceEnumerator(
+        IAudioDeviceEnumerator enumerator = new FakeAudioDeviceEnumerator(
         [
             new AudioDeviceInfo("in-1", "Mic A", AudioDeviceKind.Input, IsDefault: false),
             new AudioDeviceInfo("in-2", "Mic B", AudioDeviceKind.Input, IsDefault: false),
@@ -73,20 +73,20 @@ public class AudioDeviceEnumeratorTests
     [Fact]
     public void GetDefault_NoDevices_ReturnsNull()
     {
-        var def = new FakeAudioDeviceEnumerator([]).GetDefault(AudioDeviceKind.Input);
+        var def = ((IAudioDeviceEnumerator)new FakeAudioDeviceEnumerator([])).GetDefault(AudioDeviceKind.Input);
         Assert.Null(def);
     }
 
     [Fact]
     public void NullEnumerator_GetDevices_ReturnsEmpty()
     {
-        Assert.Empty(new NullAudioDeviceEnumerator().GetDevices());
+        Assert.Empty(((IAudioDeviceEnumerator)new NullAudioDeviceEnumerator()).GetDevices());
     }
 
     [Fact]
     public void NullEnumerator_GetDefault_ReturnsNull()
     {
-        Assert.Null(new NullAudioDeviceEnumerator().GetDefault(AudioDeviceKind.Input));
+        Assert.Null(((IAudioDeviceEnumerator)new NullAudioDeviceEnumerator()).GetDefault(AudioDeviceKind.Input));
     }
 
     [Fact]
