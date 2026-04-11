@@ -47,21 +47,29 @@ client/
 │       │   ├── IClientWebSocket.cs       # Internal WebSocket seam
 │       │   ├── SystemClientWebSocket.cs  # Wraps ClientWebSocket
 │       │   └── WebSocketTransport.cs     # WebSocket implementation
-│       └── Protocol/
-│           ├── Message.cs                # All message records + polymorphic JSON
-│           ├── MessageSerializer.cs      # Internal JSON encoder/decoder
-│           ├── HandshakeException.cs     # Thrown on handshake failure
-│           └── ProtocolClient.cs         # Handshake + send/receive over ITransport
+│       ├── Protocol/
+│       │   ├── Message.cs                # All message records + polymorphic JSON
+│       │   ├── MessageSerializer.cs      # Internal JSON encoder/decoder
+│       │   ├── HandshakeException.cs     # Thrown on handshake failure
+│       │   └── ProtocolClient.cs         # Handshake + send/receive over ITransport
+│       └── Clock/
+│           ├── ISystemClock.cs           # Internal clock seam
+│           ├── SystemClock.cs            # Production DateTime.UtcNow wrapper
+│           ├── ClockSyncResult.cs        # Offset + RTT result record
+│           └── ClockSynchronizer.cs      # NTP-style sync over ProtocolClient
 └── tests/
     └── Whirtle.Client.Tests/
         ├── Whirtle.Client.Tests.csproj
         ├── Transport/
         │   ├── FakeClientWebSocket.cs        # Test double
         │   └── WebSocketTransportTests.cs
-        └── Protocol/
-            ├── FakeTransport.cs              # Test double
-            ├── MessageSerializerTests.cs
-            └── ProtocolClientTests.cs
+        ├── Protocol/
+        │   ├── FakeTransport.cs              # Test double
+        │   ├── MessageSerializerTests.cs
+        │   └── ProtocolClientTests.cs
+        └── Clock/
+            ├── FakeClock.cs                  # Test double
+            └── ClockSynchronizerTests.cs
 ```
 
 ## Development Notes
