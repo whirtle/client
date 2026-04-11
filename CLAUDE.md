@@ -11,6 +11,7 @@ The Sendspin protocol is documented at https://www.sendspin-audio.com/spec/.
 - **Language:** C#
 - **Framework:** .NET (see `.gitignore` for tooling configuration)
 - **Package Manager:** NuGet
+- Target OS is Windows 11
 
 ## Common Commands
 
