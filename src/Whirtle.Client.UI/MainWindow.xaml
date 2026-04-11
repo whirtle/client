@@ -20,8 +20,7 @@
         <tb:TaskbarIcon
             Grid.RowSpan="2"
             x:Name="TrayIcon"
-            ToolTipText="{x:Bind NowPlayingViewModel.TrayTooltip, Mode=OneWay}"
-            TrayMouseDoubleClick="TrayIcon_DoubleClicked">
+            ToolTipText="{x:Bind NowPlayingViewModel.TrayTooltip, Mode=OneWay}">
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
                     <MenuFlyoutItem Text="Show Whirtle" Click="TrayShow_Click" />

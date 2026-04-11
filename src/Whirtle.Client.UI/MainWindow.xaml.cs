@@ -41,6 +41,10 @@ public sealed partial class MainWindow : Window
 
         // Intercept close → minimize to tray instead
         AppWindow.Closing += AppWindow_Closing;
+
+        // H.NotifyIcon.WinUI does not support click event attributes in XAML;
+        // double-click restore is wired via the DoubleClickCommand DP instead.
+        TrayIcon.DoubleClickCommand = new RelayCommand(RestoreFromTray);
     }
 
     // ── Window close / tray ────────────────────────────────────────────────
@@ -69,9 +73,6 @@ public sealed partial class MainWindow : Window
 
     // ── Tray icon handlers ─────────────────────────────────────────────────
 
-    private void TrayIcon_DoubleClicked(TaskbarIcon sender, TrayMouseDoubleClickEventArgs args)
-        => RestoreFromTray();
-
     private void TrayShow_Click(object sender, RoutedEventArgs e)
         => RestoreFromTray();
 
@@ -88,6 +89,14 @@ public sealed partial class MainWindow : Window
     }
 
     // ── Navigation ─────────────────────────────────────────────────────────
+
+    // Simple ICommand wrapper used only to set TaskbarIcon.DoubleClickCommand.
+    private sealed class RelayCommand(Action execute) : ICommand
+    {
+        public event EventHandler? CanExecuteChanged;
+        public bool CanExecute(object? _) => true;
+        public void Execute(object? _)    => execute();
+    }
 
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
