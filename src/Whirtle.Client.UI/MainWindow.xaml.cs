@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows.Input;
 using H.NotifyIcon;
+using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -64,8 +65,14 @@ public sealed partial class MainWindow : Window
 
         _backdropConfig = new SystemBackdropConfiguration { IsInputActive = true };
 
-        Activated   += (_, _) => { if (_backdropConfig is not null) _backdropConfig.IsInputActive = true;  };
-        Deactivated += (_, _) => { if (_backdropConfig is not null) _backdropConfig.IsInputActive = false; };
+        // Window.Activated fires for both focus-gained and focus-lost;
+        // check WindowActivationState to update IsInputActive accordingly.
+        Activated += (_, e) =>
+        {
+            if (_backdropConfig is not null)
+                _backdropConfig.IsInputActive =
+                    e.WindowActivationState != WindowActivationState.Deactivated;
+        };
 
         _micaController = new MicaController();
         _micaController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
