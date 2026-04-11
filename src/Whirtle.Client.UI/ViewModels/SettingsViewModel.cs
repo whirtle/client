@@ -20,6 +20,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         Converters    = { new JsonStringEnumConverter() },
     };
 
+    // Debounce: cancel any pending save and start a fresh 500 ms timer so
+    // rapid property changes (e.g. typing in a text box) produce a single write.
+    private CancellationTokenSource? _saveCts;
+    private readonly object _saveCtsLock = new();
+
     // ── Persistent settings ────────────────────────────────────────────────
 
     [ObservableProperty] private string _clientName = Environment.MachineName;
@@ -81,8 +86,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         Load();
 
-        // Auto-save on every property change that originates after construction
-        PropertyChanged += (_, _) => Save();
+        // Auto-save on every property change, debounced to avoid a disk write
+        // for every keystroke when the user edits a text field.
+        PropertyChanged += (_, _) => DebouncedSave();
 
         // Populate device list using the same enumerator as NowPlayingViewModel
         // (best-effort; may be empty on non-Windows or when NAudio not available)
@@ -124,11 +130,29 @@ public sealed partial class SettingsViewModel : ObservableObject
         catch { /* first run or corrupted file — use defaults */ }
     }
 
+    private void DebouncedSave()
+    {
+        CancellationTokenSource cts;
+        lock (_saveCtsLock)
+        {
+            _saveCts?.Cancel();
+            _saveCts?.Dispose();
+            _saveCts = cts = new CancellationTokenSource();
+        }
+
+        _ = Task.Delay(500, cts.Token).ContinueWith(
+            _ => Save(),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnRanToCompletion,
+            TaskScheduler.Default);
+    }
+
     private void Save()
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+            var dir = Path.GetDirectoryName(SettingsPath)!;
+            Directory.CreateDirectory(dir);
 
             // Keep preferred device ID in sync with the live selection
             if (SelectedAudioDevice is { } d)
@@ -143,7 +167,13 @@ public sealed partial class SettingsViewModel : ObservableObject
                 ConnectionMode,
                 LogLevel);
 
-            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(data, JsonOptions));
+            var json    = JsonSerializer.Serialize(data, JsonOptions);
+            var tmpPath = SettingsPath + ".tmp";
+
+            // Write to a temp file then rename so the settings file is never
+            // left in a partially-written state if the process is killed mid-write.
+            File.WriteAllText(tmpPath, json);
+            File.Move(tmpPath, SettingsPath, overwrite: true);
         }
         catch { /* best-effort; non-fatal */ }
     }
