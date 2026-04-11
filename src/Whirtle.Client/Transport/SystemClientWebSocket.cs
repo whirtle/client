@@ -11,7 +11,7 @@ internal sealed class SystemClientWebSocket : IClientWebSocket
     public Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
         => _inner.ConnectAsync(uri, cancellationToken);
 
-    public Task SendAsync(ReadOnlyMemory<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
+    public ValueTask SendAsync(ReadOnlyMemory<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
         => _inner.SendAsync(buffer, messageType, endOfMessage, cancellationToken);
 
     public ValueTask<ValueWebSocketReceiveResult> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken)

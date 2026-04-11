@@ -24,8 +24,8 @@ internal sealed class FakeClientWebSocket : IClientWebSocket
         return Task.CompletedTask;
     }
 
-    public Task SendAsync(ReadOnlyMemory<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
-        => Task.CompletedTask;
+    public ValueTask SendAsync(ReadOnlyMemory<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
+        => ValueTask.CompletedTask;
 
     public async ValueTask<ValueWebSocketReceiveResult> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken)
     {

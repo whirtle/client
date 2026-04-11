@@ -19,7 +19,7 @@ internal sealed class AcceptedWebSocket : IClientWebSocket
     public Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
         => Task.CompletedTask; // already connected
 
-    public Task SendAsync(
+    public ValueTask SendAsync(
         ReadOnlyMemory<byte>  buffer,
         WebSocketMessageType  messageType,
         bool                  endOfMessage,

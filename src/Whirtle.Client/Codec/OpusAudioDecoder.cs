@@ -22,7 +22,7 @@ public sealed class OpusAudioDecoder : IAudioDecoder
         ArgumentOutOfRangeException.ThrowIfLessThan(channels,   1);
         SampleRate = sampleRate;
         Channels   = channels;
-        _decoder   = OpusDecoder.Create(sampleRate, channels);
+        _decoder   = new OpusDecoder(sampleRate, channels);
     }
 
     public AudioFrame Decode(ReadOnlyMemory<byte> data)
@@ -33,7 +33,7 @@ public sealed class OpusAudioDecoder : IAudioDecoder
         int samplesPerChannel = _decoder.Decode(
             encoded, 0, encoded.Length,
             pcm,     0, MaxFrameSize,
-            decodeFec: false);
+            false);
 
         return new AudioFrame(pcm[..(samplesPerChannel * Channels)], SampleRate, Channels);
     }

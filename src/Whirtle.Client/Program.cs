@@ -94,7 +94,7 @@ internal class Program
         var syncer = new ClockSynchronizer(protocol);
         var sync   = await syncer.SyncOnceAsync(cts.Token);
         Console.WriteLine(
-            $"[Clock] Offset {sync.Offset.TotalMilliseconds:+0.0;-0.0} ms  " +
+            $"[Clock] Offset {sync.ClockOffset.TotalMilliseconds:+0.0;-0.0} ms  " +
             $"RTT {sync.RoundTripTime.TotalMilliseconds:0.0} ms");
 
         // ── Roles ────────────────────────────────────────────────────────────
