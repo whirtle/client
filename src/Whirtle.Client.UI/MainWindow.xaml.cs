@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Windowing;
 using Windows.Graphics;
+using WinRT;
 using Whirtle.Client.UI.Pages;
 using Whirtle.Client.UI.ViewModels;
 
@@ -16,10 +17,14 @@ public sealed partial class MainWindow : Window
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
-    private const int SW_HIDE = 0;
+    private const int SW_HIDE    = 0;
     private const int SW_RESTORE = 9;
 
     private bool _hideOnClose = true;
+
+    // Kept alive for the lifetime of the window (MicaController requires it).
+    private MicaController?              _micaController;
+    private SystemBackdropConfiguration? _backdropConfig;
 
     public NowPlayingViewModel NowPlayingViewModel => App.Current.NowPlayingViewModel;
 
@@ -27,8 +32,10 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // Mica material background (Windows 11 Fluent Design)
-        SystemBackdrop = new MicaBackdrop();
+        // Mica material background (Windows 11 Fluent Design).
+        // Uses MicaController directly — compatible with all WinAppSDK 1.1+
+        // builds regardless of SDK.BuildTools version.
+        TryApplyMica();
 
         // Extend XAML content into the title bar area
         ExtendsContentIntoTitleBar = true;
@@ -46,6 +53,23 @@ public sealed partial class MainWindow : Window
         // H.NotifyIcon.WinUI does not support click event attributes in XAML;
         // double-click restore is wired via the DoubleClickCommand DP instead.
         TrayIcon.DoubleClickCommand = new RelayCommand(RestoreFromTray);
+    }
+
+    // ── Mica backdrop ──────────────────────────────────────────────────────
+
+    private void TryApplyMica()
+    {
+        if (!MicaController.IsSupported())
+            return; // gracefully skip on Windows 10
+
+        _backdropConfig = new SystemBackdropConfiguration { IsInputActive = true };
+
+        Activated   += (_, _) => { if (_backdropConfig is not null) _backdropConfig.IsInputActive = true;  };
+        Deactivated += (_, _) => { if (_backdropConfig is not null) _backdropConfig.IsInputActive = false; };
+
+        _micaController = new MicaController();
+        _micaController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
+        _micaController.SetSystemBackdropConfiguration(_backdropConfig);
     }
 
     // ── Window close / tray ────────────────────────────────────────────────
@@ -94,7 +118,7 @@ public sealed partial class MainWindow : Window
     // Simple ICommand wrapper used only to set TaskbarIcon.DoubleClickCommand.
     private sealed class RelayCommand(Action execute) : ICommand
     {
-        // CanExecute always returns true; no need to ever raise CanExecuteChanged.
+        // CanExecute is always true; CanExecuteChanged is intentionally unused.
         public event EventHandler? CanExecuteChanged { add { } remove { } }
         public bool CanExecute(object? _) => true;
         public void Execute(object? _)    => execute();
