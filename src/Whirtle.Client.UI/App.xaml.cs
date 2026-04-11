@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Whirtle.Client.Audio;
 using Whirtle.Client.UI.ViewModels;
 
+
 namespace Whirtle.Client.UI;
 
 public partial class App : Application
@@ -27,7 +28,7 @@ public partial class App : Application
 
         var dispatcher = DispatcherQueue.GetForCurrentThread();
         _nowPlayingViewModel = new NowPlayingViewModel(
-            new WindowsAudioDeviceEnumerator(),
+            AudioDeviceEnumerator.Create(),
             dispatcher);
 
         _mainWindow = new MainWindow();

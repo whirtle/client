@@ -94,7 +94,8 @@ public sealed partial class MainWindow : Window
     // Simple ICommand wrapper used only to set TaskbarIcon.DoubleClickCommand.
     private sealed class RelayCommand(Action execute) : ICommand
     {
-        public event EventHandler? CanExecuteChanged;
+        // CanExecute always returns true; no need to ever raise CanExecuteChanged.
+        public event EventHandler? CanExecuteChanged { add { } remove { } }
         public bool CanExecute(object? _) => true;
         public void Execute(object? _)    => execute();
     }

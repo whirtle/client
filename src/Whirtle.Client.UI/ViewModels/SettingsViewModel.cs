@@ -88,8 +88,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         // (best-effort; may be empty on non-Windows or when NAudio not available)
         try
         {
-            var enumerator = new WindowsAudioDeviceEnumerator();
-            foreach (var d in enumerator.GetDevices(AudioDeviceKind.Render))
+            var enumerator = AudioDeviceEnumerator.Create();
+            foreach (var d in enumerator.GetDevices(AudioDeviceKind.Output))
                 AudioDevices.Add(d);
 
             SelectedAudioDevice = AudioDevices.FirstOrDefault(d => d.Id == PreferredAudioDeviceId)

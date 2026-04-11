@@ -102,10 +102,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private void LoadAudioDevices()
     {
         AudioDevices.Clear();
-        foreach (var d in _deviceEnumerator.GetDevices(AudioDeviceKind.Render))
+        foreach (var d in _deviceEnumerator.GetDevices(AudioDeviceKind.Output))
             AudioDevices.Add(d);
 
-        SelectedDevice = _deviceEnumerator.GetDefault(AudioDeviceKind.Render)
+        SelectedDevice = _deviceEnumerator.GetDefault(AudioDeviceKind.Output)
                       ?? AudioDevices.FirstOrDefault();
     }
 
