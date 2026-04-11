@@ -20,6 +20,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private ProtocolClient? _protocol;
     private ControllerClient? _controller;
     private CancellationTokenSource? _connectionCts;
+    private Task _receiveLoopTask = Task.CompletedTask;
 
     // ── Now-playing metadata ───────────────────────────────────────────────
 
@@ -133,8 +134,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             IsConnected  = true;
             ConnectionStatus = $"Connected — {endpoint.Name ?? endpoint.Host}:{endpoint.Port}";
 
-            // Start background message loop (fire-and-forget; owns its own lifetime)
-            _ = ReceiveLoopAsync(token);
+            // Start background message loop; tracked so DisconnectAsync can await it.
+            _receiveLoopTask = ReceiveLoopAsync(token);
         }
         catch (OperationCanceledException)
         {
@@ -172,6 +173,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         _connectionCts?.Cancel();
         _connectionCts = null;
+
+        // Wait for the receive loop to finish before tearing down the protocol,
+        // so it cannot access _protocol after it has been disposed.
+        try { await _receiveLoopTask.ConfigureAwait(false); } catch { /* already handled inside */ }
+        _receiveLoopTask = Task.CompletedTask;
 
         if (_protocol is not null)
         {
