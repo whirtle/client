@@ -35,7 +35,7 @@ internal sealed class WindowsAudioDeviceEnumerator : IAudioDeviceEnumerator
     {
         try
         {
-            using var device = enumerator.GetDefaultAudioEndpoint(flow, Role.Multimedia);
+            using var device = enumerator.GetDefaultAudioEndpoint(flow, NAudio.CoreAudioApi.Role.Multimedia);
             return device.ID;
         }
         catch (Exception)
