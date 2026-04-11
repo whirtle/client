@@ -1,10 +1,15 @@
 namespace Whirtle.Client.Discovery;
 
-/// <summary>A discovered Whirtle server endpoint.</summary>
-/// <param name="Host">Hostname or IP address of the server.</param>
-/// <param name="Port">TCP port the server is listening on.</param>
-public sealed record ServiceEndpoint(string Host, int Port)
+/// <summary>A Sendspin client endpoint discovered via mDNS.</summary>
+/// <param name="Host">Hostname or IP address of the client.</param>
+/// <param name="Port">TCP port the client is listening on (default 8928).</param>
+/// <param name="Path">WebSocket path from the TXT <c>path</c> record (default <c>/sendspin</c>).</param>
+/// <param name="Name">Friendly player name from the TXT <c>name</c> record, if present.</param>
+public sealed record ServiceEndpoint(
+    string  Host,
+    int     Port = MdnsAdvertiser.DefaultPort,
+    string  Path = MdnsAdvertiser.DefaultPath,
+    string? Name = null)
 {
-    public Uri ToWebSocketUri(string path = "/") =>
-        new($"ws://{Host}:{Port}{path}");
+    public Uri ToWebSocketUri() => new($"ws://{Host}:{Port}{Path}");
 }

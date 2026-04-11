@@ -4,99 +4,134 @@ namespace Whirtle.Client.Tests.Discovery;
 
 public class DnsMessageTests
 {
+    // ── Query building ────────────────────────────────────────────────────────
+
     [Fact]
     public void BuildQuery_HasCorrectQuestionCount()
     {
-        var query = DnsMessage.BuildQuery("_whirtle._tcp.local.");
-        // QDCOUNT is at bytes 4–5 (big-endian)
+        var query = DnsMessage.BuildQuery(MdnsAdvertiser.ServiceType);
         Assert.Equal(0, query[4]);
-        Assert.Equal(1, query[5]);
+        Assert.Equal(1, query[5]); // QDCOUNT = 1
     }
 
     [Fact]
     public void BuildQuery_IsStandardQuery()
     {
-        var query = DnsMessage.BuildQuery("_whirtle._tcp.local.");
-        // Flags at bytes 2–3; standard query = 0x0000
+        var query = DnsMessage.BuildQuery(MdnsAdvertiser.ServiceType);
         Assert.Equal(0, query[2]);
-        Assert.Equal(0, query[3]);
-    }
-
-    [Fact]
-    public void TryParse_RoundTrip_PtrRecord()
-    {
-        // Build a minimal PTR response for "_whirtle._tcp.local." → "myhost._whirtle._tcp.local."
-        var payload = BuildPtrResponse("_whirtle._tcp.local.", "myhost._whirtle._tcp.local.");
-        var result  = DnsMessage.TryParse(payload);
-
-        Assert.NotNull(result);
-        Assert.Single(result!.PtrRecords);
-        Assert.Equal("myhost._whirtle._tcp.local.", result.PtrRecords[0].InstanceName);
-    }
-
-    [Fact]
-    public void TryParse_MalformedData_ReturnsNull()
-    {
-        var result = DnsMessage.TryParse([0xFF, 0xFE]);
-        Assert.Null(result);
+        Assert.Equal(0, query[3]); // Flags = 0x0000
     }
 
     [Fact]
     public void BuildQuery_UsesProvidedTransactionId()
     {
-        var query = DnsMessage.BuildQuery("_whirtle._tcp.local.", transactionId: 0x1234);
+        var query = DnsMessage.BuildQuery(MdnsAdvertiser.ServiceType, transactionId: 0x1234);
         Assert.Equal(0x12, query[0]);
         Assert.Equal(0x34, query[1]);
     }
 
-    // ── Helper: hand-craft a minimal DNS response with one PTR answer ─────────
+    // ── Query parsing ─────────────────────────────────────────────────────────
 
-    private static byte[] BuildPtrResponse(string questionName, string ptrTarget)
+    [Fact]
+    public void TryParse_Query_IsQueryTrue()
     {
-        using var ms = new MemoryStream();
-        using var w  = new BinaryWriter(ms);
+        var query  = DnsMessage.BuildQuery(MdnsAdvertiser.ServiceType);
+        var parsed = DnsMessage.TryParse(query);
 
-        void WriteUInt16(ushort v) { w.Write((byte)(v >> 8)); w.Write((byte)(v & 0xFF)); }
-        void WriteName(string n)
-        {
-            foreach (var label in n.TrimEnd('.').Split('.'))
-            {
-                var b = System.Text.Encoding.ASCII.GetBytes(label);
-                w.Write((byte)b.Length);
-                w.Write(b);
-            }
-            w.Write((byte)0);
-        }
-
-        WriteUInt16(0x0000); // ID
-        WriteUInt16(0x8400); // Flags: response, authoritative
-        WriteUInt16(0);      // QDCOUNT
-        WriteUInt16(1);      // ANCOUNT
-        WriteUInt16(0);      // NSCOUNT
-        WriteUInt16(0);      // ARCOUNT
-
-        // PTR answer
-        WriteName(questionName);
-        WriteUInt16(12);     // TYPE PTR
-        WriteUInt16(1);      // CLASS IN
-
-        // TTL
-        w.Write((byte)0); w.Write((byte)0); w.Write((byte)0); w.Write((byte)120);
-
-        // RDATA: encode target name into a temporary buffer to get length
-        using var rdBuf = new MemoryStream();
-        using var rdW   = new BinaryWriter(rdBuf);
-        foreach (var label in ptrTarget.TrimEnd('.').Split('.'))
-        {
-            var b = System.Text.Encoding.ASCII.GetBytes(label);
-            rdW.Write((byte)b.Length); rdW.Write(b);
-        }
-        rdW.Write((byte)0);
-        var rd = rdBuf.ToArray();
-
-        WriteUInt16((ushort)rd.Length);
-        w.Write(rd);
-
-        return ms.ToArray();
+        Assert.NotNull(parsed);
+        Assert.True(parsed!.IsQuery);
     }
+
+    [Fact]
+    public void TryParse_Query_RecordsQuestionName()
+    {
+        var query  = DnsMessage.BuildQuery(MdnsAdvertiser.ServiceType);
+        var parsed = DnsMessage.TryParse(query);
+
+        Assert.NotNull(parsed);
+        Assert.Single(parsed!.Questions);
+        Assert.Equal("_sendspin._tcp.local", parsed.Questions[0]);
+    }
+
+    // ── Advertisement building + round-trip ───────────────────────────────────
+
+    [Fact]
+    public void BuildAdvertisement_IsResponse()
+    {
+        var data   = BuildSample();
+        var parsed = DnsMessage.TryParse(data);
+
+        Assert.NotNull(parsed);
+        Assert.False(parsed!.IsQuery);
+    }
+
+    [Fact]
+    public void BuildAdvertisement_ContainsPtrRecord()
+    {
+        var parsed = DnsMessage.TryParse(BuildSample())!;
+        Assert.Single(parsed.PtrRecords);
+    }
+
+    [Fact]
+    public void BuildAdvertisement_ContainsSrvWithCorrectPort()
+    {
+        var parsed = DnsMessage.TryParse(BuildSample())!;
+        Assert.Single(parsed.SrvRecords);
+        Assert.Equal(8928, parsed.SrvRecords[0].Port);
+    }
+
+    [Fact]
+    public void BuildAdvertisement_ContainsTxtWithPathKey()
+    {
+        var parsed = DnsMessage.TryParse(BuildSample())!;
+        Assert.Single(parsed.TxtRecords);
+        Assert.True(parsed.TxtRecords[0].Entries.ContainsKey("path"));
+        Assert.Equal("/sendspin", parsed.TxtRecords[0].Entries["path"]);
+    }
+
+    [Fact]
+    public void BuildAdvertisement_ContainsTxtWithNameKey_WhenProvided()
+    {
+        var data   = DnsMessage.BuildAdvertisement(
+            "Player._sendspin._tcp.local.", "myhost", "192.168.1.1",
+            8928, "/sendspin", friendlyName: "Living Room");
+        var parsed = DnsMessage.TryParse(data)!;
+
+        Assert.True(parsed.TxtRecords[0].Entries.ContainsKey("name"));
+        Assert.Equal("Living Room", parsed.TxtRecords[0].Entries["name"]);
+    }
+
+    [Fact]
+    public void BuildAdvertisement_OmitsTxtNameKey_WhenNull()
+    {
+        var parsed = DnsMessage.TryParse(BuildSample())!;
+        Assert.False(parsed.TxtRecords[0].Entries.ContainsKey("name"));
+    }
+
+    [Fact]
+    public void BuildAdvertisement_ContainsARecord()
+    {
+        var parsed = DnsMessage.TryParse(BuildSample())!;
+        Assert.Single(parsed.ARecords);
+        Assert.Equal("192.168.1.1", parsed.ARecords[0].Address);
+    }
+
+    // ── Error handling ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TryParse_MalformedData_ReturnsNull()
+    {
+        Assert.Null(DnsMessage.TryParse([0xFF, 0xFE]));
+    }
+
+    // ── Helper ────────────────────────────────────────────────────────────────
+
+    private static byte[] BuildSample() =>
+        DnsMessage.BuildAdvertisement(
+            instanceName: "myhost._sendspin._tcp.local.",
+            hostname:     "myhost",
+            ipAddress:    "192.168.1.1",
+            port:         MdnsAdvertiser.DefaultPort,
+            path:         MdnsAdvertiser.DefaultPath,
+            friendlyName: null);
 }
