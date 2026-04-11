@@ -10,7 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="NAudio"    Version="2.2.1" />
+    <PackageReference Include="Concentus" Version="2.2.2" />
   </ItemGroup>
 
 </Project>
