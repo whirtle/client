@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Steve Peterson
+// SPDX-License-Identifier: MIT
+
 using System.Text.Json.Serialization;
 
 namespace Whirtle.Client.Protocol;

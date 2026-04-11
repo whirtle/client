@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Steve Peterson
+// SPDX-License-Identifier: MIT
+
 namespace Whirtle.Client.Codec;
 
 /// <summary>Decodes encoded audio packets into <see cref="AudioFrame"/> instances.</summary>

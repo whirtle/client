@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Steve Peterson
+// SPDX-License-Identifier: MIT
+
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;

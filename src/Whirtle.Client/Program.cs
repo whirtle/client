@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Steve Peterson
+// SPDX-License-Identifier: MIT
+
 using System.Net;
 using Whirtle.Client.Clock;
 using Whirtle.Client.Discovery;

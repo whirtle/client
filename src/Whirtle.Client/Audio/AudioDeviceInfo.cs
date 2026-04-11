@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Steve Peterson
+// SPDX-License-Identifier: MIT
+
 namespace Whirtle.Client.Audio;
 
 /// <summary>Describes a single audio endpoint discovered at enumeration time.</summary>

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Steve Peterson
+// SPDX-License-Identifier: MIT
+
 namespace Whirtle.Client.Discovery;
 
 /// <summary>A Sendspin client endpoint discovered via mDNS.</summary>

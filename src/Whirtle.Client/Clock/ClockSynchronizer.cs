@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Steve Peterson
+// SPDX-License-Identifier: MIT
+
 using Whirtle.Client.Protocol;
 
 namespace Whirtle.Client.Clock;
