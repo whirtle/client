@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Steve Peterson
 // SPDX-License-Identifier: MIT
 
+using System.Runtime.InteropServices;
 using Concentus.Structs;
 
 namespace Whirtle.Client.Codec;
@@ -30,16 +31,37 @@ public sealed class OpusAudioDecoder : IAudioDecoder
 
     public AudioFrame Decode(ReadOnlyMemory<byte> data)
     {
-        var encoded = data.ToArray();
-        var pcm     = new short[MaxFrameSize * Channels];
+        // Use the underlying array when available to avoid an extra heap allocation;
+        // fall back to ToArray() only when the memory does not back a managed array
+        // (e.g. when it originates from native/unsafe storage).
+        byte[] encoded;
+        int    offset, length;
+        if (MemoryMarshal.TryGetArray(data, out var seg))
+        {
+            encoded = seg.Array!;
+            offset  = seg.Offset;
+            length  = seg.Count;
+        }
+        else
+        {
+            encoded = data.ToArray();
+            offset  = 0;
+            length  = encoded.Length;
+        }
 
+        var pcm = new short[MaxFrameSize * Channels];
         int samplesPerChannel = _decoder.Decode(
-            encoded, 0, encoded.Length,
-            pcm,     0, MaxFrameSize,
+            encoded, offset, length,
+            pcm,     0,      MaxFrameSize,
             false);
 
         return new AudioFrame(pcm[..(samplesPerChannel * Channels)], SampleRate, Channels);
     }
 
-    public void Dispose() { }
+    public void Dispose()
+    {
+        // Dispose the underlying decoder if the Concentus version being used
+        // holds native resources (e.g. via OpusCodecFactory on supported platforms).
+        (_decoder as IDisposable)?.Dispose();
+    }
 }
