@@ -1,5 +1,10 @@
 <Solution>
   <Project Path="src/Whirtle.Client/Whirtle.Client.csproj" />
+  <Folder Name="/Solution items/">
+    <File Path=".gitignore" />
+    <File Path="CLAUDE.md" />
+    <File Path="LICENSE" />
+  </Folder>
   <Project Path="src/Whirtle.Client.UI/Whirtle.Client.UI.csproj" />
   <Project Path="tests/Whirtle.Client.Tests/Whirtle.Client.Tests.csproj" />
 </Solution>
