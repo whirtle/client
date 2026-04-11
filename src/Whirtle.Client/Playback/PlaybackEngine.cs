@@ -41,9 +41,9 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     public PlaybackState State => _state;
 
-    public PlaybackEngine(
-        IWasapiRenderer renderer,
-        ProtocolClient  protocol,
+    internal PlaybackEngine(
+        IWasapiRenderer     renderer,
+        ProtocolClient      protocol,
         Clock.ISystemClock? clock = null)
     {
         _renderer = renderer;
