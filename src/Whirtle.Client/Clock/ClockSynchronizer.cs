@@ -21,6 +21,13 @@ namespace Whirtle.Client.Clock;
 /// </summary>
 public sealed class ClockSynchronizer
 {
+    /// <summary>
+    /// Maximum time to wait for a SyncReply before treating the round-trip as
+    /// failed.  Prevents SyncOnceAsync from hanging forever if the server stops
+    /// responding.
+    /// </summary>
+    private static readonly TimeSpan DefaultSyncTimeout = TimeSpan.FromSeconds(10);
+
     private readonly ProtocolClient _client;
     private readonly ISystemClock _clock;
 
@@ -40,14 +47,22 @@ public sealed class ClockSynchronizer
     /// <remarks>
     /// Reads the next message from the shared receive stream, so the caller
     /// must not be concurrently consuming <see cref="ProtocolClient.ReceiveAsync"/>.
+    /// Imposes a <see cref="DefaultSyncTimeout"/> deadline so the call cannot
+    /// block indefinitely if the server never sends a SyncReply.
     /// </remarks>
     public async Task<ClockSyncResult> SyncOnceAsync(CancellationToken cancellationToken = default)
     {
+        // Apply a hard per-call deadline so a silent server cannot block forever.
+        using var deadline = new CancellationTokenSource(DefaultSyncTimeout);
+        using var linked   = CancellationTokenSource.CreateLinkedTokenSource(
+                                 cancellationToken, deadline.Token);
+        var token = linked.Token;
+
         var t0 = _clock.UtcNowTicks;
 
-        await _client.SendAsync(new SyncRequestMessage(t0), cancellationToken);
+        await _client.SendAsync(new SyncRequestMessage(t0), token);
 
-        await foreach (var msg in _client.ReceiveAsync(cancellationToken))
+        await foreach (var msg in _client.ReceiveAsync(token))
         {
             if (msg is not SyncReplyMessage reply)
                 continue;
