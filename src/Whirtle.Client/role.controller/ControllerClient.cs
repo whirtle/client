@@ -1,6 +1,6 @@
 using Whirtle.Client.Protocol;
 
-namespace Whirtle.Client.Controller;
+namespace Whirtle.Client.Role;
 
 /// <summary>
 /// Sends remote-control commands on behalf of the UI (Controller Role).

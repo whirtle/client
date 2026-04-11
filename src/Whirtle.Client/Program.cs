@@ -1,10 +1,8 @@
 using System.Net;
-using Whirtle.Client.Artwork;
 using Whirtle.Client.Clock;
-using Whirtle.Client.Controller;
 using Whirtle.Client.Discovery;
-using Whirtle.Client.Metadata;
 using Whirtle.Client.Protocol;
+using Whirtle.Client.Role;
 using Whirtle.Client.Transport;
 
 namespace Whirtle.Client;

@@ -1,8 +1,8 @@
-using Whirtle.Client.Controller;
 using Whirtle.Client.Protocol;
+using Whirtle.Client.Role;
 using Whirtle.Client.Tests.Protocol;
 
-namespace Whirtle.Client.Tests.Controller;
+namespace Whirtle.Client.Tests.Role;
 
 public class ControllerClientTests
 {

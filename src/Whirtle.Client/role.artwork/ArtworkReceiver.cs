@@ -1,6 +1,6 @@
 using Whirtle.Client.Protocol;
 
-namespace Whirtle.Client.Artwork;
+namespace Whirtle.Client.Role;
 
 /// <summary>
 /// Stores the latest album artwork received from the server as binary WebSocket

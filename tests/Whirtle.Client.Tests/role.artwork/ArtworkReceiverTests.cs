@@ -1,7 +1,7 @@
-using Whirtle.Client.Artwork;
 using Whirtle.Client.Protocol;
+using Whirtle.Client.Role;
 
-namespace Whirtle.Client.Tests.Artwork;
+namespace Whirtle.Client.Tests.Role;
 
 public class ArtworkReceiverTests
 {

@@ -1,7 +1,7 @@
-using Whirtle.Client.Metadata;
 using Whirtle.Client.Protocol;
+using Whirtle.Client.Role;
 
-namespace Whirtle.Client.Tests.Metadata;
+namespace Whirtle.Client.Tests.Role;
 
 public class NowPlayingStateTests
 {

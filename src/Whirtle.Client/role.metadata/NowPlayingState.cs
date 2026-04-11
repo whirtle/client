@@ -1,6 +1,6 @@
 using Whirtle.Client.Protocol;
 
-namespace Whirtle.Client.Metadata;
+namespace Whirtle.Client.Role;
 
 /// <summary>
 /// Tracks the most recently received now-playing metadata (Metadata Role).
