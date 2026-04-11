@@ -37,13 +37,22 @@ client/
 ├── .gitignore
 ├── Whirtle.Client.slnx
 ├── src/
-│   └── Whirtle.Client/          # Main application
+│   └── Whirtle.Client/
 │       ├── Whirtle.Client.csproj
-│       └── Program.cs
+│       ├── Program.cs
+│       ├── Properties/
+│       │   └── AssemblyInfo.cs
+│       └── Transport/
+│           ├── ITransport.cs             # Transport abstraction
+│           ├── IClientWebSocket.cs       # Internal WebSocket seam
+│           ├── SystemClientWebSocket.cs  # Wraps ClientWebSocket
+│           └── WebSocketTransport.cs     # WebSocket implementation
 └── tests/
-    └── Whirtle.Client.Tests/    # Unit tests (xUnit)
+    └── Whirtle.Client.Tests/
         ├── Whirtle.Client.Tests.csproj
-        └── ProgramTests.cs
+        └── Transport/
+            ├── FakeClientWebSocket.cs        # Test double
+            └── WebSocketTransportTests.cs
 ```
 
 ## Development Notes
