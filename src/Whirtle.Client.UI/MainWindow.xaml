@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Whirtle.Client.UI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Whirtle.Client.UI"
+    xmlns:tb="using:H.NotifyIcon"
+    Title="Whirtle">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--
+            Non-visual tray icon. Lives in the window's element tree but renders nothing;
+            H.NotifyIcon creates the Shell_NotifyIcon entry in the taskbar notification area.
+        -->
+        <tb:TaskbarIcon
+            Grid.RowSpan="2"
+            x:Name="TrayIcon"
+            ToolTipText="{x:Bind NowPlayingViewModel.TrayTooltip, Mode=OneWay}"
+            TrayLeftMouseDoubleClick="TrayIcon_DoubleClicked">
+            <tb:TaskbarIcon.ContextFlyout>
+                <MenuFlyout>
+                    <MenuFlyoutItem Text="Show Whirtle" Click="TrayShow_Click" />
+                    <MenuFlyoutItem x:Name="TrayMuteItem" Text="Mute" Click="TrayMute_Click" />
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="Quit Whirtle" Click="TrayQuit_Click" />
+                </MenuFlyout>
+            </tb:TaskbarIcon.ContextFlyout>
+        </tb:TaskbarIcon>
+
+        <!-- Drag region / custom title bar -->
+        <Grid Grid.Row="0" x:Name="AppTitleBar">
+            <TextBlock
+                Text="Whirtle"
+                VerticalAlignment="Center"
+                Margin="16,0"
+                Style="{ThemeResource CaptionTextBlockStyle}" />
+        </Grid>
+
+        <!-- Main navigation shell -->
+        <NavigationView
+            Grid.Row="1"
+            x:Name="NavView"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            PaneDisplayMode="Left"
+            OpenPaneLength="180"
+            SelectionChanged="NavView_SelectionChanged">
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem Tag="NowPlaying" Content="Now Playing">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8D6;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem Tag="Settings" Content="Settings">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE713;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.FooterMenuItems>
+
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
+    </Grid>
+</Window>
