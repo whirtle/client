@@ -53,6 +53,14 @@ internal sealed class JitterBuffer
     /// Updates the internal cursor so equal/older frames are dropped on
     /// future <see cref="Enqueue"/> calls.
     /// </summary>
+    /// <remarks>
+    /// After dequeuing a frame at timestamp <c>T</c> the cursor is set to
+    /// <c>T + 1</c>, meaning any subsequently enqueued frame with timestamp
+    /// ≤ <c>T</c> is treated as a duplicate or late arrival and silently dropped.
+    /// Frames whose timestamps skip values (e.g. <c>T</c>, <c>T+5</c>, <c>T+10</c>)
+    /// are handled correctly — the gap is simply not present in the sorted list and
+    /// no phantom frames are inserted.
+    /// </remarks>
     public bool TryDequeue(out long timestamp, out AudioFrame? frame)
     {
         lock (_frames)
@@ -64,9 +72,9 @@ internal sealed class JitterBuffer
                 return false;
             }
 
-            timestamp       = _frames.Keys[0];
-            frame           = _frames.Values[0];
-            _nextExpected   = timestamp + 1;
+            timestamp     = _frames.Keys[0];
+            frame         = _frames.Values[0];
+            _nextExpected = timestamp + 1; // drop duplicates and late arrivals
             _frames.RemoveAt(0);
             return true;
         }
