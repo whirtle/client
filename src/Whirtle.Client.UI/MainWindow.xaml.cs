@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Windows.Input;
 using H.NotifyIcon;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
