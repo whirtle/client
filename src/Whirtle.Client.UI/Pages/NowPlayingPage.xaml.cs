@@ -21,7 +21,7 @@ public sealed partial class NowPlayingPage : Page
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
     }
 
-    private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    private async void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is not nameof(ViewModel.AlbumArtData))
             return;
@@ -29,10 +29,19 @@ public sealed partial class NowPlayingPage : Page
         if (ViewModel.AlbumArtData is { Length: > 0 } bytes)
         {
             var bitmap = new BitmapImage();
+            // Keep the stream alive until SetSourceAsync completes; disposing
+            // it early (as a using-in-sync-method would) corrupts the load.
             using var stream = new System.IO.MemoryStream(bytes);
-            using var ras = stream.AsRandomAccessStream();
-            _ = bitmap.SetSourceAsync(ras);
-            AlbumArtImage.Source = bitmap;
+            using var ras    = stream.AsRandomAccessStream();
+            try
+            {
+                await bitmap.SetSourceAsync(ras);
+                AlbumArtImage.Source = bitmap;
+            }
+            catch
+            {
+                AlbumArtImage.Source = null;
+            }
         }
         else
         {
