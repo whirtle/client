@@ -69,7 +69,7 @@ public sealed partial class MainWindow : Window
 
     // ── Tray icon handlers ─────────────────────────────────────────────────
 
-    private void TrayIcon_DoubleClicked(TaskbarIcon sender, RoutedEventArgs args)
+    private void TrayIcon_DoubleClicked(TaskbarIcon sender, TrayMouseDoubleClickEventArgs args)
         => RestoreFromTray();
 
     private void TrayShow_Click(object sender, RoutedEventArgs e)
