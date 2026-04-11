@@ -42,17 +42,26 @@ client/
 │       ├── Program.cs
 │       ├── Properties/
 │       │   └── AssemblyInfo.cs
-│       └── Transport/
-│           ├── ITransport.cs             # Transport abstraction
-│           ├── IClientWebSocket.cs       # Internal WebSocket seam
-│           ├── SystemClientWebSocket.cs  # Wraps ClientWebSocket
-│           └── WebSocketTransport.cs     # WebSocket implementation
+│       ├── Transport/
+│       │   ├── ITransport.cs             # Transport abstraction
+│       │   ├── IClientWebSocket.cs       # Internal WebSocket seam
+│       │   ├── SystemClientWebSocket.cs  # Wraps ClientWebSocket
+│       │   └── WebSocketTransport.cs     # WebSocket implementation
+│       └── Protocol/
+│           ├── Message.cs                # All message records + polymorphic JSON
+│           ├── MessageSerializer.cs      # Internal JSON encoder/decoder
+│           ├── HandshakeException.cs     # Thrown on handshake failure
+│           └── ProtocolClient.cs         # Handshake + send/receive over ITransport
 └── tests/
     └── Whirtle.Client.Tests/
         ├── Whirtle.Client.Tests.csproj
-        └── Transport/
-            ├── FakeClientWebSocket.cs        # Test double
-            └── WebSocketTransportTests.cs
+        ├── Transport/
+        │   ├── FakeClientWebSocket.cs        # Test double
+        │   └── WebSocketTransportTests.cs
+        └── Protocol/
+            ├── FakeTransport.cs              # Test double
+            ├── MessageSerializerTests.cs
+            └── ProtocolClientTests.cs
 ```
 
 ## Development Notes
