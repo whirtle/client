@@ -52,11 +52,17 @@ client/
 │       │   ├── MessageSerializer.cs      # Internal JSON encoder/decoder
 │       │   ├── HandshakeException.cs     # Thrown on handshake failure
 │       │   └── ProtocolClient.cs         # Handshake + send/receive over ITransport
-│       └── Clock/
-│           ├── ISystemClock.cs           # Internal clock seam
-│           ├── SystemClock.cs            # Production DateTime.UtcNow wrapper
-│           ├── ClockSyncResult.cs        # Offset + RTT result record
-│           └── ClockSynchronizer.cs      # NTP-style sync over ProtocolClient
+│       ├── Clock/
+│       │   ├── ISystemClock.cs           # Internal clock seam
+│       │   ├── SystemClock.cs            # Production DateTime.UtcNow wrapper
+│       │   ├── ClockSyncResult.cs        # Offset + RTT result record
+│       │   └── ClockSynchronizer.cs      # NTP-style sync over ProtocolClient
+│       └── Discovery/
+│           ├── ServiceEndpoint.cs        # Discovered host + port
+│           ├── IMulticastSocket.cs       # Internal UDP socket seam
+│           ├── SystemMulticastSocket.cs  # Production UdpClient wrapper
+│           ├── DnsMessage.cs             # DNS wire-format encoder/decoder (PTR/SRV/A)
+│           └── MdnsDiscovery.cs          # mDNS PTR query + response parsing
 └── tests/
     └── Whirtle.Client.Tests/
         ├── Whirtle.Client.Tests.csproj
@@ -67,9 +73,13 @@ client/
         │   ├── FakeTransport.cs              # Test double
         │   ├── MessageSerializerTests.cs
         │   └── ProtocolClientTests.cs
-        └── Clock/
-            ├── FakeClock.cs                  # Test double
-            └── ClockSynchronizerTests.cs
+        ├── Clock/
+        │   ├── FakeClock.cs                  # Test double
+        │   └── ClockSynchronizerTests.cs
+        └── Discovery/
+            ├── FakeMulticastSocket.cs        # Test double
+            ├── DnsMessageTests.cs
+            └── MdnsDiscoveryTests.cs
 ```
 
 ## Development Notes
