@@ -89,7 +89,7 @@ public sealed class MdnsAdvertiser : IDisposable
             if (parsed is null || !parsed.IsQuery) continue;
 
             bool asksForUs = parsed.Questions.Any(q =>
-                string.Equals(q, ServiceType, StringComparison.OrdinalIgnoreCase));
+                string.Equals(q.TrimEnd('.'), ServiceType.TrimEnd('.'), StringComparison.OrdinalIgnoreCase));
 
             if (!asksForUs) continue;
 
