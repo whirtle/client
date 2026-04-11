@@ -15,6 +15,8 @@ internal sealed class FakeTransport : ITransport
 
     public void EnqueueInbound(byte[] data) => _inbound.Writer.TryWrite(data);
     public void CloseInbound() => _inbound.Writer.TryComplete();
+    /// <summary>Completes the inbound stream with an error, simulating a connection drop.</summary>
+    public void CompleteWithError(Exception ex) => _inbound.Writer.TryComplete(ex);
 
     public Task ConnectAsync(Uri uri, CancellationToken cancellationToken = default)
     {

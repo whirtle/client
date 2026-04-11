@@ -7,16 +7,21 @@ namespace Whirtle.Client.Tests.Transport;
 internal sealed class FakeClientWebSocket : IClientWebSocket
 {
     private WebSocketState _state = WebSocketState.None;
-    private readonly Channel<(byte[] Data, WebSocketMessageType Type)> _incoming =
-        Channel.CreateUnbounded<(byte[], WebSocketMessageType)>();
+
+    private readonly record struct Queued(byte[]? Data, WebSocketMessageType Type, Exception? Error);
+    private readonly Channel<Queued> _incoming = Channel.CreateUnbounded<Queued>();
 
     public WebSocketState State => _state;
 
     public void EnqueueMessage(byte[] data, WebSocketMessageType type = WebSocketMessageType.Binary)
-        => _incoming.Writer.TryWrite((data, type));
+        => _incoming.Writer.TryWrite(new Queued(data, type, null));
 
     public void EnqueueClose()
-        => _incoming.Writer.TryWrite(([], WebSocketMessageType.Close));
+        => _incoming.Writer.TryWrite(new Queued([], WebSocketMessageType.Close, null));
+
+    /// <summary>Causes the next ReceiveAsync call to throw <paramref name="ex"/>.</summary>
+    public void EnqueueException(Exception ex)
+        => _incoming.Writer.TryWrite(new Queued(null, WebSocketMessageType.Binary, ex));
 
     public Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
     {
@@ -29,7 +34,12 @@ internal sealed class FakeClientWebSocket : IClientWebSocket
 
     public async ValueTask<ValueWebSocketReceiveResult> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken)
     {
-        var (data, type) = await _incoming.Reader.ReadAsync(cancellationToken);
+        var queued = await _incoming.Reader.ReadAsync(cancellationToken);
+
+        if (queued.Error is not null)
+            throw queued.Error;
+
+        var (data, type) = (queued.Data!, queued.Type);
 
         if (type == WebSocketMessageType.Close)
         {

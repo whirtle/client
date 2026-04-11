@@ -131,4 +131,48 @@ public class ReceiveAllAsyncTests
 
         Assert.Fail("No frame received.");
     }
+
+    // ── Connection-loss / error propagation ──────────────────────────────────
+
+    [Fact]
+    public async Task ReceiveAllAsync_PropagatesTransportError()
+    {
+        var (client, transport) = Build();
+        transport.CompleteWithError(new IOException("socket reset"));
+
+        await Assert.ThrowsAsync<IOException>(async () =>
+        {
+            await foreach (var _ in client.ReceiveAllAsync()) { }
+        });
+    }
+
+    [Fact]
+    public async Task ReceiveAllAsync_DeliversFramesBeforeTransportError()
+    {
+        var (client, transport) = Build();
+        transport.EnqueueInbound(Serializer.Serialize(new PingMessage()));
+        transport.EnqueueInbound(Serializer.Serialize(new PongMessage()));
+        transport.CompleteWithError(new IOException("socket reset"));
+
+        var received = new List<IncomingFrame>();
+        await Assert.ThrowsAsync<IOException>(async () =>
+        {
+            await foreach (var f in client.ReceiveAllAsync())
+                received.Add(f);
+        });
+
+        Assert.Equal(2, received.Count); // both messages arrived before the error
+    }
+
+    [Fact]
+    public async Task ReceiveAsync_PropagatesTransportError()
+    {
+        var (client, transport) = Build();
+        transport.CompleteWithError(new IOException("socket reset"));
+
+        await Assert.ThrowsAsync<IOException>(async () =>
+        {
+            await foreach (var _ in client.ReceiveAsync()) { }
+        });
+    }
 }

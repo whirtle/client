@@ -1,3 +1,4 @@
+using System.Net.WebSockets;
 using Whirtle.Client.Transport;
 
 namespace Whirtle.Client.Tests.Transport;
@@ -148,5 +149,43 @@ public class WebSocketTransportTests
         await transport.DisposeAsync();
 
         Assert.False(transport.IsConnected);
+    }
+
+    // ── Connection-loss / error propagation ──────────────────────────────────
+
+    [Fact]
+    public async Task ReceiveAsync_PropagatesSocketException()
+    {
+        var fake = new FakeClientWebSocket();
+        var transport = new WebSocketTransport(fake);
+        await transport.ConnectAsync(new Uri("ws://localhost"));
+
+        fake.EnqueueException(new WebSocketException("connection reset by peer"));
+
+        await Assert.ThrowsAsync<WebSocketException>(async () =>
+        {
+            await foreach (var _ in transport.ReceiveAsync()) { }
+        });
+    }
+
+    [Fact]
+    public async Task ReceiveAsync_AfterSuccessfulMessages_PropagatesSocketException()
+    {
+        var fake = new FakeClientWebSocket();
+        var transport = new WebSocketTransport(fake);
+        await transport.ConnectAsync(new Uri("ws://localhost"));
+
+        fake.EnqueueMessage([1]);
+        fake.EnqueueMessage([2]);
+        fake.EnqueueException(new WebSocketException("mid-stream failure"));
+
+        var received = new List<byte[]>();
+        await Assert.ThrowsAsync<WebSocketException>(async () =>
+        {
+            await foreach (var msg in transport.ReceiveAsync())
+                received.Add(msg);
+        });
+
+        Assert.Equal(2, received.Count); // received good messages before the error
     }
 }
