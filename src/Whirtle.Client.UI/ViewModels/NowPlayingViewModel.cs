@@ -167,18 +167,6 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             Log.Information("Connected to {ServerId} ({ServerName}), reason={Reason}",
                 hello.ServerId, hello.Name, hello.ConnectionReason);
 
-            var playerSupport = new PlayerV1Support(
-                SupportedFormats:
-                [
-                    new SupportedFormat("opus", Channels: 2, SampleRate: 48_000, BitDepth: 16),
-                    new SupportedFormat("flac", Channels: 2, SampleRate: 44_100, BitDepth: 16),
-                    new SupportedFormat("pcm",  Channels: 2, SampleRate: 48_000, BitDepth: 16),
-                ],
-                BufferCapacity:    1_000_000,
-                SupportedCommands: ["volume", "mute"]);
-
-            await _protocol.HandshakeAsync("1.0", playerSupport, token);
-
             // Initial clock sync — establishes RTT for signal strength.
             var syncer = new ClockSynchronizer(_protocol);
             var sync   = await syncer.SyncOnceAsync(token);
@@ -278,7 +266,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task SkipAsync()
     {
         if (_controller is null) return;
-        await _controller.SkipAsync();
+        await _controller.NextAsync();
     }
 
     [RelayCommand]
@@ -325,7 +313,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                                 Title           = meta.Title;
                                 Artist          = meta.Artist;
                                 Album           = meta.Album;
-                                PositionSeconds = meta.Progress ?? 0;
+                                PositionSeconds = meta.Progress is { } p ? p.TrackProgress / 1000.0 : 0;
                                 OnPropertyChanged(nameof(TrayTooltip));
                             });
                         }
@@ -339,9 +327,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                         }
                         break;
 
-                    case ProtocolFrame { Message: StreamStartMessage s }:
-                        var codec      = s.Player.Codec.ToUpperInvariant();
-                        var sampleRate = s.Player.SampleRate;
+                    case ProtocolFrame { Message: StreamStartMessage { Player: { } sp } }:
+                        var codec      = sp.Codec.ToUpperInvariant();
+                        var sampleRate = sp.SampleRate;
                         _dispatcher.TryEnqueue(() =>
                         {
                             CodecName  = codec;
