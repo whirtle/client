@@ -16,12 +16,33 @@ public abstract record Message;
 /// Wire type: <c>client/hello</c>
 /// </summary>
 public sealed record ClientHelloMessage(
-    string          ClientId,
-    string          Name,
-    int             Version,
-    string[]        SupportedRoles,
+    string           ClientId,
+    string           Name,
+    int              Version,
+    string[]         SupportedRoles,
     [property: JsonPropertyName("player@v1_support")]
-    PlayerV1Support? PlayerV1Support = null) : Message;
+    PlayerV1Support?  PlayerV1Support  = null,
+    [property: JsonPropertyName("artwork@v1_support")]
+    ArtworkV1Support? ArtworkV1Support = null) : Message;
+
+/// <summary>Configuration for one artwork channel in <see cref="ArtworkV1Support"/>.</summary>
+/// <param name="Source"><c>"album"</c> | <c>"artist"</c> | <c>"none"</c></param>
+/// <param name="Format"><c>"jpeg"</c> | <c>"png"</c> | <c>"bmp"</c></param>
+/// <param name="MediaWidth">Maximum width in pixels the client can display.</param>
+/// <param name="MediaHeight">Maximum height in pixels the client can display.</param>
+public sealed record ArtworkV1SupportChannel(
+    string Source,
+    string Format,
+    int    MediaWidth,
+    int    MediaHeight);
+
+/// <summary>
+/// Artwork-role capability object sent inside <c>client/hello</c>.
+/// Declares 1–4 independent display channels.
+/// Wire name: <c>artwork@v1_support</c>
+/// </summary>
+public sealed record ArtworkV1Support(
+    ArtworkV1SupportChannel[] Channels);
 
 /// <summary>One supported audio format advertised in <see cref="PlayerV1Support"/>.</summary>
 public sealed record PlayerV1SupportFormat(
@@ -178,18 +199,31 @@ public sealed record GroupUpdateMessage(
 // ─── Player Role ──────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Sent by the player client to request a different audio encoding.
+/// Sent by the client to request a different encoding (player audio or artwork format).
 /// Wire type: <c>stream/request-format</c>
 /// </summary>
 public sealed record StreamRequestFormatMessage(
-    StreamRequestFormatPlayer? Player = null) : Message;
+    StreamRequestFormatPlayer?  Player  = null,
+    StreamRequestFormatArtwork? Artwork = null) : Message;
 
-/// <summary>Requested format parameters inside <see cref="StreamRequestFormatMessage"/>.</summary>
+/// <summary>Requested audio format parameters inside <see cref="StreamRequestFormatMessage"/>.</summary>
 public sealed record StreamRequestFormatPlayer(
     string? Codec      = null,
     int?    Channels   = null,
     int?    SampleRate = null,
     int?    BitDepth   = null);
+
+/// <summary>
+/// Requested artwork format for a single channel inside <see cref="StreamRequestFormatMessage"/>.
+/// </summary>
+/// <param name="Channel">Channel number (0–3) matching the index from <c>client/hello</c>.</param>
+/// <param name="Source"><c>"album"</c> | <c>"artist"</c> | <c>"none"</c></param>
+public sealed record StreamRequestFormatArtwork(
+    int     Channel,
+    string? Source      = null,
+    string? Format      = null,
+    int?    MediaWidth  = null,
+    int?    MediaHeight = null);
 
 /// <summary>
 /// Sent by the server to instruct the player to change volume, mute state, or static delay.
@@ -207,13 +241,14 @@ public sealed record ServerCommandPlayer(
     int?   StaticDelayMs = null);
 
 /// <summary>
-/// Sent by the server to describe the active audio stream format.
+/// Sent by the server to describe the active audio and/or artwork stream format.
 /// Wire type: <c>stream/start</c>
 /// </summary>
 public sealed record StreamStartMessage(
-    StreamStartPlayer? Player = null) : Message;
+    StreamStartPlayer?  Player  = null,
+    ArtworkStreamStart? Artwork = null) : Message;
 
-/// <summary>Stream format details inside <see cref="StreamStartMessage"/>.</summary>
+/// <summary>Audio stream format details inside <see cref="StreamStartMessage"/>.</summary>
 /// <param name="CodecHeader">Base64-encoded codec header (e.g. required for FLAC).</param>
 public sealed record StreamStartPlayer(
     string  Codec,
@@ -221,6 +256,21 @@ public sealed record StreamStartPlayer(
     int     Channels,
     int     BitDepth,
     string? CodecHeader = null);
+
+/// <summary>Active artwork channel configuration inside <see cref="StreamStartMessage"/>.</summary>
+public sealed record ArtworkStreamStart(
+    ArtworkStreamStartChannel[] Channels);
+
+/// <summary>Per-channel artwork format reported in <see cref="ArtworkStreamStart"/>.</summary>
+/// <param name="Source"><c>"album"</c> | <c>"artist"</c> | <c>"none"</c></param>
+/// <param name="Format"><c>"jpeg"</c> | <c>"png"</c> | <c>"bmp"</c></param>
+/// <param name="Width">Actual width of encoded images in pixels.</param>
+/// <param name="Height">Actual height of encoded images in pixels.</param>
+public sealed record ArtworkStreamStartChannel(
+    string Source,
+    string Format,
+    int    Width,
+    int    Height);
 
 /// <summary>
 /// Sent by the server to instruct the player to discard all buffered audio.

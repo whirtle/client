@@ -116,8 +116,13 @@ public sealed class ProtocolClient : IAsyncDisposable
                 // 8–11 = artwork channel 0–3
                 var typeId  = data[0];
                 var payload = data[1..];
-                if (typeId is >= 8 and <= 11)
-                    yield return new ArtworkFrame(payload, DetectMimeType(payload), Channel: typeId - 8);
+                if (typeId is >= 8 and <= 11 && payload.Length >= 8)
+                {
+                    long  timestamp = BinaryPrimitives.ReadInt64BigEndian(payload);
+                    var   imageData = payload[8..];
+                    yield return new ArtworkFrame(
+                        timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
+                }
                 else if (typeId == 4 && payload.Length >= 8)
                 {
                     long timestamp   = BinaryPrimitives.ReadInt64BigEndian(payload);
