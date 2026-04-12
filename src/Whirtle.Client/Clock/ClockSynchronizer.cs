@@ -10,26 +10,19 @@ namespace Whirtle.Client.Clock;
 ///
 /// Round-trip algorithm
 /// ────────────────────
-///  t0  client sends   SyncRequest(clientSentAt = t0)
-///  t1  server records serverReceivedAt = t1, replies SyncReply(t0, t1)
-///  t2  client records clientReceivedAt = t2
+///  t0  client sends   client/time(client_transmitted = t0)  [Unix μs]
+///  t1  server records server_received = t1, replies server/time(t0, t1)
+///  t2  client records current time = t2
 ///
-///  RTT         = t2 − t0
-///  ClockOffset = t1 − t0 − RTT/2
-///              = (t1 − t0 − t2 + t0) / 2         (simplified NTP formula)
-///              = (t1 − t2) / 2                    (one-way assumption: RTT symmetric)
+///  RTT         = t2 − t0             [μs → converted to TimeSpan]
+///  ClockOffset = t1 − t0 − RTT/2    [μs → converted to TimeSpan]
 /// </summary>
 public sealed class ClockSynchronizer
 {
-    /// <summary>
-    /// Maximum time to wait for a SyncReply before treating the round-trip as
-    /// failed.  Prevents SyncOnceAsync from hanging forever if the server stops
-    /// responding.
-    /// </summary>
     private static readonly TimeSpan DefaultSyncTimeout = TimeSpan.FromSeconds(10);
 
     private readonly ProtocolClient _client;
-    private readonly ISystemClock _clock;
+    private readonly ISystemClock   _clock;
 
     public ClockSynchronizer(ProtocolClient client)
         : this(client, SystemClock.Instance) { }
@@ -37,48 +30,40 @@ public sealed class ClockSynchronizer
     internal ClockSynchronizer(ProtocolClient client, ISystemClock clock)
     {
         _client = client;
-        _clock = clock;
+        _clock  = clock;
     }
 
     /// <summary>
     /// Executes one sync round trip and returns the measured
     /// <see cref="ClockSyncResult"/>.
     /// </summary>
-    /// <remarks>
-    /// Reads the next message from the shared receive stream, so the caller
-    /// must not be concurrently consuming <see cref="ProtocolClient.ReceiveAsync"/>.
-    /// Imposes a <see cref="DefaultSyncTimeout"/> deadline so the call cannot
-    /// block indefinitely if the server never sends a SyncReply.
-    /// </remarks>
     public async Task<ClockSyncResult> SyncOnceAsync(CancellationToken cancellationToken = default)
     {
-        // Apply a hard per-call deadline so a silent server cannot block forever.
         using var deadline = new CancellationTokenSource(DefaultSyncTimeout);
         using var linked   = CancellationTokenSource.CreateLinkedTokenSource(
                                  cancellationToken, deadline.Token);
         var token = linked.Token;
 
-        var t0 = _clock.UtcNowTicks;
-
-        await _client.SendAsync(new SyncRequestMessage(t0), token);
+        var t0 = _clock.UtcNowMicroseconds;
+        await _client.SendAsync(new ClientTimeMessage(t0), token);
 
         await foreach (var msg in _client.ReceiveAsync(token))
         {
-            if (msg is not SyncReplyMessage reply)
+            if (msg is not ServerTimeMessage reply)
                 continue;
 
-            var t2 = _clock.UtcNowTicks;
-            return Compute(reply.ClientSentAt, reply.ServerReceivedAt, t2);
+            var t2 = _clock.UtcNowMicroseconds;
+            return Compute(reply.ClientTransmitted, reply.ServerReceived, t2);
         }
 
         throw new InvalidOperationException(
-            "Connection closed before a SyncReply was received.");
+            "Connection closed before a server/time reply was received.");
     }
 
     private static ClockSyncResult Compute(long t0, long t1, long t2)
     {
-        var rtt    = TimeSpan.FromTicks(t2 - t0);
-        var offset = TimeSpan.FromTicks(t1 - t0 - rtt.Ticks / 2);
+        var rtt    = TimeSpan.FromMicroseconds(t2 - t0);
+        var offset = TimeSpan.FromMicroseconds(t1 - t0 - (t2 - t0) / 2);
         return new ClockSyncResult(offset, rtt);
     }
 }

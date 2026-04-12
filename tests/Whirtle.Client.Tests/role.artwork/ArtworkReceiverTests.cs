@@ -79,7 +79,7 @@ public class ArtworkReceiverTests
         var transport = new Whirtle.Client.Tests.Protocol.FakeTransport();
         var protocol  = new Whirtle.Client.Protocol.ProtocolClient(transport);
 
-        transport.EnqueueInbound(binaryData);
+        transport.EnqueueInbound([8, .. binaryData]); // type byte 8 = artwork channel 0
         transport.CloseInbound();
 
         await foreach (var frame in protocol.ReceiveAllAsync())

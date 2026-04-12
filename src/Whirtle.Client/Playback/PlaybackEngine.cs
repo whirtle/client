@@ -189,7 +189,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
         try
         {
             await _protocol.SendAsync(
-                new ErrorMessage("playback_error", "Buffer underrun or excessive clock drift."),
+                new ClientStateMessage("error"),
                 ct).ConfigureAwait(false);
         }
         catch (Exception)
@@ -207,7 +207,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
             // Use a short-lived CTS so a stalled send doesn't block forever.
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
             await _protocol.SendAsync(
-                new ErrorMessage("synchronized", "Playback recovered."), cts.Token)
+                new ClientStateMessage("synchronized"), cts.Token)
                 .ConfigureAwait(false);
         }
         catch (Exception) { }
@@ -219,8 +219,8 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// </summary>
     private double ComputeDriftMs(long serverTimestamp)
     {
-        long localNow      = _clock.UtcNowTicks;
-        long serverNowTicks = localNow + _clockOffset.Ticks;
-        return TimeSpan.FromTicks(serverNowTicks - serverTimestamp).TotalMilliseconds;
+        long localNowUs  = _clock.UtcNowMicroseconds;
+        long serverNowUs = localNowUs + (long)_clockOffset.TotalMicroseconds;
+        return TimeSpan.FromMicroseconds(serverNowUs - serverTimestamp).TotalMilliseconds;
     }
 }

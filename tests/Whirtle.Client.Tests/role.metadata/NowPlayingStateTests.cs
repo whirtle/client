@@ -5,25 +5,23 @@ namespace Whirtle.Client.Tests.Role;
 
 public class NowPlayingStateTests
 {
-    private static NowPlayingMessage SampleMsg(
-        string? title  = "Song",
-        string? artist = "Artist",
-        string? album  = "Album",
-        double? dur    = 240.0,
-        double? pos    = 30.0)
-        => new(title, artist, album, dur, pos);
+    private static ServerMetadataState SampleState(
+        string? title    = "Song",
+        string? artist   = "Artist",
+        string? album    = "Album",
+        double? progress = 30.0)
+        => new(Title: title, Artist: artist, Album: album, Progress: progress);
 
     [Fact]
     public void Update_SetsAllFields()
     {
         var state = new NowPlayingState();
-        state.Update(SampleMsg());
+        state.Update(SampleState());
 
         Assert.Equal("Song",   state.Title);
         Assert.Equal("Artist", state.Artist);
         Assert.Equal("Album",  state.Album);
-        Assert.Equal(240.0,    state.DurationSeconds);
-        Assert.Equal(30.0,     state.PositionSeconds);
+        Assert.Equal(30.0,     state.ProgressSeconds);
     }
 
     [Fact]
@@ -33,7 +31,7 @@ public class NowPlayingStateTests
         int raised = 0;
         state.Changed += () => raised++;
 
-        state.Update(SampleMsg());
+        state.Update(SampleState());
 
         Assert.Equal(1, raised);
     }
@@ -42,8 +40,8 @@ public class NowPlayingStateTests
     public void Update_OverwritesPreviousValues()
     {
         var state = new NowPlayingState();
-        state.Update(SampleMsg(title: "Old"));
-        state.Update(SampleMsg(title: "New"));
+        state.Update(SampleState(title: "Old"));
+        state.Update(SampleState(title: "New"));
 
         Assert.Equal("New", state.Title);
     }
@@ -52,20 +50,19 @@ public class NowPlayingStateTests
     public void Update_NullableFields_AreNullWhenAbsent()
     {
         var state = new NowPlayingState();
-        state.Update(new NowPlayingMessage(null, null, null, null, null));
+        state.Update(new ServerMetadataState());
 
         Assert.Null(state.Title);
         Assert.Null(state.Artist);
         Assert.Null(state.Album);
-        Assert.Null(state.DurationSeconds);
-        Assert.Null(state.PositionSeconds);
+        Assert.Null(state.ProgressSeconds);
     }
 
     [Fact]
     public void ToString_IncludesPresentFields()
     {
         var state = new NowPlayingState();
-        state.Update(SampleMsg("Track", "Band", "Record"));
+        state.Update(SampleState("Track", "Band", "Record"));
 
         var text = state.ToString();
         Assert.Contains("Track",  text);

@@ -3,7 +3,9 @@
 
 namespace Whirtle.Client.Clock;
 
+/// <summary>Abstraction over wall-clock time, enabling deterministic testing.</summary>
 internal interface ISystemClock
 {
-    long UtcNowTicks { get; }
+    /// <summary>Current UTC time expressed as Unix microseconds (μs since 1970-01-01T00:00:00Z).</summary>
+    long UtcNowMicroseconds { get; }
 }

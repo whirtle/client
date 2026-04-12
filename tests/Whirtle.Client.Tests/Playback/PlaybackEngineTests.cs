@@ -17,7 +17,7 @@ public class PlaybackEngineTests
         var renderer  = new FakeWasapiRenderer();
         var transport = new FakeTransport();
         var protocol  = new ProtocolClient(transport);
-        var clock     = new FakeClock(DateTime.UtcNow.Ticks);
+        var clock     = new FakeClock();
         var engine    = new PlaybackEngine(renderer, protocol, clock);
         return (engine, renderer, clock);
     }
@@ -36,7 +36,7 @@ public class PlaybackEngineTests
         engine.Start();
 
         for (int i = 0; i < 4; i++)
-            engine.Enqueue(clock.UtcNowTicks + i * TimeSpan.FromMilliseconds(20).Ticks, Frame());
+            engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
 
         await PollUntil(() => engine.State == PlaybackState.Synchronized, TimeSpan.FromSeconds(2));
 
@@ -52,7 +52,7 @@ public class PlaybackEngineTests
 
         // Provide just enough to reach Synchronized…
         for (int i = 0; i < 4; i++)
-            engine.Enqueue(clock.UtcNowTicks + i * TimeSpan.FromMilliseconds(20).Ticks, Frame());
+            engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
 
         await PollUntil(() => engine.State == PlaybackState.Synchronized, TimeSpan.FromSeconds(2));
 
@@ -70,7 +70,7 @@ public class PlaybackEngineTests
         engine.Start();
 
         for (int i = 0; i < 4; i++)
-            engine.Enqueue(clock.UtcNowTicks + i * TimeSpan.FromMilliseconds(20).Ticks, Frame());
+            engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
 
         await PollUntil(() => engine.State == PlaybackState.Synchronized, TimeSpan.FromSeconds(2));
         await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(3));

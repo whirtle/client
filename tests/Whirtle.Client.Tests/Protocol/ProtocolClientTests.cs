@@ -13,40 +13,33 @@ public class ProtocolClientTests
     }
 
     [Fact]
-    public async Task HandshakeAsync_SendsHello_ReturnsWelcome()
+    public async Task HandshakeAsync_SendsClientHello_ReturnsServerHello()
     {
         var (client, transport) = Build();
         await client.ConnectAsync(new Uri("ws://localhost"));
-        transport.EnqueueInbound(Serializer.Serialize(new WelcomeMessage("s-1", "1.0")));
+        transport.EnqueueInbound(Serializer.Serialize(
+            new ServerHelloMessage("srv-1", "Server", 1, ["metadata@v1"], "discovery")));
 
-        var welcome = await client.HandshakeAsync("1.0");
+        var welcome = await client.HandshakeAsync("client-id", "Test Client");
 
-        Assert.Equal("s-1", welcome.SessionId);
-        Assert.Equal("1.0", welcome.ServerVersion);
-        var sent = (HelloMessage)Serializer.Deserialize(transport.Sent[0]);
-        Assert.Equal("1.0", sent.Version);
+        Assert.Equal("srv-1",     welcome.ServerId);
+        Assert.Equal("discovery", welcome.ConnectionReason);
+
+        var sent = (ClientHelloMessage)Serializer.Deserialize(transport.Sent[0]);
+        Assert.Equal("client-id",   sent.ClientId);
+        Assert.Equal("Test Client", sent.Name);
+        Assert.Equal(1,             sent.Version);
     }
 
     [Fact]
-    public async Task HandshakeAsync_ServerSendsError_ThrowsHandshakeException()
-    {
-        var (client, transport) = Build();
-        await client.ConnectAsync(new Uri("ws://localhost"));
-        transport.EnqueueInbound(Serializer.Serialize(new ErrorMessage("auth_failed", "Bad token")));
-
-        var ex = await Assert.ThrowsAsync<HandshakeException>(() => client.HandshakeAsync("1.0"));
-
-        Assert.Equal("auth_failed", ex.Code);
-    }
-
-    [Fact]
-    public async Task HandshakeAsync_ConnectionClosedBeforeWelcome_ThrowsHandshakeException()
+    public async Task HandshakeAsync_ConnectionClosedBeforeServerHello_ThrowsHandshakeException()
     {
         var (client, transport) = Build();
         await client.ConnectAsync(new Uri("ws://localhost"));
         transport.CloseInbound();
 
-        var ex = await Assert.ThrowsAsync<HandshakeException>(() => client.HandshakeAsync("1.0"));
+        var ex = await Assert.ThrowsAsync<HandshakeException>(
+            () => client.HandshakeAsync("id", "name"));
 
         Assert.Equal("connection_closed", ex.Code);
     }
@@ -56,9 +49,10 @@ public class ProtocolClientTests
     {
         var (client, transport) = Build();
         await client.ConnectAsync(new Uri("ws://localhost"));
-        transport.EnqueueInbound(Serializer.Serialize(new PingMessage()));
+        transport.EnqueueInbound(Serializer.Serialize(new GroupUpdateMessage("playing", "g-1")));
 
-        var ex = await Assert.ThrowsAsync<HandshakeException>(() => client.HandshakeAsync("1.0"));
+        var ex = await Assert.ThrowsAsync<HandshakeException>(
+            () => client.HandshakeAsync("id", "name"));
 
         Assert.Equal("unexpected_message", ex.Code);
     }
@@ -68,31 +62,17 @@ public class ProtocolClientTests
     {
         var (client, transport) = Build();
         await client.ConnectAsync(new Uri("ws://localhost"));
-        transport.EnqueueInbound(Serializer.Serialize(new PingMessage()));
-        transport.EnqueueInbound(Serializer.Serialize(new PongMessage()));
-        transport.EnqueueInbound(Serializer.Serialize(new GoodbyeMessage("normal")));
+        transport.EnqueueInbound(Serializer.Serialize(new ServerStateMessage()));
+        transport.EnqueueInbound(Serializer.Serialize(new GroupUpdateMessage("playing", "g1")));
+        transport.CloseInbound();
 
         var received = new List<Message>();
         await foreach (var msg in client.ReceiveAsync())
             received.Add(msg);
 
         Assert.Equal(2, received.Count);
-        Assert.IsType<PingMessage>(received[0]);
-        Assert.IsType<PongMessage>(received[1]);
-    }
-
-    [Fact]
-    public async Task ReceiveAsync_StopsOnGoodbye()
-    {
-        var (client, transport) = Build();
-        await client.ConnectAsync(new Uri("ws://localhost"));
-        transport.EnqueueInbound(Serializer.Serialize(new GoodbyeMessage("normal")));
-
-        var count = 0;
-        await foreach (var _ in client.ReceiveAsync())
-            count++;
-
-        Assert.Equal(0, count);
+        Assert.IsType<ServerStateMessage>(received[0]);
+        Assert.IsType<GroupUpdateMessage>(received[1]);
     }
 
     [Fact]
@@ -101,14 +81,15 @@ public class ProtocolClientTests
         var (client, transport) = Build();
         await client.ConnectAsync(new Uri("ws://localhost"));
 
-        await client.SendAsync(new PingMessage());
+        await client.SendAsync(new ClientTimeMessage(12345L));
 
         Assert.Single(transport.Sent);
-        Assert.IsType<PingMessage>(Serializer.Deserialize(transport.Sent[0]));
+        var msg = (ClientTimeMessage)Serializer.Deserialize(transport.Sent[0]);
+        Assert.Equal(12345L, msg.ClientTransmitted);
     }
 
     [Fact]
-    public async Task DisconnectAsync_SendsGoodbyeAndDisconnects()
+    public async Task DisconnectAsync_SendsClientGoodbyeAndDisconnects()
     {
         var (client, transport) = Build();
         await client.ConnectAsync(new Uri("ws://localhost"));
@@ -116,7 +97,7 @@ public class ProtocolClientTests
         await client.DisconnectAsync("shutdown");
 
         Assert.False(transport.IsConnected);
-        var sent = (GoodbyeMessage)Serializer.Deserialize(transport.Sent[0]);
+        var sent = (ClientGoodbyeMessage)Serializer.Deserialize(transport.Sent[0]);
         Assert.Equal("shutdown", sent.Reason);
     }
 }

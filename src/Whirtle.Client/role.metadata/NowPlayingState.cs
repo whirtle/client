@@ -8,29 +8,30 @@ namespace Whirtle.Client.Role;
 /// <summary>
 /// Tracks the most recently received now-playing metadata (Metadata Role).
 ///
-/// Call <see cref="Update"/> each time a <see cref="NowPlayingMessage"/> arrives
-/// from the server. Raises <see cref="Changed"/> after every update so the UI
-/// can refresh.
+/// Call <see cref="Update"/> each time a <see cref="ServerStateMessage"/> that
+/// contains a non-null <see cref="ServerStateMessage.Metadata"/> arrives from
+/// the server. Raises <see cref="Changed"/> after every update.
 /// </summary>
 public sealed class NowPlayingState
 {
     public string? Title           { get; private set; }
     public string? Artist          { get; private set; }
     public string? Album           { get; private set; }
-    public double? DurationSeconds { get; private set; }
-    public double? PositionSeconds { get; private set; }
+    public double? ProgressSeconds { get; private set; }
 
     /// <summary>Raised whenever now-playing metadata changes.</summary>
     public event Action? Changed;
 
-    /// <summary>Applies a <see cref="NowPlayingMessage"/>, updating all properties and firing <see cref="Changed"/>.</summary>
-    public void Update(NowPlayingMessage msg)
+    /// <summary>
+    /// Applies a <see cref="ServerMetadataState"/> snapshot, updating all
+    /// properties and firing <see cref="Changed"/>.
+    /// </summary>
+    public void Update(ServerMetadataState state)
     {
-        Title           = msg.Title;
-        Artist          = msg.Artist;
-        Album           = msg.Album;
-        DurationSeconds = msg.DurationSeconds;
-        PositionSeconds = msg.PositionSeconds;
+        Title           = state.Title;
+        Artist          = state.Artist;
+        Album           = state.Album;
+        ProgressSeconds = state.Progress;
         Changed?.Invoke();
     }
 

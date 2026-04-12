@@ -9,4 +9,5 @@
   </Project>
   <Project Path="src/Whirtle.Client/Whirtle.Client.csproj" />
   <Project Path="tests/Whirtle.Client.Tests/Whirtle.Client.Tests.csproj" />
+  <Project Path="tests/Whirtle.Client.IntegrationTests/Whirtle.Client.IntegrationTests.csproj" />
 </Solution>
