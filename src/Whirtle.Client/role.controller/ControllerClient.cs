@@ -25,9 +25,17 @@ public sealed class ControllerClient
     public Task PauseAsync(CancellationToken cancellationToken = default)
         => Send("pause", cancellationToken);
 
-    /// <summary>Sends a <c>next</c> (skip) command.</summary>
-    public Task SkipAsync(CancellationToken cancellationToken = default)
+    /// <summary>Sends a <c>stop</c> command (stops playback and resets position).</summary>
+    public Task StopAsync(CancellationToken cancellationToken = default)
+        => Send("stop", cancellationToken);
+
+    /// <summary>Sends a <c>next</c> command (skip forward).</summary>
+    public Task NextAsync(CancellationToken cancellationToken = default)
         => Send("next", cancellationToken);
+
+    /// <summary>Sends a <c>previous</c> command (skip back / restart current).</summary>
+    public Task PreviousAsync(CancellationToken cancellationToken = default)
+        => Send("previous", cancellationToken);
 
     /// <summary>
     /// Sends a <c>volume</c> command.
@@ -40,6 +48,39 @@ public sealed class ControllerClient
             new ClientCommandMessage(new ClientControllerCommand("volume", Volume: vol100)),
             cancellationToken);
     }
+
+    /// <summary>Sends a <c>mute</c> command.</summary>
+    /// <param name="muted"><see langword="true"/> to mute; <see langword="false"/> to unmute.</param>
+    public Task SetMuteAsync(bool muted, CancellationToken cancellationToken = default)
+        => _protocol.SendAsync(
+            new ClientCommandMessage(new ClientControllerCommand("mute", Mute: muted)),
+            cancellationToken);
+
+    /// <summary>Sends a <c>repeat_off</c> command.</summary>
+    public Task RepeatOffAsync(CancellationToken cancellationToken = default)
+        => Send("repeat_off", cancellationToken);
+
+    /// <summary>Sends a <c>repeat_one</c> command (repeat current track continuously).</summary>
+    public Task RepeatOneAsync(CancellationToken cancellationToken = default)
+        => Send("repeat_one", cancellationToken);
+
+    /// <summary>Sends a <c>repeat_all</c> command (repeat all tracks continuously).</summary>
+    public Task RepeatAllAsync(CancellationToken cancellationToken = default)
+        => Send("repeat_all", cancellationToken);
+
+    /// <summary>Sends a <c>shuffle</c> command (randomise playback order).</summary>
+    public Task ShuffleAsync(CancellationToken cancellationToken = default)
+        => Send("shuffle", cancellationToken);
+
+    /// <summary>Sends an <c>unshuffle</c> command (restore original playback order).</summary>
+    public Task UnshuffleAsync(CancellationToken cancellationToken = default)
+        => Send("unshuffle", cancellationToken);
+
+    /// <summary>
+    /// Sends a <c>switch</c> command (move this client to the next group in the cycle).
+    /// </summary>
+    public Task SwitchAsync(CancellationToken cancellationToken = default)
+        => Send("switch", cancellationToken);
 
     private Task Send(string command, CancellationToken ct)
         => _protocol.SendAsync(
