@@ -167,9 +167,13 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
         rateRatio = Math.Clamp(rateRatio, 0.9, 1.1);
 
-        var samples = Math.Abs(rateRatio - 1.0) > 0.001
+        var resampled = Math.Abs(rateRatio - 1.0) > 0.001
             ? SampleInterpolator.Interpolate(frame.Samples, frame.Channels, rateRatio)
             : frame.Samples;
+
+        var samples = frame.Channels != _renderer.Channels
+            ? ChannelDownmixer.Downmix(resampled, frame.Channels)
+            : resampled;
 
         _renderer.Write(samples);
 
