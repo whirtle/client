@@ -7,7 +7,13 @@ namespace Whirtle.Client.Transport;
 
 internal sealed class SystemClientWebSocket : IClientWebSocket
 {
-    private readonly ClientWebSocket _inner = new();
+    private readonly ClientWebSocket _inner;
+
+    public SystemClientWebSocket()
+    {
+        _inner = new ClientWebSocket();
+        _inner.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    }
 
     public WebSocketState State => _inner.State;
 
