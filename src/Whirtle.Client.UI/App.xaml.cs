@@ -3,8 +3,10 @@
 
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Serilog;
 using Whirtle.Client.Audio;
+using Whirtle.Client.Discovery;
 using Whirtle.Client.UI.Logging;
 using Whirtle.Client.UI.ViewModels;
 
@@ -57,6 +59,33 @@ public partial class App : Application
         };
 
         _mainWindow.Activate();
+        _ = CheckFirewallAsync();
+    }
+
+    private async Task CheckFirewallAsync()
+    {
+        if (_settingsViewModel!.ConnectionMode != ConnectionMode.ServerInitiated)
+            return;
+
+        var port = MdnsAdvertiser.DefaultPort;
+        if (FirewallHelper.IsRulePresent(port))
+            return;
+
+        var dialog = new ContentDialog
+        {
+            Title             = "Firewall rule required",
+            Content           = $"Whirtle needs a Windows Firewall rule to allow incoming connections on port {port}. Add it now?",
+            PrimaryButtonText = "Add rule",
+            CloseButtonText   = "Not now",
+            DefaultButton     = ContentDialogButton.Primary,
+            XamlRoot          = _mainWindow!.Content.XamlRoot,
+        };
+
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        {
+            FirewallHelper.AddRule(port);
+            Log.Information("Requested firewall rule for port {Port}", port);
+        }
     }
 
     // ── Crash reporting ───────────────────────────────────────────────────────
