@@ -13,6 +13,10 @@ The Sendspin protocol is documented at https://www.sendspin-audio.com/spec/.
 - **Package Manager:** NuGet
 - Target OS is Windows 11
 
+## Tools
+
+- `gh.exe` is located at `C:\Program Files\GitHub CLI\gh.exe`
+
 ## Common Commands
 
 Once project files are in place, standard .NET CLI commands apply:
