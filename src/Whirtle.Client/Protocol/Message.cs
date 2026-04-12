@@ -129,18 +129,37 @@ public sealed record ServerStateMessage(
     ServerControllerState? Controller = null) : Message;
 
 /// <summary>Metadata portion of a <see cref="ServerStateMessage"/>.</summary>
+/// <param name="Timestamp">
+/// Server clock time in microseconds for when this metadata is valid.
+/// </param>
 public sealed record ServerMetadataState(
-    long?   Timestamp   = null,
-    string? Title       = null,
-    string? Artist      = null,
-    string? AlbumArtist = null,
-    string? Album       = null,
-    string? ArtworkUrl  = null,
-    int?    Year        = null,
-    int?    Track       = null,
-    double? Progress    = null,
-    string? Repeat      = null,
-    bool?   Shuffle     = null);
+    long?            Timestamp   = null,
+    string?          Title       = null,
+    string?          Artist      = null,
+    string?          AlbumArtist = null,
+    string?          Album       = null,
+    string?          ArtworkUrl  = null,
+    int?             Year        = null,
+    int?             Track       = null,
+    PlaybackProgress? Progress   = null,
+    string?          Repeat      = null,
+    bool?            Shuffle     = null);
+
+/// <summary>
+/// Playback progress snapshot embedded in <see cref="ServerMetadataState"/>.
+/// Sent whenever playback state changes (play, pause, resume, seek, speed change).
+/// </summary>
+/// <param name="TrackProgress">Current playback position in milliseconds.</param>
+/// <param name="TrackDuration">
+/// Total track length in milliseconds. 0 means unlimited/unknown (e.g. live radio).
+/// </param>
+/// <param name="PlaybackSpeed">
+/// Speed multiplier × 1000 (1000 = normal, 1500 = 1.5×, 0 = paused).
+/// </param>
+public sealed record PlaybackProgress(
+    int TrackProgress,
+    int TrackDuration,
+    int PlaybackSpeed);
 
 /// <summary>Controller portion of a <see cref="ServerStateMessage"/>.</summary>
 public sealed record ServerControllerState(
