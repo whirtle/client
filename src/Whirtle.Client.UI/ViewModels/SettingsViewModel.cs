@@ -25,11 +25,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     private CancellationTokenSource? _saveCts;
     private readonly object _saveCtsLock = new();
 
-    // Snapshot for OK/Cancel support
+    // Snapshot for OK/Cancel support (connection mode excluded: it changes via the
+    // server picker, outside the Settings dialog lifecycle).
     private record SettingsSnapshot(
         string ClientName, string ClientId, string PreferredAudioDeviceId,
-        AudioFormat PreferredFormat, int StaticDelayMs, ConnectionMode ConnectionMode,
-        string LogLevel);
+        AudioFormat PreferredFormat, int StaticDelayMs, string LogLevel);
 
     private SettingsSnapshot? _snapshot;
     private bool _suppressSave;
@@ -46,9 +46,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _preferredAudioDeviceId = string.Empty;
     [ObservableProperty] private int    _staticDelayMs          = 0;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ConnectionModeIndex))]
-    private ConnectionMode _connectionMode = ConnectionMode.ServerInitiated;
+    [ObservableProperty] private ConnectionMode _connectionMode = ConnectionMode.ServerInitiated;
 
     [ObservableProperty] private string _logLevel = "Information";
 
@@ -56,7 +54,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private AudioDeviceInfo? _selectedAudioDevice;
 
-    public ObservableCollection<AudioDeviceInfo> AudioDevices { get; } = new();
+    public ObservableCollection<AudioDeviceInfo>  AudioDevices  { get; } = new();
+    public ObservableCollection<PersistedServer>  SavedServers  { get; } = new();
 
     // ── Static option lists ────────────────────────────────────────────────
 
@@ -66,7 +65,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<string> LogLevelOptions { get; } =
         ["Verbose", "Debug", "Information", "Warning", "Error"];
 
-    // ── Index helpers (for RadioButtons SelectedIndex binding) ─────────────
+    // ── Index helpers ──────────────────────────────────────────────────────
 
     public int AudioFormatIndex
     {
@@ -82,14 +81,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             1 => AudioFormat.Flac,
             _ => AudioFormat.Pcm,
         };
-    }
-
-    public int ConnectionModeIndex
-    {
-        get => _connectionMode == ConnectionMode.ServerInitiated ? 0 : 1;
-        set => ConnectionMode  = value == 0
-            ? ConnectionMode.ServerInitiated
-            : ConnectionMode.ClientInitiated;
     }
 
     // ── Constructor ────────────────────────────────────────────────────────
@@ -117,6 +108,20 @@ public sealed partial class SettingsViewModel : ObservableObject
         catch { /* non-Windows build or no audio devices */ }
     }
 
+    // ── Saved server management ────────────────────────────────────────────
+
+    public void AddSavedServer(PersistedServer server)
+    {
+        SavedServers.Add(server);
+        Save();
+    }
+
+    public void RemoveSavedServer(PersistedServer server)
+    {
+        SavedServers.Remove(server);
+        Save();
+    }
+
     // ── Load / save ────────────────────────────────────────────────────────
 
     private void Load()
@@ -138,6 +143,12 @@ public sealed partial class SettingsViewModel : ObservableObject
             _staticDelayMs          = saved.StaticDelayMs;
             _connectionMode         = saved.ConnectionMode;
             _logLevel               = saved.LogLevel;
+
+            if (saved.SavedServers is { } servers)
+            {
+                foreach (var s in servers)
+                    SavedServers.Add(s);
+            }
         }
         catch { /* first run or corrupted file — use defaults */ }
     }
@@ -146,7 +157,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         _snapshot = new SettingsSnapshot(
             ClientName, ClientId, PreferredAudioDeviceId,
-            PreferredFormat, StaticDelayMs, ConnectionMode, LogLevel);
+            PreferredFormat, StaticDelayMs, LogLevel);
     }
 
     public void RestoreSnapshot()
@@ -160,7 +171,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             PreferredAudioDeviceId = _snapshot.PreferredAudioDeviceId;
             PreferredFormat        = _snapshot.PreferredFormat;
             StaticDelayMs          = _snapshot.StaticDelayMs;
-            ConnectionMode         = _snapshot.ConnectionMode;
             LogLevel               = _snapshot.LogLevel;
         }
         finally
@@ -218,7 +228,8 @@ public sealed partial class SettingsViewModel : ObservableObject
                 PreferredFormat,
                 StaticDelayMs,
                 ConnectionMode,
-                LogLevel);
+                LogLevel,
+                SavedServers.ToList());
 
             var json    = JsonSerializer.Serialize(data, JsonOptions);
             var tmpPath = SettingsPath + ".tmp";
@@ -240,5 +251,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         AudioFormat    PreferredFormat,
         int            StaticDelayMs,
         ConnectionMode ConnectionMode,
-        string         LogLevel);
+        string         LogLevel,
+        IReadOnlyList<PersistedServer>? SavedServers = null);
 }

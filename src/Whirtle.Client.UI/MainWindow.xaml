@@ -6,7 +6,7 @@
     xmlns:local="using:Whirtle.Client.UI"
     xmlns:tb="using:H.NotifyIcon"
     xmlns:controls="using:Whirtle.Client.UI.Controls"
-    Title="Whirtle">
+Title="Whirtle">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -15,10 +15,6 @@
             <RowDefinition Height="24" />
         </Grid.RowDefinitions>
 
-        <!--
-            Non-visual tray icon. Lives in the window's element tree but renders nothing;
-            H.NotifyIcon creates the Shell_NotifyIcon entry in the taskbar notification area.
-        -->
         <tb:TaskbarIcon
             Grid.RowSpan="2"
             x:Name="TrayIcon"
@@ -48,27 +44,37 @@
         <!-- Status bar -->
         <Border
             Grid.Row="2"
-            Padding="12,0"
+            Padding="4,0,12,0"
             Background="{ThemeResource LayerFillColorDefaultBrush}"
             BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
             BorderThickness="0,1,0,0">
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />    <!-- server name: takes leftover space -->
-                    <ColumnDefinition Width="Auto" /> <!-- codec + sample rate -->
-                    <ColumnDefinition Width="Auto" /> <!-- signal bars -->
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Server name (left, truncates when space is tight) -->
-                <TextBlock
+                <!-- Server picker button -->
+                <Button
                     Grid.Column="0"
-                    VerticalAlignment="Center"
-                    Style="{ThemeResource CaptionTextBlockStyle}"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="{x:Bind NowPlayingViewModel.ServerName, Mode=OneWay, FallbackValue='—'}"
-                    TextTrimming="CharacterEllipsis" />
+                    x:Name="ServerPickerButton"
+                    VerticalAlignment="Stretch"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Left"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="8,0"
+                    CornerRadius="0"
+                    Click="ServerPickerButton_Click">
+                    <TextBlock
+                        Style="{ThemeResource CaptionTextBlockStyle}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{x:Bind NowPlayingViewModel.ServerPickerLabel, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis" />
+                </Button>
 
-                <!-- Codec · sample rate (centre-ish) -->
+                <!-- Codec · sample rate -->
                 <TextBlock
                     Grid.Column="1"
                     VerticalAlignment="Center"
@@ -76,7 +82,7 @@
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Text="{x:Bind NowPlayingViewModel.CodecDisplay, Mode=OneWay}" />
 
-                <!-- Signal bars (right) -->
+                <!-- Signal bars -->
                 <controls:SignalBarsControl
                     Grid.Column="2"
                     VerticalAlignment="Center"
