@@ -21,7 +21,7 @@ public sealed partial class MainWindow : Window
     private const int SW_HIDE    = 0;
     private const int SW_RESTORE = 9;
 
-    private bool _hideOnClose = true;
+    private bool _hideOnClose = false;
 
     // Kept alive for the lifetime of the window (MicaController requires it).
     private MicaController?              _micaController;
@@ -87,6 +87,10 @@ public sealed partial class MainWindow : Window
         {
             args.Cancel = true;
             HideToTray();
+        }
+        else
+        {
+            Application.Current.Exit();
         }
     }
 
