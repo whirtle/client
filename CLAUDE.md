@@ -181,8 +181,6 @@ Use _ as leading character on instance variables.
 
 - Development happens on feature branches; merge to `main` via pull request.
 - Write clear, descriptive commit messages.
-- The `gh` CLI is not available. Push branches with `git push -u origin <branch>` and open a PR at:
-  https://github.com/whirtle/client/compare/<branch>?expand=1
 
 ## Before pushing
 
