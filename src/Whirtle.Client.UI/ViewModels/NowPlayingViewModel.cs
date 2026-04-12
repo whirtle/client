@@ -88,7 +88,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         get
         {
-            if (_codecName is null) return "—";
+            if (_codecName is null) return "";
             if (_sampleRate is null) return _codecName;
             double kHz = _sampleRate.Value / 1000.0;
             string kHzStr = kHz == Math.Floor(kHz) ? $"{kHz:0} kHz" : $"{kHz:0.0} kHz";
