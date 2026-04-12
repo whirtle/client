@@ -98,7 +98,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     public int AudioFormatIndex
     {
         get => _currentDeviceFormat switch
-        get => PreferredFormat switch
         {
             AudioFormat.Opus => 0,
             AudioFormat.Flac => 1,
