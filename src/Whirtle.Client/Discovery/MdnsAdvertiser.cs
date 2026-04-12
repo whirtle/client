@@ -77,21 +77,32 @@ public sealed class MdnsAdvertiser : IDisposable
     /// </summary>
     public async Task AdvertiseAsync(CancellationToken cancellationToken = default)
     {
+        try
+        {
+            await AdvertiseInternalAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "mDNS advertiser failed");
+        }
+    }
+
+    private async Task AdvertiseInternalAsync(CancellationToken cancellationToken)
+    {
+        Log.Information("mDNS: building announcement for \"{Name}\"", _instanceName);
+
         var ip           = GetLocalIpAddress();
         var announcement = DnsMessage.BuildAdvertisement(
             _instanceName, _hostname, ip, _port, _path, _friendlyName);
 
         Log.Information(
-            "mDNS: announcing \"{Name}\" on {IP}:{Port}{Path}",
-            _instanceName, ip, _port, _path);
+            "mDNS: announcing on {IP}:{Port}{Path}",
+            ip, _port, _path);
 
-        try
-        {
-            await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
-            await Task.Delay(1000, cancellationToken);
-            await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
-        }
-        catch (OperationCanceledException) { return; }
+        await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
+        await Task.Delay(1000, cancellationToken);
+        await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
 
         while (!cancellationToken.IsCancellationRequested)
         {
