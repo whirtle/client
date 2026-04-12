@@ -18,6 +18,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 {
     private readonly IAudioDeviceEnumerator _deviceEnumerator;
     private readonly DispatcherQueue _dispatcher;
+    private readonly SettingsViewModel _settings;
 
     private ProtocolClient? _protocol;
     private ControllerClient? _controller;
@@ -63,11 +64,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(TrayTooltip))]
     private string _connectionStatus = "Not connected";
 
-    [ObservableProperty] private string? _manualUrl;
-
     // ── Status bar ─────────────────────────────────────────────────────────
 
-    [ObservableProperty] private string? _serverName;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ServerPickerLabel))]
+    private string? _serverName;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CodecDisplay))]
@@ -97,12 +98,29 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         }
     }
 
-    public int     VolumePercent      => (int)(Volume * 100);
-    public string  PlayPauseGlyph     => IsPlaying ? "\uE769" : "\uE768"; // Pause : Play
-    public string  VolumeGlyph        => IsMuted   ? "\uE74F" : "\uE767"; // Muted : Speaker
-    public string  MuteButtonTooltip  => IsMuted   ? "Unmute" : "Mute";
-    public bool    IsNotConnected     => !IsConnected;
-    public Visibility DisconnectVisibility => IsConnected ? Visibility.Visible : Visibility.Collapsed;
+    /// <summary>
+    /// Text shown in the status-bar server button.
+    /// Shows the target/connected server name as soon as one is chosen,
+    /// "Automatically connect" when in server-initiated mode with no target,
+    /// or "Select a server" otherwise.
+    /// </summary>
+    public string ServerPickerLabel
+    {
+        get
+        {
+            if (_serverName is not null) return _serverName;
+            return _settings.ConnectionMode == ConnectionMode.ServerInitiated
+                ? "Automatically connect"
+                : "Select a server";
+        }
+    }
+
+    public int     VolumePercent      => (int)(_volume * 100);
+    public string  PlayPauseGlyph     => _isPlaying ? "\uE769" : "\uE768"; // Pause : Play
+    public string  VolumeGlyph        => _isMuted   ? "\uE74F" : "\uE767"; // Muted : Speaker
+    public string  MuteButtonTooltip  => _isMuted   ? "Unmute" : "Mute";
+    public bool    IsNotConnected     => !_isConnected;
+    public Visibility DisconnectVisibility => _isConnected ? Visibility.Visible : Visibility.Collapsed;
 
     public InfoBarSeverity ConnectionInfoSeverity
         => IsConnected ? InfoBarSeverity.Success : InfoBarSeverity.Informational;
@@ -123,12 +141,27 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     public ObservableCollection<ServiceEndpoint> DiscoveredServers { get; } = new();
     public ObservableCollection<AudioDeviceInfo> AudioDevices      { get; } = new();
 
+    /// <summary>Manually-added servers, persisted in settings.</summary>
+    public ObservableCollection<PersistedServer> SavedServers => _settings.SavedServers;
+
     // ── Constructor ────────────────────────────────────────────────────────
 
-    public NowPlayingViewModel(IAudioDeviceEnumerator deviceEnumerator, DispatcherQueue dispatcher)
+    public NowPlayingViewModel(
+        IAudioDeviceEnumerator deviceEnumerator,
+        DispatcherQueue        dispatcher,
+        SettingsViewModel      settings)
     {
         _deviceEnumerator = deviceEnumerator;
         _dispatcher       = dispatcher;
+        _settings         = settings;
+
+        // Keep ServerPickerLabel in sync when connection mode changes in settings.
+        _settings.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SettingsViewModel.ConnectionMode))
+                OnPropertyChanged(nameof(ServerPickerLabel));
+        };
+
         LoadAudioDevices();
     }
 
@@ -149,12 +182,15 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         await DisconnectAsync();
 
+        // Show the target in the status bar immediately, before any awaits.
+        ServerName = endpoint.DisplayName;
+
         _connectionCts = new CancellationTokenSource();
         var token = _connectionCts.Token;
 
         try
         {
-            ConnectionStatus = $"Connecting to {endpoint.Name ?? endpoint.Host}…";
+            ConnectionStatus = $"Connecting to {endpoint.DisplayName}…";
 
             var transport = new WebSocketTransport();
             _protocol     = new ProtocolClient(transport);
@@ -175,42 +211,79 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
             _controller  = new ControllerClient(_protocol);
             IsConnected  = true;
-            ServerName   = endpoint.Name ?? endpoint.Host;
-            ConnectionStatus = $"Connected — {endpoint.Name ?? endpoint.Host}:{endpoint.Port}";
+            ConnectionStatus = $"Connected — {endpoint.Host}:{endpoint.Port}";
 
             // Start background message loop; tracked so DisconnectAsync can await it.
             _receiveLoopTask = ReceiveLoopAsync(token);
         }
         catch (OperationCanceledException)
         {
+            ServerName = null;
             ConnectionStatus = "Disconnected";
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Connection to {Host}:{Port} failed", endpoint.Host, endpoint.Port);
+            ServerName = null;
             ConnectionStatus = $"Connection failed: {ex.Message}";
             IsConnected = false;
         }
     }
 
+    /// <summary>
+    /// Connects to a manually-saved server entry.
+    /// Sets connection mode to ClientInitiated before connecting.
+    /// </summary>
     [RelayCommand]
-    private async Task ConnectManualAsync()
+    private async Task ConnectToSavedAsync(PersistedServer saved)
     {
-        if (string.IsNullOrWhiteSpace(ManualUrl))
-            return;
+        _settings.ConnectionMode = ConnectionMode.ClientInitiated;
+        var ep = new ServiceEndpoint(saved.Host, saved.Port, saved.Path, saved.Label);
+        await ConnectAsync(ep);
+    }
 
-        if (!Uri.TryCreate(ManualUrl, UriKind.Absolute, out var uri))
+    /// <summary>
+    /// Switches to server-initiated (auto-connect) mode and disconnects any
+    /// active session so the server can re-initiate via mDNS.
+    /// </summary>
+    [RelayCommand]
+    private async Task SetAutoConnectModeAsync()
+    {
+        _settings.ConnectionMode = ConnectionMode.ServerInitiated;
+        ServerName = null;  // Update status bar immediately; don't wait for graceful close
+        if (_isConnected)
+            await DisconnectAsync();
+    }
+
+    /// <summary>
+    /// Parses a raw user input string into a <see cref="ServiceEndpoint"/>,
+    /// saves the entry to settings, and connects.
+    /// </summary>
+    internal async Task AddSavedServerAsync(string input)
+    {
+        input = input.Trim();
+        var ep = ParseServerInput(input);
+        var saved = new PersistedServer(input, ep.Host, ep.Port, ep.Path);
+        _settings.AddSavedServer(saved);
+        _settings.ConnectionMode = ConnectionMode.ClientInitiated;
+        await ConnectAsync(ep);
+    }
+
+    internal void RemoveSavedServer(PersistedServer saved)
+        => _settings.RemoveSavedServer(saved);
+
+    private static ServiceEndpoint ParseServerInput(string input)
+    {
+        // If the input already contains a scheme, parse it as a URI.
+        if (input.Contains("://") && Uri.TryCreate(input, UriKind.Absolute, out var uri))
         {
-            ConnectionStatus = "Invalid URL";
-            return;
+            var port = uri.Port > 0 ? uri.Port : MdnsAdvertiser.DefaultPort;
+            var path = string.IsNullOrEmpty(uri.AbsolutePath) ? MdnsAdvertiser.DefaultPath : uri.AbsolutePath;
+            return new ServiceEndpoint(uri.Host, port, path);
         }
 
-        var host = uri.Host;
-        var port = uri.Port > 0 ? uri.Port : MdnsAdvertiser.DefaultPort;
-        var path = string.IsNullOrEmpty(uri.AbsolutePath) ? MdnsAdvertiser.DefaultPath : uri.AbsolutePath;
-        var ep   = new ServiceEndpoint(host, port, path);
-
-        await ConnectAsync(ep);
+        // Otherwise treat the whole string as a hostname or IP address.
+        return new ServiceEndpoint(input, MdnsAdvertiser.DefaultPort, MdnsAdvertiser.DefaultPath);
     }
 
     [RelayCommand]

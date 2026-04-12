@@ -1,14 +1,12 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Whirtle.Client.Discovery;
 using Whirtle.Client.UI.ViewModels;
 
 namespace Whirtle.Client.UI.Pages;
 
 public sealed partial class SettingsPage : Page
 {
-    private SettingsViewModel    ViewModel            => App.Current.SettingsViewModel;
-    private NowPlayingViewModel  NowPlayingViewModel  => App.Current.NowPlayingViewModel;
+    private SettingsViewModel ViewModel => App.Current.SettingsViewModel;
 
     public event EventHandler? SaveClicked;
 

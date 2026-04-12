@@ -46,7 +46,8 @@ public partial class App : Application
         _settingsViewModel   = new SettingsViewModel();
         _nowPlayingViewModel = new NowPlayingViewModel(
             AudioDeviceEnumerator.Create(),
-            dispatcher);
+            dispatcher,
+            _settingsViewModel);
 
         _mainWindow = new MainWindow();
         _mainWindow.Closed += (_, _) =>
