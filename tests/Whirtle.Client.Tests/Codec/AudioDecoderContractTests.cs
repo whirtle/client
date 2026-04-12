@@ -47,10 +47,11 @@ public class AudioDecoderContractTests
     }
 
     [Fact]
-    public void FlacDecoder_Decode_ThrowsNotSupported()
+    public void FlacDecoder_InvalidData_ThrowsInvalidData()
     {
+        // Four zero bytes are not a valid fLaC marker and fail the frame sync check.
         using var decoder = new FlacAudioDecoder();
-        Assert.Throws<NotSupportedException>(() => decoder.Decode(new byte[4]));
+        Assert.Throws<InvalidDataException>(() => decoder.Decode(new byte[4]));
     }
 
     [Fact]
