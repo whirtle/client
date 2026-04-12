@@ -377,8 +377,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         int syncScore = rtt.TotalMilliseconds switch
         {
-            <= 5  => 3,
-            <= 15 => 2,
+            <= 5  => 4,
+            <= 15 => 3,
+            <= 30 => 2,
             <= 50 => 1,
             _     => 0,
         };
@@ -388,10 +389,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
         int bufferScore = bufferCount switch
         {
-            >= 8 => 3,
-            >= 4 => 2,
-            >= 2 => 1,
-            _    => 0,
+            >= 12 => 4,
+            >= 8  => 3,
+            >= 4  => 2,
+            >= 2  => 1,
+            _     => 0,
         };
 
         return Math.Min(syncScore, bufferScore);

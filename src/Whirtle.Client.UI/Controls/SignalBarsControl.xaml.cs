@@ -44,6 +44,7 @@ public sealed partial class SignalBarsControl : UserControl
         Bar1.Fill = Level >= 1 ? active : inactive;
         Bar2.Fill = Level >= 2 ? active : inactive;
         Bar3.Fill = Level >= 3 ? active : inactive;
+        Bar4.Fill = Level >= 4 ? active : inactive;
     }
 
     private SolidColorBrush ActiveBrush()
