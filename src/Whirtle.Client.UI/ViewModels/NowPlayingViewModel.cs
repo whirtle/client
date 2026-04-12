@@ -199,15 +199,26 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
         try
         {
+            Log.Debug(
+                "Client-initiated connection starting: host={Host}, port={Port}, path={Path}, displayName={DisplayName}",
+                endpoint.Host, endpoint.Port, endpoint.Path, endpoint.DisplayName);
+
             ConnectionStatus = $"Connecting to {endpoint.DisplayName}…";
 
             var transport = new WebSocketTransport();
             _protocol     = new ProtocolClient(transport);
 
             await _protocol.ConnectAsync(endpoint.ToWebSocketUri(), token);
+
+            Log.Debug("Client-initiated WebSocket connected; starting handshake with {Uri}", endpoint.ToWebSocketUri());
+
             var hello = await _protocol.HandshakeAsync(
                 $"whirtle-{Environment.MachineName}", "Whirtle",
                 cancellationToken: token);
+
+            Log.Debug(
+                "Client-initiated handshake complete: serverId={ServerId}, serverName={ServerName}, reason={Reason}",
+                hello.ServerId, hello.Name, hello.ConnectionReason);
 
             Log.Information("Connected to {ServerId} ({ServerName}), reason={Reason}",
                 hello.ServerId, hello.Name, hello.ConnectionReason);
@@ -352,6 +363,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
     private void StartServerInitiatedMode()
     {
+        Log.Debug("Server-initiated mode starting");
         _serverModeCts = new CancellationTokenSource();
         ConnectionStatus = "Listening for server…";
         _ = RunServerAcceptLoopAsync(_serverModeCts.Token);
@@ -374,6 +386,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         }
 
         var hostname   = Environment.MachineName;
+
+        Log.Debug(
+            "Server-initiated mode: starting mDNS advertiser with hostname={Hostname}, clientName={ClientName}, port={Port}, path={Path}",
+            hostname, _settings.ClientName, MdnsAdvertiser.DefaultPort, MdnsAdvertiser.DefaultPath);
+
         var advertiser = new MdnsAdvertiser(hostname, _settings.ClientName, MdnsAdvertiser.DefaultPort);
         _ = advertiser.AdvertiseAsync(cancellationToken);
 
@@ -414,6 +431,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         ITransport        candidate,
         CancellationToken serverModeCancellation)
     {
+        Log.Debug("Server-initiated: inbound connection received, starting handshake");
+
         var protocol = new ProtocolClient(candidate);
 
         ServerHelloMessage hello;
@@ -440,6 +459,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             await protocol.DisposeAsync();
             return;
         }
+
+        Log.Debug(
+            "Server-initiated: inbound handshake complete: serverId={ServerId}, serverName={ServerName}, reason={Reason}",
+            hello.ServerId, hello.Name, hello.ConnectionReason);
 
         if (!_connectionManager.ShouldAccept(hello.ServerId, hello.ConnectionReason))
         {
