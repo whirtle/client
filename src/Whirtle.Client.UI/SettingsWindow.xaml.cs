@@ -17,6 +17,8 @@ public sealed partial class SettingsWindow : Window
     {
         InitializeComponent();
 
+        ((FrameworkElement)Content).RequestedTheme = ElementTheme.Dark;
+
         AppWindow.Resize(new SizeInt32(700, 740));
         TryApplyMica();
     }
@@ -26,7 +28,11 @@ public sealed partial class SettingsWindow : Window
         if (!MicaController.IsSupported())
             return;
 
-        _backdropConfig = new SystemBackdropConfiguration { IsInputActive = true };
+        _backdropConfig = new SystemBackdropConfiguration
+        {
+            IsInputActive = true,
+            Theme = SystemBackdropTheme.Dark,
+        };
 
         Activated += (_, e) =>
         {

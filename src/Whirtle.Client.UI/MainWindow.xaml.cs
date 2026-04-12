@@ -33,6 +33,8 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
 
+        ((FrameworkElement)Content).RequestedTheme = ElementTheme.Dark;
+
         // Mica material background (Windows 11 Fluent Design).
         // Uses MicaController directly — compatible with all WinAppSDK 1.1+
         // builds regardless of SDK.BuildTools version.
@@ -63,7 +65,11 @@ public sealed partial class MainWindow : Window
         if (!MicaController.IsSupported())
             return; // gracefully skip on Windows 10
 
-        _backdropConfig = new SystemBackdropConfiguration { IsInputActive = true };
+        _backdropConfig = new SystemBackdropConfiguration
+        {
+            IsInputActive = true,
+            Theme = SystemBackdropTheme.Dark,
+        };
 
         // Window.Activated fires for both focus-gained and focus-lost;
         // check WindowActivationState to update IsInputActive accordingly.
