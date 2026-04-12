@@ -12,6 +12,7 @@ public sealed partial class NowPlayingPage : Page
     private NowPlayingViewModel ViewModel => App.Current.NowPlayingViewModel;
 
     private bool _volumeChanging;
+    private SettingsWindow? _settingsWindow;
 
     public NowPlayingPage()
     {
@@ -66,5 +67,18 @@ public sealed partial class NowPlayingPage : Page
     {
         if (sender is Slider slider)
             await ViewModel.SeekCommand.ExecuteAsync(slider.Value);
+    }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+
+        _settingsWindow = new SettingsWindow();
+        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Activate();
     }
 }

@@ -22,209 +22,223 @@
         </Style>
     </Page.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel
-            Padding="24"
-            Spacing="16"
-            MaxWidth="660"
-            HorizontalAlignment="Left">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-            <TextBlock
-                Text="Settings"
-                Style="{ThemeResource TitleLargeTextBlockStyle}"
-                Margin="0,0,0,8" />
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel
+                Padding="24"
+                Spacing="16"
+                MaxWidth="660"
+                HorizontalAlignment="Left">
 
-            <!-- ═══ IDENTITY ══════════════════════════════════════════════════ -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="16">
-                    <TextBlock Text="Identity" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                <!-- ═══ IDENTITY ══════════════════════════════════════════════════ -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="Identity" Style="{ThemeResource SubtitleTextBlockStyle}" />
 
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Client name" Style="{StaticResource SettingLabelStyle}" />
-                        <TextBox
-                            PlaceholderText="e.g. Living Room"
-                            Text="{x:Bind ViewModel.ClientName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Client name" Style="{StaticResource SettingLabelStyle}" />
+                            <TextBox
+                                PlaceholderText="e.g. Living Room"
+                                Text="{x:Bind ViewModel.ClientName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Client ID" Style="{StaticResource SettingLabelStyle}" />
+                            <TextBox
+                                IsReadOnly="True"
+                                Text="{x:Bind ViewModel.ClientId, Mode=OneWay}"
+                                FontFamily="Cascadia Mono, Consolas, Courier New"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock
+                                Text="Automatically generated. Used to identify this player to the server."
+                                Style="{ThemeResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
                     </StackPanel>
+                </Border>
 
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Client ID" Style="{StaticResource SettingLabelStyle}" />
-                        <TextBox
-                            IsReadOnly="True"
-                            Text="{x:Bind ViewModel.ClientId, Mode=OneWay}"
-                            FontFamily="Cascadia Mono, Consolas, Courier New"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <!-- ═══ AUDIO ═════════════════════════════════════════════════════ -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="Audio" Style="{ThemeResource SubtitleTextBlockStyle}" />
+
+                        <!-- Output device preference -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Preferred output device" Style="{StaticResource SettingLabelStyle}" />
+                            <ComboBox
+                                ItemsSource="{x:Bind ViewModel.AudioDevices}"
+                                SelectedItem="{x:Bind ViewModel.SelectedAudioDevice, Mode=TwoWay}"
+                                HorizontalAlignment="Stretch"
+                                MinWidth="280">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE7F3;" FontSize="14" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+
+                        <!-- Format preference -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Preferred stream format" Style="{StaticResource SettingLabelStyle}" />
+                            <ComboBox
+                                ItemsSource="{x:Bind ViewModel.AudioFormatOptions}"
+                                SelectedIndex="{x:Bind ViewModel.AudioFormatIndex, Mode=TwoWay}"
+                                HorizontalAlignment="Stretch"
+                                MinWidth="280" />
+                        </StackPanel>
+
+                        <!-- Static delay -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Static delay (ms)" Style="{StaticResource SettingLabelStyle}" />
+                            <NumberBox
+                                Minimum="-2000"
+                                Maximum="5000"
+                                SmallChange="10"
+                                LargeChange="100"
+                                SpinButtonPlacementMode="Inline"
+                                Value="{x:Bind ViewModel.StaticDelayMs, Mode=TwoWay}" />
+                            <TextBlock
+                                Text="Positive values delay this client relative to the group (room correction)."
+                                Style="{ThemeResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ CONNECTION ════════════════════════════════════════════════ -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="Connection" Style="{ThemeResource SubtitleTextBlockStyle}" />
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Connection mode" Style="{StaticResource SettingLabelStyle}" />
+                            <RadioButtons
+                                SelectedIndex="{x:Bind ViewModel.ConnectionModeIndex, Mode=TwoWay}">
+                                <RadioButton Content="Server-initiated  (advertise via mDNS; server connects)" />
+                                <RadioButton Content="Client-initiated  (discover or manually enter server URL)" />
+                            </RadioButtons>
+                        </StackPanel>
+
+                        <!-- Live connection status -->
+                        <InfoBar
+                            IsOpen="True"
+                            IsClosable="False"
+                            Severity="{x:Bind NowPlayingViewModel.ConnectionInfoSeverity, Mode=OneWay}"
+                            Message="{x:Bind NowPlayingViewModel.ConnectionStatus, Mode=OneWay}" />
+
+                        <!-- Auto-discovered servers -->
                         <TextBlock
-                            Text="Automatically generated. Used to identify this player to the server."
-                            Style="{ThemeResource CaptionTextBlockStyle}"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+                            Text="Auto-discovered servers"
+                            Style="{StaticResource SettingLabelStyle}" />
 
-            <!-- ═══ AUDIO ═════════════════════════════════════════════════════ -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="16">
-                    <TextBlock Text="Audio" Style="{ThemeResource SubtitleTextBlockStyle}" />
-
-                    <!-- Output device preference -->
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Preferred output device" Style="{StaticResource SettingLabelStyle}" />
-                        <ComboBox
-                            ItemsSource="{x:Bind ViewModel.AudioDevices}"
-                            SelectedItem="{x:Bind ViewModel.SelectedAudioDevice, Mode=TwoWay}"
-                            HorizontalAlignment="Stretch"
-                            MinWidth="280">
-                            <ComboBox.ItemTemplate>
+                        <ListView
+                            x:Name="ServerList"
+                            ItemsSource="{x:Bind NowPlayingViewModel.DiscoveredServers}"
+                            SelectionMode="Single"
+                            MaxHeight="180"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                            <ListView.ItemTemplate>
                                 <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <FontIcon Glyph="&#xE7F3;" FontSize="14" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                                    </StackPanel>
+                                    <Grid Padding="0,6" ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <FontIcon
+                                            Grid.Column="0"
+                                            Glyph="&#xECA5;"
+                                            FontSize="14"
+                                            VerticalAlignment="Center"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock
+                                                Text="{Binding Name}"
+                                                Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                            <TextBlock
+                                                Style="{ThemeResource CaptionTextBlockStyle}"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                                <Run Text="{Binding Host}" /><Run Text=":" /><Run Text="{Binding Port}" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Grid>
                                 </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
+                            </ListView.ItemTemplate>
+                        </ListView>
 
-                    <!-- Format preference -->
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Preferred stream format" Style="{StaticResource SettingLabelStyle}" />
-                        <RadioButtons
-                            SelectedIndex="{x:Bind ViewModel.AudioFormatIndex, Mode=TwoWay}">
-                            <RadioButton Content="Opus  (recommended — low-latency compressed)" />
-                            <RadioButton Content="FLAC  (lossless compressed)" />
-                            <RadioButton Content="PCM   (uncompressed raw audio)" />
-                        </RadioButtons>
-                    </StackPanel>
-
-                    <!-- Static delay -->
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Static delay (ms)" Style="{StaticResource SettingLabelStyle}" />
-                        <NumberBox
-                            Minimum="-2000"
-                            Maximum="5000"
-                            SmallChange="10"
-                            LargeChange="100"
-                            SpinButtonPlacementMode="Inline"
-                            Value="{x:Bind ViewModel.StaticDelayMs, Mode=TwoWay}" />
-                        <TextBlock
-                            Text="Positive values delay this client relative to the group (room correction)."
-                            Style="{ThemeResource CaptionTextBlockStyle}"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- ═══ CONNECTION ════════════════════════════════════════════════ -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="16">
-                    <TextBlock Text="Connection" Style="{ThemeResource SubtitleTextBlockStyle}" />
-
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Connection mode" Style="{StaticResource SettingLabelStyle}" />
-                        <RadioButtons
-                            SelectedIndex="{x:Bind ViewModel.ConnectionModeIndex, Mode=TwoWay}">
-                            <RadioButton Content="Server-initiated  (advertise via mDNS; server connects)" />
-                            <RadioButton Content="Client-initiated  (discover or manually enter server URL)" />
-                        </RadioButtons>
-                    </StackPanel>
-
-                    <!-- Live connection status -->
-                    <InfoBar
-                        IsOpen="True"
-                        IsClosable="False"
-                        Severity="{x:Bind NowPlayingViewModel.ConnectionInfoSeverity, Mode=OneWay}"
-                        Message="{x:Bind NowPlayingViewModel.ConnectionStatus, Mode=OneWay}" />
-
-                    <!-- Auto-discovered servers -->
-                    <TextBlock
-                        Text="Auto-discovered servers"
-                        Style="{StaticResource SettingLabelStyle}" />
-
-                    <ListView
-                        x:Name="ServerList"
-                        ItemsSource="{x:Bind NowPlayingViewModel.DiscoveredServers}"
-                        SelectionMode="Single"
-                        MaxHeight="180"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="4">
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Padding="0,6" ColumnSpacing="10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <FontIcon
-                                        Grid.Column="0"
-                                        Glyph="&#xECA5;"
-                                        FontSize="14"
-                                        VerticalAlignment="Center"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                    <StackPanel Grid.Column="1" Spacing="2">
-                                        <TextBlock
-                                            Text="{Binding Name}"
-                                            Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                                        <TextBlock
-                                            Style="{ThemeResource CaptionTextBlockStyle}"
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                            <Run Text="{Binding Host}" /><Run Text=":" /><Run Text="{Binding Port}" />
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-
-                    <Button
-                        Content="Connect to Selected"
-                        IsEnabled="{x:Bind NowPlayingViewModel.IsNotConnected, Mode=OneWay}"
-                        Click="ConnectSelected_Click" />
-
-                    <!-- Manual URL entry -->
-                    <TextBlock
-                        Text="Or connect manually:"
-                        Style="{StaticResource SettingLabelStyle}" />
-
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox
-                            Grid.Column="0"
-                            PlaceholderText="ws://192.168.1.x:8928/sendspin"
-                            Text="{x:Bind NowPlayingViewModel.ManualUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         <Button
-                            Grid.Column="1"
-                            Content="Connect"
+                            Content="Connect to Selected"
                             IsEnabled="{x:Bind NowPlayingViewModel.IsNotConnected, Mode=OneWay}"
-                            Command="{x:Bind NowPlayingViewModel.ConnectManualCommand}" />
-                    </Grid>
+                            Click="ConnectSelected_Click" />
 
-                    <!-- Disconnect (only visible while connected) -->
-                    <Button
-                        Content="Disconnect"
-                        Visibility="{x:Bind NowPlayingViewModel.DisconnectVisibility, Mode=OneWay}"
-                        Command="{x:Bind NowPlayingViewModel.DisconnectCommand}" />
-                </StackPanel>
-            </Border>
+                        <!-- Manual URL entry -->
+                        <TextBlock
+                            Text="Or connect manually:"
+                            Style="{StaticResource SettingLabelStyle}" />
 
-            <!-- ═══ DIAGNOSTICS ═══════════════════════════════════════════════ -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="16">
-                    <TextBlock Text="Diagnostics" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox
+                                Grid.Column="0"
+                                PlaceholderText="ws://192.168.1.x:8928/sendspin"
+                                Text="{x:Bind NowPlayingViewModel.ManualUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button
+                                Grid.Column="1"
+                                Content="Connect"
+                                IsEnabled="{x:Bind NowPlayingViewModel.IsNotConnected, Mode=OneWay}"
+                                Command="{x:Bind NowPlayingViewModel.ConnectManualCommand}" />
+                        </Grid>
 
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Log level" Style="{StaticResource SettingLabelStyle}" />
-                        <ComboBox
-                            ItemsSource="{x:Bind ViewModel.LogLevelOptions}"
-                            SelectedItem="{x:Bind ViewModel.LogLevel, Mode=TwoWay}"
-                            MinWidth="200" />
+                        <!-- Disconnect (only visible while connected) -->
+                        <Button
+                            Content="Disconnect"
+                            Visibility="{x:Bind NowPlayingViewModel.DisconnectVisibility, Mode=OneWay}"
+                            Command="{x:Bind NowPlayingViewModel.DisconnectCommand}" />
                     </StackPanel>
-                </StackPanel>
-            </Border>
+                </Border>
 
-        </StackPanel>
-    </ScrollViewer>
+                <!-- ═══ DIAGNOSTICS ═══════════════════════════════════════════════ -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="Diagnostics" Style="{ThemeResource SubtitleTextBlockStyle}" />
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Log level" Style="{StaticResource SettingLabelStyle}" />
+                            <ComboBox
+                                ItemsSource="{x:Bind ViewModel.LogLevelOptions}"
+                                SelectedItem="{x:Bind ViewModel.LogLevel, Mode=TwoWay}"
+                                MinWidth="200" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Sticky OK / Cancel bar -->
+        <Border
+            Grid.Row="1"
+            Padding="24,12"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button Content="Cancel" Click="Cancel_Click" />
+                <Button Content="OK" Style="{ThemeResource AccentButtonStyle}" Click="OK_Click" />
+            </StackPanel>
+        </Border>
+
+    </Grid>
 </Page>

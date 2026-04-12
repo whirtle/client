@@ -40,21 +40,7 @@
                 Style="{ThemeResource CaptionTextBlockStyle}" />
         </Grid>
 
-        <!-- Player + settings button -->
-        <Grid Grid.Row="1">
-            <Frame x:Name="ContentFrame" />
-
-            <Button
-                VerticalAlignment="Bottom"
-                HorizontalAlignment="Left"
-                Margin="16,0,0,16"
-                Padding="12,8"
-                Click="SettingsButton_Click">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <FontIcon Glyph="&#xE713;" FontSize="16" VerticalAlignment="Center" />
-                    <TextBlock Text="Settings" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-        </Grid>
+        <!-- Player -->
+        <Frame x:Name="ContentFrame" Grid.Row="1" />
     </Grid>
 </Window>

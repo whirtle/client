@@ -10,6 +10,9 @@ public sealed partial class SettingsPage : Page
     private SettingsViewModel    ViewModel            => App.Current.SettingsViewModel;
     private NowPlayingViewModel  NowPlayingViewModel  => App.Current.NowPlayingViewModel;
 
+    public event EventHandler? OKClicked;
+    public event EventHandler? CancelClicked;
+
     public SettingsPage()
     {
         InitializeComponent();
@@ -20,4 +23,10 @@ public sealed partial class SettingsPage : Page
         if (ServerList.SelectedItem is ServiceEndpoint endpoint)
             await NowPlayingViewModel.ConnectCommand.ExecuteAsync(endpoint);
     }
+
+    private void OK_Click(object sender, RoutedEventArgs e)
+        => OKClicked?.Invoke(this, EventArgs.Empty);
+
+    private void Cancel_Click(object sender, RoutedEventArgs e)
+        => CancelClicked?.Invoke(this, EventArgs.Empty);
 }

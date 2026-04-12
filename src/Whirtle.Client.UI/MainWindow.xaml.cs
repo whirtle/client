@@ -44,8 +44,8 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
-        // Initial window size
-        AppWindow.Resize(new SizeInt32(1080, 740));
+        // Initial window size — sized to fit content
+        AppWindow.Resize(new SizeInt32(480, 560));
 
         // Navigate to Now Playing on launch
         ContentFrame.Navigate(typeof(NowPlayingPage));
@@ -141,18 +141,4 @@ public sealed partial class MainWindow : Window
         public void Execute(object? _)    => execute();
     }
 
-    private SettingsWindow? _settingsWindow;
-
-    private void SettingsButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_settingsWindow is not null)
-        {
-            _settingsWindow.Activate();
-            return;
-        }
-
-        _settingsWindow = new SettingsWindow();
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
-        _settingsWindow.Activate();
-    }
 }

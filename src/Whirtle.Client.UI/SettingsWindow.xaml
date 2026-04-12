@@ -6,6 +6,16 @@
     xmlns:pages="using:Whirtle.Client.UI.Pages"
     Title="Whirtle — Settings">
 
-    <pages:SettingsPage />
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Invisible drag strip replaces default title bar -->
+        <Grid Grid.Row="0" x:Name="DragBar" />
+
+        <pages:SettingsPage Grid.Row="1" x:Name="ContentPage" />
+    </Grid>
 
 </Window>

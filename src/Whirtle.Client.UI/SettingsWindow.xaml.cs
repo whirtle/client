@@ -19,8 +19,24 @@ public sealed partial class SettingsWindow : Window
 
         ((FrameworkElement)Content).RequestedTheme = ElementTheme.Dark;
 
-        AppWindow.Resize(new SizeInt32(700, 740));
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(DragBar);
+
+        AppWindow.Resize(new SizeInt32(680, 860));
         TryApplyMica();
+
+        App.Current.SettingsViewModel.CaptureSnapshot();
+
+        ContentPage.OKClicked += (_, _) =>
+        {
+            App.Current.SettingsViewModel.CommitNow();
+            Close();
+        };
+        ContentPage.CancelClicked += (_, _) =>
+        {
+            App.Current.SettingsViewModel.RestoreSnapshot();
+            Close();
+        };
     }
 
     private void TryApplyMica()

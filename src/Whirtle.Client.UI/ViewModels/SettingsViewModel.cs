@@ -25,6 +25,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     private CancellationTokenSource? _saveCts;
     private readonly object _saveCtsLock = new();
 
+    // Snapshot for OK/Cancel support
+    private record SettingsSnapshot(
+        string ClientName, string ClientId, string PreferredAudioDeviceId,
+        AudioFormat PreferredFormat, int StaticDelayMs, ConnectionMode ConnectionMode,
+        string LogLevel);
+
+    private SettingsSnapshot? _snapshot;
+    private bool _suppressSave;
+
     // ── Persistent settings ────────────────────────────────────────────────
 
     [ObservableProperty] private string _clientName = Environment.MachineName;
@@ -50,6 +59,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ObservableCollection<AudioDeviceInfo> AudioDevices { get; } = new();
 
     // ── Static option lists ────────────────────────────────────────────────
+
+    public IReadOnlyList<string> AudioFormatOptions { get; } =
+        ["Opus (recommended)", "FLAC (lossless)", "PCM (uncompressed)"];
 
     public IReadOnlyList<string> LogLevelOptions { get; } =
         ["Verbose", "Debug", "Information", "Warning", "Error"];
@@ -130,8 +142,49 @@ public sealed partial class SettingsViewModel : ObservableObject
         catch { /* first run or corrupted file — use defaults */ }
     }
 
+    public void CaptureSnapshot()
+    {
+        _snapshot = new SettingsSnapshot(
+            ClientName, ClientId, PreferredAudioDeviceId,
+            PreferredFormat, StaticDelayMs, ConnectionMode, LogLevel);
+    }
+
+    public void RestoreSnapshot()
+    {
+        if (_snapshot is null) return;
+        _suppressSave = true;
+        try
+        {
+            ClientName             = _snapshot.ClientName;
+            ClientId               = _snapshot.ClientId;
+            PreferredAudioDeviceId = _snapshot.PreferredAudioDeviceId;
+            PreferredFormat        = _snapshot.PreferredFormat;
+            StaticDelayMs          = _snapshot.StaticDelayMs;
+            ConnectionMode         = _snapshot.ConnectionMode;
+            LogLevel               = _snapshot.LogLevel;
+        }
+        finally
+        {
+            _suppressSave = false;
+        }
+        Save();
+    }
+
+    public void CommitNow()
+    {
+        lock (_saveCtsLock)
+        {
+            _saveCts?.Cancel();
+            _saveCts?.Dispose();
+            _saveCts = null;
+        }
+        Save();
+    }
+
     private void DebouncedSave()
     {
+        if (_suppressSave) return;
+
         CancellationTokenSource cts;
         lock (_saveCtsLock)
         {
