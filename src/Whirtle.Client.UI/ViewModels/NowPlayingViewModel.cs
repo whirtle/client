@@ -385,14 +385,17 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             return;
         }
 
-        var hostname   = Environment.MachineName;
-
-        Log.Debug(
-            "Server-initiated mode: starting mDNS advertiser with hostname={Hostname}, clientName={ClientName}, port={Port}, path={Path}",
-            hostname, _settings.ClientName, MdnsAdvertiser.DefaultPort, MdnsAdvertiser.DefaultPath);
-
-        var advertiser = new MdnsAdvertiser(hostname, _settings.ClientName, MdnsAdvertiser.DefaultPort);
-        _ = advertiser.AdvertiseAsync(cancellationToken);
+        var hostname = Environment.MachineName;
+        MdnsAdvertiser? advertiser = null;
+        try
+        {
+            advertiser = new MdnsAdvertiser(hostname, _settings.ClientName, MdnsAdvertiser.DefaultPort);
+            _ = advertiser.AdvertiseAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to start mDNS advertiser — server will not discover this client");
+        }
 
         Log.Information(
             "Server-initiated mode: listening on :{Port}{Path}, advertising as \"{Name}\"",
@@ -423,7 +426,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         finally
         {
             await listener.DisposeAsync();
-            advertiser.Dispose();
+            advertiser?.Dispose();
         }
     }
 
