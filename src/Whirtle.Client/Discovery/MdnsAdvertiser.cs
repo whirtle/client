@@ -72,6 +72,10 @@ public sealed class MdnsAdvertiser : IDisposable
 
         var label     = friendlyName ?? hostname;
         _instanceName = $"{label}.{ServiceType}";
+
+        Log.Debug(
+            "mDNS advertiser configured: hostname={Hostname}, friendlyName={FriendlyName}, port={Port}, path={Path}, instance={Instance}",
+            _hostname, _friendlyName, _port, _path, _instanceName);
     }
 
     /// <summary>
@@ -145,6 +149,12 @@ public sealed class MdnsAdvertiser : IDisposable
 
             bool asksForUs = parsed.Questions.Any(q =>
                 string.Equals(q.TrimEnd('.'), ServiceType.TrimEnd('.'), StringComparison.OrdinalIgnoreCase));
+
+            Log.Debug(
+                "mDNS query received from {Remote}: questions=[{Questions}], asksForUs={AsksForUs}",
+                received.RemoteEndPoint,
+                string.Join(", ", parsed.Questions),
+                asksForUs);
 
             if (!asksForUs) continue;
 
