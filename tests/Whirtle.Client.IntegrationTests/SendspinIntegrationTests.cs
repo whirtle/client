@@ -15,15 +15,15 @@ namespace Whirtle.Client.IntegrationTests;
 /// Run manually with <c>uvx sendspin serve --demo</c> in another terminal
 /// to exercise the live protocol path.
 /// </summary>
-[Collection(SensspinCollection.Name)]
-public sealed class SensspinIntegrationTests
+[Collection(SendspinCollection.Name)]
+public sealed class SendspinIntegrationTests
 {
     private static readonly Uri ServerUri =
-        new($"ws://127.0.0.1:{SensspinServerFixture.Port}{SensspinServerFixture.Path}");
+        new($"ws://127.0.0.1:{SendspinServerFixture.Port}{SendspinServerFixture.Path}");
 
-    private readonly SensspinServerFixture _server;
+    private readonly SendspinServerFixture _server;
 
-    public SensspinIntegrationTests(SensspinServerFixture server)
+    public SendspinIntegrationTests(SendspinServerFixture server)
         => _server = server;
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ namespace Whirtle.Client.IntegrationTests;
 /// <c>uvx</c> is not installed or the server fails to start within
 /// <see cref="StartupTimeoutMs"/>.
 /// </summary>
-public sealed class SensspinServerFixture : IAsyncLifetime, IDisposable
+public sealed class SendspinServerFixture : IAsyncLifetime, IDisposable
 {
     public const int    Port             = 8927;
     public const string Path             = "/sendspin";
@@ -126,7 +126,7 @@ public sealed class SensspinServerFixture : IAsyncLifetime, IDisposable
 }
 
 [CollectionDefinition(Name)]
-public sealed class SensspinCollection : ICollectionFixture<SensspinServerFixture>
+public sealed class SendspinCollection : ICollectionFixture<SendspinServerFixture>
 {
     public const string Name = "Sendspin server";
 }
