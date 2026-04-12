@@ -98,6 +98,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public int AudioFormatIndex
     {
         get => _currentDeviceFormat switch
+        get => PreferredFormat switch
         {
             AudioFormat.Opus => 0,
             AudioFormat.Flac => 1,
@@ -113,7 +114,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public int ConnectionModeIndex
     {
-        get => _connectionMode == ConnectionMode.ServerInitiated ? 0 : 1;
+        get => ConnectionMode == ConnectionMode.ServerInitiated ? 0 : 1;
         set => ConnectionMode  = value == 0
             ? ConnectionMode.ServerInitiated
             : ConnectionMode.ClientInitiated;
