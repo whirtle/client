@@ -46,6 +46,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _preferredAudioDeviceId = string.Empty;
     [ObservableProperty] private int    _staticDelayMs          = 0;
 
+    partial void OnStaticDelayMsChanged(int value)
+    {
+        if (value < 0) StaticDelayMs = 0;
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ConnectionModeIndex))]
     private ConnectionMode _connectionMode = ConnectionMode.ServerInitiated;

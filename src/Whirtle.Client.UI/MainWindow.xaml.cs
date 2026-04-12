@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Windows.Input;
 using H.NotifyIcon;
 using Microsoft.UI;
@@ -16,12 +15,6 @@ namespace Whirtle.Client.UI;
 
 public sealed partial class MainWindow : Window
 {
-    [DllImport("user32.dll")]
-    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-    private const int SW_HIDE    = 0;
-    private const int SW_RESTORE = 9;
-
     private bool _hideOnClose = false;
 
     // Kept alive for the lifetime of the window (MicaController requires it).
@@ -111,13 +104,13 @@ public sealed partial class MainWindow : Window
     private void HideToTray()
     {
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        ShowWindow(hwnd, SW_HIDE);
+        NativeWindow.ShowWindow(hwnd, NativeWindow.SW_HIDE);
     }
 
     private void RestoreFromTray()
     {
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        ShowWindow(hwnd, SW_RESTORE);
+        NativeWindow.ShowWindow(hwnd, NativeWindow.SW_RESTORE);
         Activate();
     }
 

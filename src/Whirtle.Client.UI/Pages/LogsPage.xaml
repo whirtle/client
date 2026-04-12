@@ -34,14 +34,14 @@
                 <DataTemplate x:DataType="logging:LogEntry">
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="175" />
-                            <ColumnDefinition Width="50"  />
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="90"  />
                             <ColumnDefinition Width="*"   />
                         </Grid.ColumnDefinitions>
 
                         <TextBlock
                             Grid.Column="0"
-                            Text="{x:Bind Timestamp}"
+                            Text="{x:Bind FormattedTimestamp}"
                             Style="{ThemeResource CaptionTextBlockStyle}"
                             Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                             FontFamily="Consolas"

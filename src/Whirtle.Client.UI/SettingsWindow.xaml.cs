@@ -27,15 +27,19 @@ public sealed partial class SettingsWindow : Window
 
         App.Current.SettingsViewModel.CaptureSnapshot();
 
-        ContentPage.OKClicked += (_, _) =>
+        var saved = false;
+
+        ContentPage.SaveClicked += (_, _) =>
         {
+            saved = true;
             App.Current.SettingsViewModel.CommitNow();
             Close();
         };
-        ContentPage.CancelClicked += (_, _) =>
+
+        Closed += (_, _) =>
         {
-            App.Current.SettingsViewModel.RestoreSnapshot();
-            Close();
+            if (!saved)
+                App.Current.SettingsViewModel.RestoreSnapshot();
         };
     }
 

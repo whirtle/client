@@ -10,8 +10,7 @@ public sealed partial class SettingsPage : Page
     private SettingsViewModel    ViewModel            => App.Current.SettingsViewModel;
     private NowPlayingViewModel  NowPlayingViewModel  => App.Current.NowPlayingViewModel;
 
-    public event EventHandler? OKClicked;
-    public event EventHandler? CancelClicked;
+    public event EventHandler? SaveClicked;
 
     public SettingsPage()
     {
@@ -24,9 +23,6 @@ public sealed partial class SettingsPage : Page
             await NowPlayingViewModel.ConnectCommand.ExecuteAsync(endpoint);
     }
 
-    private void OK_Click(object sender, RoutedEventArgs e)
-        => OKClicked?.Invoke(this, EventArgs.Empty);
-
-    private void Cancel_Click(object sender, RoutedEventArgs e)
-        => CancelClicked?.Invoke(this, EventArgs.Empty);
+    private void Save_Click(object sender, RoutedEventArgs e)
+        => SaveClicked?.Invoke(this, EventArgs.Empty);
 }
