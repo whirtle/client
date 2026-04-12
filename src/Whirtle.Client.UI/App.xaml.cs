@@ -4,6 +4,7 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.Win32;
 using Serilog;
 using Whirtle.Client.Audio;
 using Whirtle.Client.Discovery;
@@ -22,6 +23,8 @@ public partial class App : Application
     private LogsViewModel?       _logsViewModel;
     private InMemorySink?        _logSink;
     private AppUiStateService?   _uiStateService;
+    private DispatcherQueue?     _dispatcher;
+    private NetworkMonitor?      _networkMonitor;
 
     internal static new App Current => (App)Application.Current;
 
@@ -38,12 +41,12 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        var dispatcher = DispatcherQueue.GetForCurrentThread();
+        _dispatcher = DispatcherQueue.GetForCurrentThread();
 
         // ── Logging ──────────────────────────────────────────────────────────
         _logSink = new InMemorySink();
         AppLogger.Configure(_logSink);
-        _logsViewModel = new LogsViewModel(_logSink, dispatcher);
+        _logsViewModel = new LogsViewModel(_logSink, _dispatcher);
 
         Log.Information("Whirtle starting up");
 
@@ -58,7 +61,7 @@ public partial class App : Application
         _settingsViewModel   = new SettingsViewModel();
         _nowPlayingViewModel = new NowPlayingViewModel(
             AudioDeviceEnumerator.Create(),
-            dispatcher,
+            _dispatcher,
             _settingsViewModel);
 
         _uiStateService = new AppUiStateService(
@@ -91,9 +94,19 @@ public partial class App : Application
             }
         };
 
+        // ── Power events ─────────────────────────────────────────────────────
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
+
+        // ── Network monitoring ────────────────────────────────────────────────
+        _networkMonitor = new NetworkMonitor();
+        _networkMonitor.PreferredAddressChanged += OnPreferredAddressChanged;
+
         _mainWindow = new MainWindow();
         _mainWindow.Closed += (_, _) =>
         {
+            SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            _networkMonitor.PreferredAddressChanged -= OnPreferredAddressChanged;
+            _networkMonitor.Dispose();
             Log.Information("Main window closed; shutting down");
             AppLogger.CloseAndFlush();
         };
@@ -138,6 +151,43 @@ public partial class App : Application
         {
             FirewallHelper.AddRule(port);
             Log.Information("Requested firewall rule for port {Port}", port);
+        }
+    }
+
+    // ── Network monitoring ────────────────────────────────────────────────────
+
+    private void OnPreferredAddressChanged(object? sender, string newIp)
+    {
+        if (_nowPlayingViewModel is null || _dispatcher is null) return;
+
+        _dispatcher.TryEnqueue(async () =>
+        {
+            try   { await _nowPlayingViewModel.OnNetworkChangedAsync(newIp); }
+            catch (Exception ex) { Log.Warning(ex, "Error during network change handling"); }
+        });
+    }
+
+    // ── Power management ──────────────────────────────────────────────────────
+
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        if (_nowPlayingViewModel is null || _dispatcher is null) return;
+
+        if (e.Mode == PowerModes.Suspend)
+        {
+            _dispatcher.TryEnqueue(async () =>
+            {
+                try   { await _nowPlayingViewModel.OnSuspendAsync(); }
+                catch (Exception ex) { Log.Warning(ex, "Error during suspend handling"); }
+            });
+        }
+        else if (e.Mode == PowerModes.Resume)
+        {
+            _dispatcher.TryEnqueue(async () =>
+            {
+                try   { await _nowPlayingViewModel.OnResumeAsync(); }
+                catch (Exception ex) { Log.Warning(ex, "Error during resume handling"); }
+            });
         }
     }
 
