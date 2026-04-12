@@ -13,13 +13,16 @@ namespace Whirtle.Client.Role;
 /// Responsibilities
 /// ────────────────
 /// • Decodes incoming binary audio chunks and enqueues them in <see cref="PlaybackEngine"/>.
-/// • Handles <c>stream/start</c> (initialises the appropriate codec decoder).
+/// • Handles <c>stream/start</c> (initialises the appropriate codec decoder and
+///   creates/replaces the <see cref="PlaybackEngine"/> with the correct format).
 /// • Handles <c>stream/clear</c> (flushes the jitter buffer).
 /// • Handles <c>server/command</c> (volume / mute / set_static_delay) and echoes
 ///   the new state back to the server via <c>client/state</c>.
 /// • Exposes <see cref="SendStateAsync"/> for the initial state report after hello.
 /// • Exposes <see cref="RequestFormatAsync"/> so callers can adapt to changing
 ///   network or CPU conditions.
+/// • Exposes <see cref="UpdateClockOffset"/> so the clock synchroniser can keep
+///   the playback engine's timestamp translation in sync.
 ///
 /// Usage
 /// ─────
@@ -28,14 +31,18 @@ namespace Whirtle.Client.Role;
 /// 2. After the handshake, call <see cref="SendStateAsync"/> once.
 /// 3. Feed every <see cref="IncomingFrame"/> from
 ///    <see cref="ProtocolClient.ReceiveAllAsync"/> into <see cref="ProcessFrameAsync"/>.
+/// 4. Call <see cref="UpdateClockOffset"/> whenever the clock synchroniser
+///    produces a new measurement.
 /// </summary>
-public sealed class PlayerClient : IDisposable
+public sealed class PlayerClient : IAsyncDisposable
 {
-    private readonly ProtocolClient _protocol;
-    private readonly PlaybackEngine _playbackEngine;
+    private readonly ProtocolClient                  _protocol;
+    private readonly Func<int, int, IWasapiRenderer> _rendererFactory;
 
     private IAudioDecoder? _decoder;
-    private bool           _streamActive;
+    private PlaybackEngine? _playbackEngine;
+    private bool            _streamActive;
+    private TimeSpan        _clockOffset;
 
     private int  _volume        = 100;
     private bool _muted         = false;
@@ -63,10 +70,18 @@ public sealed class PlayerClient : IDisposable
     /// <summary>Raised when the server sends a <c>set_static_delay</c> command.</summary>
     public event Action<int>?  StaticDelayChanged;
 
-    public PlayerClient(ProtocolClient protocol, PlaybackEngine playbackEngine)
+    /// <summary>
+    /// Creates a player client that drives the system WASAPI device identified by
+    /// <paramref name="deviceId"/> (or the system default when <see langword="null"/>).
+    /// </summary>
+    public PlayerClient(ProtocolClient protocol, string? deviceId = null)
+        : this(protocol, (sampleRate, channels) => new WasapiRenderer(deviceId, sampleRate, channels)) { }
+
+    /// <summary>Internal constructor for testing — accepts a renderer factory seam.</summary>
+    internal PlayerClient(ProtocolClient protocol, Func<int, int, IWasapiRenderer> rendererFactory)
     {
-        _protocol       = protocol;
-        _playbackEngine = playbackEngine;
+        _protocol        = protocol;
+        _rendererFactory = rendererFactory;
     }
 
     // ── Static helpers ────────────────────────────────────────────────────────
@@ -106,6 +121,17 @@ public sealed class PlayerClient : IDisposable
         => _protocol.SendAsync(new StreamRequestFormatMessage(request), cancellationToken);
 
     /// <summary>
+    /// Updates the clock offset used to translate server audio timestamps to
+    /// local time. Call this whenever the <see cref="Clock.ClockSynchronizer"/>
+    /// produces a new measurement.
+    /// </summary>
+    public void UpdateClockOffset(TimeSpan offset)
+    {
+        _clockOffset = offset;
+        _playbackEngine?.UpdateClockOffset(offset);
+    }
+
+    /// <summary>
     /// Processes a single <see cref="IncomingFrame"/> from the server.
     /// Call for every frame yielded by <see cref="ProtocolClient.ReceiveAllAsync"/>.
     /// </summary>
@@ -116,12 +142,12 @@ public sealed class PlayerClient : IDisposable
         switch (frame)
         {
             case ProtocolFrame { Message: StreamStartMessage { Player: { } player } }:
-                HandleStreamStart(player);
+                await HandleStreamStartAsync(player, cancellationToken).ConfigureAwait(false);
                 break;
 
             case ProtocolFrame { Message: StreamClearMessage }:
                 _streamActive = false;
-                _playbackEngine.ClearBuffer();
+                _playbackEngine?.ClearBuffer();
                 break;
 
             case ProtocolFrame { Message: ServerCommandMessage { Player: { } cmd } }:
@@ -134,12 +160,24 @@ public sealed class PlayerClient : IDisposable
         }
     }
 
-    public void Dispose() => _decoder?.Dispose();
+    public async ValueTask DisposeAsync()
+    {
+        _decoder?.Dispose();
+        if (_playbackEngine is not null)
+            await _playbackEngine.DisposeAsync().ConfigureAwait(false);
+    }
 
     // ── Private ───────────────────────────────────────────────────────────────
 
-    private void HandleStreamStart(StreamStartPlayer player)
+    private async Task HandleStreamStartAsync(StreamStartPlayer player, CancellationToken ct)
     {
+        // Tear down any previous engine before starting a new one.
+        if (_playbackEngine is not null)
+        {
+            await _playbackEngine.DisposeAsync().ConfigureAwait(false);
+            _playbackEngine = null;
+        }
+
         _decoder?.Dispose();
 
         var format = player.Codec.ToLowerInvariant() switch
@@ -149,7 +187,13 @@ public sealed class PlayerClient : IDisposable
             _      => AudioFormat.Pcm,
         };
 
-        _decoder      = AudioDecoderFactory.Create(format, player.SampleRate, player.Channels);
+        _decoder = AudioDecoderFactory.Create(format, player.SampleRate, player.Channels);
+
+        var renderer    = _rendererFactory(player.SampleRate, player.Channels);
+        _playbackEngine = new PlaybackEngine(renderer, _protocol);
+        _playbackEngine.UpdateClockOffset(_clockOffset);
+        _playbackEngine.Start();
+
         _streamActive = true;
     }
 
@@ -160,7 +204,7 @@ public sealed class PlayerClient : IDisposable
         long effectiveTimestamp = chunk.Timestamp - (_staticDelayMs * 1_000L);
 
         var audioFrame = _decoder!.Decode(chunk.EncodedData);
-        _playbackEngine.Enqueue(effectiveTimestamp, audioFrame);
+        _playbackEngine!.Enqueue(effectiveTimestamp, audioFrame);
     }
 
     private async Task HandleCommandAsync(ServerCommandPlayer cmd, CancellationToken ct)

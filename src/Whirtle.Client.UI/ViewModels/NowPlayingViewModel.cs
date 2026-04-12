@@ -22,6 +22,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
     private ProtocolClient? _protocol;
     private ControllerClient? _controller;
+    private PlayerClient? _player;
     private ClockSynchronizer? _syncer;
     private CancellationTokenSource? _connectionCts;
     private Task _receiveLoopTask = Task.CompletedTask;
@@ -227,6 +228,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
             _syncer      = new ClockSynchronizer(_protocol);
             _controller  = new ControllerClient(_protocol);
+            _player      = new PlayerClient(_protocol, SelectedDevice?.Id);
             IsConnected  = true;
             ConnectionStatus = $"Connected — {endpoint.Host}:{endpoint.Port}";
 
@@ -236,6 +238,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 r =>
                 {
                     _lastRtt = r.RoundTripTime;
+                    _player.UpdateClockOffset(r.ClockOffset);
                     _dispatcher.TryEnqueue(
                         () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
                 },
@@ -337,6 +340,12 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _receiveLoopTask = Task.CompletedTask;
         _syncTask        = Task.CompletedTask;
         _syncer          = null;
+
+        if (_player is not null)
+        {
+            await _player.DisposeAsync().ConfigureAwait(false);
+            _player = null;
+        }
 
         if (_protocol is not null)
         {
@@ -495,6 +504,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _protocol    = protocol;
         _syncer      = new ClockSynchronizer(protocol);
         _controller  = new ControllerClient(protocol);
+        _player      = new PlayerClient(protocol, SelectedDevice?.Id);
         _connectionCts  = new CancellationTokenSource();
 
         // Start background tasks — receive loop routes server/time to the syncer.
@@ -503,6 +513,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             r =>
             {
                 _lastRtt = r.RoundTripTime;
+                _player.UpdateClockOffset(r.ClockOffset);
                 _dispatcher.TryEnqueue(
                     () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
             },
@@ -581,6 +592,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         {
             await foreach (var frame in _protocol.ReceiveAllAsync(cancellationToken))
             {
+                // Forward every frame to the player role client (it ignores
+                // frames it doesn't own, so this is safe for all frame types).
+                if (_player is not null)
+                    await _player.ProcessFrameAsync(frame, cancellationToken).ConfigureAwait(false);
+
                 switch (frame)
                 {
                     case ProtocolFrame { Message: ServerTimeMessage timeMsg }:
