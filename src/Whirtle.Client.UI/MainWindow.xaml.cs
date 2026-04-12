@@ -48,6 +48,7 @@ public sealed partial class MainWindow : Window
         titleBar.ButtonInactiveForegroundColor = Colors.White;
 
         AppWindow.Resize(new SizeInt32(480, 584));
+        RestoreWindowPosition();
 
         ContentFrame.Navigate(typeof(NowPlayingPage));
 
@@ -85,6 +86,8 @@ public sealed partial class MainWindow : Window
 
     private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
+        SaveWindowPosition();
+
         if (_hideOnClose)
         {
             args.Cancel = true;
@@ -94,6 +97,19 @@ public sealed partial class MainWindow : Window
         {
             Application.Current.Exit();
         }
+    }
+
+    private void RestoreWindowPosition()
+    {
+        var settings = App.Current.SettingsViewModel;
+        if (settings.WindowX is { } x && settings.WindowY is { } y)
+            AppWindow.Move(new PointInt32(x, y));
+    }
+
+    private void SaveWindowPosition()
+    {
+        var pos = AppWindow.Position;
+        App.Current.SettingsViewModel.SaveWindowPosition(pos.X, pos.Y);
     }
 
     private void HideToTray()
