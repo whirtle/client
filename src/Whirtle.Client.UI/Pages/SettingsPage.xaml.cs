@@ -15,12 +15,6 @@ public sealed partial class SettingsPage : Page
         InitializeComponent();
     }
 
-    private async void ConnectSelected_Click(object sender, RoutedEventArgs e)
-    {
-        if (ServerList.SelectedItem is ServiceEndpoint endpoint)
-            await NowPlayingViewModel.ConnectCommand.ExecuteAsync(endpoint);
-    }
-
     private void Save_Click(object sender, RoutedEventArgs e)
         => SaveClicked?.Invoke(this, EventArgs.Empty);
 }
