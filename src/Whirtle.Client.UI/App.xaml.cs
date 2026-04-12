@@ -75,7 +75,7 @@ public partial class App : Application
             return;
 
         var port = MdnsAdvertiser.DefaultPort;
-        if (FirewallHelper.IsRulePresent(port))
+        if (FirewallHelper.IsRulePresent())
             return;
 
         var dialog = new ContentDialog

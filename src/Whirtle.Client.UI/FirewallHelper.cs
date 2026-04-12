@@ -7,14 +7,19 @@ namespace Whirtle.Client.UI;
 
 internal static class FirewallHelper
 {
-    private static string RuleName(int port) => $"Whirtle {port}";
+    private const string RuleName = "Whirtle";
 
-    internal static bool IsRulePresent(int port)
+    /// <summary>
+    /// Returns true if any inbound firewall rule named "Whirtle" exists —
+    /// this covers both the Windows-auto-created rule (from the Security Alert)
+    /// and any rule we created ourselves.
+    /// </summary>
+    internal static bool IsRulePresent()
     {
         var psi = new ProcessStartInfo
         {
             FileName               = "netsh",
-            Arguments              = $"advfirewall firewall show rule name=\"{RuleName(port)}\" dir=in",
+            Arguments              = $"advfirewall firewall show rule name=\"{RuleName}\" dir=in",
             RedirectStandardOutput = true,
             UseShellExecute        = false,
             CreateNoWindow         = true,
@@ -25,10 +30,10 @@ internal static class FirewallHelper
             using var process = Process.Start(psi);
             if (process is null) return false;
 
-            var output = process.StandardOutput.ReadToEnd();
+            process.StandardOutput.ReadToEnd(); // drain
             process.WaitForExit();
 
-            return process.ExitCode == 0 && output.Contains(port.ToString());
+            return process.ExitCode == 0;
         }
         catch
         {
@@ -36,12 +41,19 @@ internal static class FirewallHelper
         }
     }
 
+    /// <summary>
+    /// Spawns an elevated netsh process to add an inbound TCP allow rule
+    /// scoped to this executable. Fire-and-forget; swallows UAC cancellation.
+    /// </summary>
     internal static void AddRule(int port)
     {
+        var exePath   = Environment.ProcessPath;
+        var programArg = exePath is not null ? $" program=\"{exePath}\"" : "";
+
         var psi = new ProcessStartInfo
         {
             FileName        = "netsh",
-            Arguments       = $"advfirewall firewall add rule name=\"{RuleName(port)}\" dir=in action=allow protocol=TCP localport={port}",
+            Arguments       = $"advfirewall firewall add rule name=\"{RuleName}\" dir=in action=allow protocol=TCP localport={port}{programArg}",
             Verb            = "runas",
             UseShellExecute = true,
         };
