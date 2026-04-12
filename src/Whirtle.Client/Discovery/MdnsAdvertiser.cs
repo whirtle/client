@@ -4,6 +4,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using Serilog;
 
 namespace Whirtle.Client.Discovery;
 
@@ -70,12 +71,28 @@ public sealed class MdnsAdvertiser : IDisposable
     }
 
     /// <summary>
-    /// Listens for mDNS PTR queries for <see cref="ServiceType"/> and replies
-    /// with this client's service records until <paramref name="cancellationToken"/>
-    /// is cancelled.
+    /// Sends an unsolicited mDNS announcement on startup (twice, 1 s apart per
+    /// RFC 6762 §8.3 to survive packet loss), then listens for PTR queries and
+    /// responds until <paramref name="cancellationToken"/> is cancelled.
     /// </summary>
     public async Task AdvertiseAsync(CancellationToken cancellationToken = default)
     {
+        var ip           = GetLocalIpAddress();
+        var announcement = DnsMessage.BuildAdvertisement(
+            _instanceName, _hostname, ip, _port, _path, _friendlyName);
+
+        Log.Information(
+            "mDNS: announcing \"{Name}\" on {IP}:{Port}{Path}",
+            _instanceName, ip, _port, _path);
+
+        try
+        {
+            await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
+            await Task.Delay(1000, cancellationToken);
+            await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
+        }
+        catch (OperationCanceledException) { return; }
+
         while (!cancellationToken.IsCancellationRequested)
         {
             UdpReceiveResult received;
@@ -96,17 +113,9 @@ public sealed class MdnsAdvertiser : IDisposable
 
             if (!asksForUs) continue;
 
-            var response = DnsMessage.BuildAdvertisement(
-                _instanceName,
-                _hostname,
-                GetLocalIpAddress(),
-                _port,
-                _path,
-                _friendlyName);
-
             try
             {
-                await _socket.SendAsync(response, MdnsEndpoint, cancellationToken);
+                await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
             }
             catch (OperationCanceledException) { break; }
         }
