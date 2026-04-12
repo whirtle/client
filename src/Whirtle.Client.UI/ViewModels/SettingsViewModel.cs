@@ -75,7 +75,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public int AudioFormatIndex
     {
-        get => _preferredFormat switch
+        get => PreferredFormat switch
         {
             AudioFormat.Opus => 0,
             AudioFormat.Flac => 1,
@@ -91,7 +91,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public int ConnectionModeIndex
     {
-        get => _connectionMode == ConnectionMode.ServerInitiated ? 0 : 1;
+        get => ConnectionMode == ConnectionMode.ServerInitiated ? 0 : 1;
         set => ConnectionMode  = value == 0
             ? ConnectionMode.ServerInitiated
             : ConnectionMode.ClientInitiated;
@@ -134,15 +134,15 @@ public sealed partial class SettingsViewModel : ObservableObject
             var saved    = JsonSerializer.Deserialize<SettingsData>(json, JsonOptions);
             if (saved is null) return;
 
-            // Write directly to backing fields to avoid firing PropertyChanged
-            // (and triggering Save) during initialisation.
-            _clientName             = saved.ClientName;
-            _clientId               = saved.ClientId;
-            _preferredAudioDeviceId = saved.PreferredAudioDeviceId;
-            _preferredFormat        = saved.PreferredFormat;
-            _staticDelayMs          = saved.StaticDelayMs;
-            _connectionMode         = saved.ConnectionMode;
-            _logLevel               = saved.LogLevel;
+            // Assign via generated properties; PropertyChanged fires here but
+            // the DebouncedSave handler is not yet subscribed (Load runs before that).
+            ClientName             = saved.ClientName;
+            ClientId               = saved.ClientId;
+            PreferredAudioDeviceId = saved.PreferredAudioDeviceId;
+            PreferredFormat        = saved.PreferredFormat;
+            StaticDelayMs          = saved.StaticDelayMs;
+            ConnectionMode         = saved.ConnectionMode;
+            LogLevel               = saved.LogLevel;
         }
         catch { /* first run or corrupted file — use defaults */ }
     }
@@ -214,12 +214,12 @@ public sealed partial class SettingsViewModel : ObservableObject
 
             // Keep preferred device ID in sync with the live selection
             if (SelectedAudioDevice is { } d)
-                _preferredAudioDeviceId = d.Id;
+                PreferredAudioDeviceId = d.Id;
 
             var data = new SettingsData(
                 ClientName,
                 ClientId,
-                _preferredAudioDeviceId,
+                PreferredAudioDeviceId,
                 PreferredFormat,
                 StaticDelayMs,
                 ConnectionMode,
