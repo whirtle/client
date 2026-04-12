@@ -1,65 +1,127 @@
 // Copyright (c) 2026 Steve Peterson
 // SPDX-License-Identifier: MIT
 
-using System.Text.Json.Serialization;
-
 namespace Whirtle.Client.Protocol;
 
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
-[JsonDerivedType(typeof(HelloMessage),          "hello")]
-[JsonDerivedType(typeof(WelcomeMessage),        "welcome")]
-[JsonDerivedType(typeof(PingMessage),           "ping")]
-[JsonDerivedType(typeof(PongMessage),           "pong")]
-[JsonDerivedType(typeof(ErrorMessage),          "error")]
-[JsonDerivedType(typeof(GoodbyeMessage),        "goodbye")]
-[JsonDerivedType(typeof(SyncRequestMessage),    "sync_request")]
-[JsonDerivedType(typeof(SyncReplyMessage),      "sync_reply")]
-[JsonDerivedType(typeof(ClientCommandMessage),  "client/command")]
-[JsonDerivedType(typeof(NowPlayingMessage),     "now_playing")]
+/// <summary>Base type for all Sendspin protocol messages.</summary>
 public abstract record Message;
 
-/// <summary>Sent by the client immediately after the WebSocket connection opens.</summary>
-public sealed record HelloMessage(string Version) : Message;
-
-/// <summary>Sent by the server to accept the handshake.</summary>
-public sealed record WelcomeMessage(string SessionId, string ServerVersion) : Message;
-
-/// <summary>Keepalive probe; the receiver should reply with <see cref="PongMessage"/>.</summary>
-public sealed record PingMessage : Message;
-
-/// <summary>Keepalive reply to a <see cref="PingMessage"/>.</summary>
-public sealed record PongMessage : Message;
-
-/// <summary>Sent by either side to report a protocol-level error.</summary>
-public sealed record ErrorMessage(string Code, string Description) : Message;
-
-/// <summary>Sent by either side to begin a graceful shutdown.</summary>
-public sealed record GoodbyeMessage(string Reason) : Message;
+// ─── Client → Server ──────────────────────────────────────────────────────────
 
 /// <summary>
-/// Sent by the client to initiate one clock-sync round trip.
-/// <see cref="ClientSentAt"/> is the client's UTC ticks at send time.
+/// Sent by the client immediately after the WebSocket connection opens to
+/// identify itself and declare its capabilities.
+/// Wire type: <c>client/hello</c>
 /// </summary>
-public sealed record SyncRequestMessage(long ClientSentAt) : Message;
+public sealed record ClientHelloMessage(
+    string   ClientId,
+    string   Name,
+    int      Version,
+    string[] SupportedRoles) : Message;
 
 /// <summary>
-/// Sent by the server in reply to <see cref="SyncRequestMessage"/>.
-/// Echoes the original <see cref="ClientSentAt"/> and adds the server's
-/// UTC ticks at the moment it processed the request.
+/// Sent periodically by the client for clock synchronisation.
+/// <see cref="ClientTransmitted"/> is the client's Unix timestamp in microseconds.
+/// Wire type: <c>client/time</c>
 /// </summary>
-public sealed record SyncReplyMessage(long ClientSentAt, long ServerReceivedAt) : Message;
+public sealed record ClientTimeMessage(long ClientTransmitted) : Message;
 
 /// <summary>
-/// Sent by the client to control playback for the whole group (Controller Role).
+/// Sent by the client to report its operational state to the server.
+/// Wire type: <c>client/state</c>
 /// </summary>
-/// <param name="Command">Command name: <c>play</c>, <c>pause</c>, <c>skip</c>, or <c>volume</c>.</param>
-/// <param name="Value">Optional numeric parameter — for <c>volume</c>: 0.0 (silent) to 1.0 (full).</param>
-public sealed record ClientCommandMessage(string Command, double? Value = null) : Message;
+/// <param name="State">
+/// <c>"synchronized"</c> | <c>"error"</c> | <c>"external_source"</c>
+/// </param>
+public sealed record ClientStateMessage(string? State = null) : Message;
 
-/// <summary>Sent by the server to push now-playing track metadata to all clients (Metadata Role).</summary>
-public sealed record NowPlayingMessage(
-    string? Title,
-    string? Artist,
-    string? Album,
-    double? DurationSeconds,
-    double? PositionSeconds) : Message;
+/// <summary>
+/// Sent by the client to issue playback commands (Controller Role).
+/// Wire type: <c>client/command</c>
+/// </summary>
+public sealed record ClientCommandMessage(
+    ClientControllerCommand? Controller = null) : Message;
+
+/// <summary>A controller sub-command embedded in <see cref="ClientCommandMessage"/>.</summary>
+/// <param name="Command">
+/// Command name: <c>play</c>, <c>pause</c>, <c>stop</c>, <c>next</c>,
+/// <c>previous</c>, <c>volume</c>, <c>mute</c>, etc.
+/// </param>
+/// <param name="Volume">0–100, required when <see cref="Command"/> is <c>volume</c>.</param>
+/// <param name="Mute"><see langword="true"/> to mute; required when <see cref="Command"/> is <c>mute</c>.</param>
+public sealed record ClientControllerCommand(
+    string Command,
+    int?   Volume = null,
+    bool?  Mute   = null);
+
+/// <summary>
+/// Sent by the client to begin a graceful shutdown or to yield to another server.
+/// Wire type: <c>client/goodbye</c>
+/// </summary>
+/// <param name="Reason"><c>"shutdown"</c> | <c>"another_server"</c></param>
+public sealed record ClientGoodbyeMessage(string Reason) : Message;
+
+// ─── Server → Client ──────────────────────────────────────────────────────────
+
+/// <summary>
+/// Sent by the server to acknowledge the handshake and describe the session.
+/// Wire type: <c>server/hello</c>
+/// </summary>
+public sealed record ServerHelloMessage(
+    string   ServerId,
+    string   Name,
+    int      Version,
+    string[] ActiveRoles,
+    string   ConnectionReason) : Message;
+
+/// <summary>
+/// Sent by the server as the clock-sync reply.
+/// Echoes <see cref="ClientTransmitted"/> and adds the server's Unix timestamp in microseconds.
+/// Wire type: <c>server/time</c>
+/// </summary>
+public sealed record ServerTimeMessage(
+    long ClientTransmitted,
+    long ServerReceived) : Message;
+
+/// <summary>
+/// Sent by the server with one or more role-specific state updates.
+/// Wire type: <c>server/state</c>
+/// </summary>
+public sealed record ServerStateMessage(
+    ServerMetadataState?   Metadata   = null,
+    ServerControllerState? Controller = null) : Message;
+
+/// <summary>Metadata portion of a <see cref="ServerStateMessage"/>.</summary>
+public sealed record ServerMetadataState(
+    long?   Timestamp   = null,
+    string? Title       = null,
+    string? Artist      = null,
+    string? AlbumArtist = null,
+    string? Album       = null,
+    string? ArtworkUrl  = null,
+    int?    Year        = null,
+    int?    Track       = null,
+    double? Progress    = null,
+    string? Repeat      = null,
+    bool?   Shuffle     = null);
+
+/// <summary>Controller portion of a <see cref="ServerStateMessage"/>.</summary>
+public sealed record ServerControllerState(
+    string[] SupportedCommands,
+    int      Volume,
+    bool     Muted);
+
+/// <summary>
+/// Sent by the server when group playback state changes.
+/// Wire type: <c>group/update</c>
+/// </summary>
+public sealed record GroupUpdateMessage(
+    string PlaybackState,
+    string GroupId) : Message;
+
+/// <summary>
+/// Returned by <see cref="MessageSerializer"/> when the wire <c>type</c> is not
+/// recognised, allowing callers to ignore unknown messages gracefully rather than
+/// throwing.
+/// </summary>
+public sealed record UnknownMessage(string Type) : Message;

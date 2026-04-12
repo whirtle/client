@@ -4,12 +4,12 @@ namespace Whirtle.Client.Tests.Clock;
 
 internal sealed class FakeClock : ISystemClock
 {
-    private long _ticks;
+    private long _microseconds;
 
-    public FakeClock(long initialTicks = 0) => _ticks = initialTicks;
+    public FakeClock(long initialMicroseconds = 0) => _microseconds = initialMicroseconds;
 
-    public long UtcNowTicks => _ticks;
+    public long UtcNowMicroseconds => _microseconds;
 
-    public void Advance(TimeSpan by) => _ticks += by.Ticks;
-    public void Set(long ticks) => _ticks = ticks;
+    public void Advance(TimeSpan by) => _microseconds += (long)by.TotalMicroseconds;
+    public void Set(long microseconds) => _microseconds = microseconds;
 }

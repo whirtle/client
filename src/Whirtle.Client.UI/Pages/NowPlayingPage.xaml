@@ -174,16 +174,26 @@
                 </Grid>
             </Border>
 
-            <!-- ═══ 4 · SETTINGS BUTTON ════════════════════════════════════ -->
-            <Button
-                HorizontalAlignment="Left"
-                Padding="12,8"
-                Click="SettingsButton_Click">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <FontIcon Glyph="&#xE713;" FontSize="16" VerticalAlignment="Center" />
-                    <TextBlock Text="Settings" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
+            <!-- ═══ 4 · ACTION BUTTONS ════════════════════════════════════ -->
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
+                <Button
+                    Padding="12,8"
+                    Click="SettingsButton_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE713;" FontSize="16" VerticalAlignment="Center" />
+                        <TextBlock Text="Settings" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                <Button
+                    Padding="12,8"
+                    Click="LogsButton_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE7C3;" FontSize="16" VerticalAlignment="Center" />
+                        <TextBlock Text="Logs" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
 
         </StackPanel>
     </ScrollViewer>
