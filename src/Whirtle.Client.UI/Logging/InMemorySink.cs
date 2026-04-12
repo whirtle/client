@@ -20,10 +20,14 @@ public sealed class InMemorySink : ILogEventSink
 
     void ILogEventSink.Emit(LogEvent logEvent)
     {
+        var message = logEvent.RenderMessage();
+        if (logEvent.Exception is { } ex)
+            message += $": {ex.Message}";
+
         var entry = new LogEntry(
             logEvent.Timestamp,
             logEvent.Level.ToString(),
-            logEvent.RenderMessage());
+            message);
 
         NewEntry?.Invoke(entry);
     }
