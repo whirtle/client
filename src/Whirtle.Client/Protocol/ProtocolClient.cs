@@ -27,15 +27,20 @@ public sealed class ProtocolClient : IAsyncDisposable
     /// server replies or if an unexpected message arrives.
     /// </summary>
     public async Task<ServerHelloMessage> HandshakeAsync(
-        string            clientId,
-        string            clientName,
-        string[]?         supportedRoles    = null,
-        CancellationToken cancellationToken = default)
+        string             clientId,
+        string             clientName,
+        string[]?          supportedRoles    = null,
+        ArtworkV1Support?  artworkSupport    = null,
+        PlayerV1Support?   playerSupport     = null,
+        CancellationToken  cancellationToken = default)
     {
-        supportedRoles ??= ["metadata@v1", "controller@v1", "artwork@v1"];
+        supportedRoles ??= ["metadata@v1", "controller@v1"];
 
         await SendAsync(
-            new ClientHelloMessage(clientId, clientName, Version: 1, supportedRoles),
+            new ClientHelloMessage(
+                clientId, clientName, Version: 1, supportedRoles,
+                PlayerV1Support:  playerSupport,
+                ArtworkV1Support: artworkSupport),
             cancellationToken);
 
         await foreach (var msg in ReceiveRawAsync(cancellationToken))

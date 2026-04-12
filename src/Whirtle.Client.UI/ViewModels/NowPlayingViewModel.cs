@@ -32,6 +32,26 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private CancellationTokenSource? _serverModeCts;
     private readonly ConnectionManager _connectionManager = new();
 
+    // ── Handshake capability declarations ─────────────────────────────────────
+
+    private static readonly string[] SupportedRoles =
+        ["metadata@v1", "controller@v1", "artwork@v1", "player@v1"];
+
+    private static readonly ArtworkV1Support ArtworkSupport = new(
+    [
+        new ArtworkV1SupportChannel(Source: "album", Format: "jpeg", MediaWidth: 800, MediaHeight: 800),
+    ]);
+
+    private static readonly PlayerV1Support PlayerSupport = PlayerClient.BuildSupport(
+        supportedFormats:
+        [
+            new PlayerV1SupportFormat("opus", Channels: 2, SampleRate: 48_000, BitDepth: 16),
+            new PlayerV1SupportFormat("flac", Channels: 2, SampleRate: 48_000, BitDepth: 16),
+            new PlayerV1SupportFormat("pcm",  Channels: 2, SampleRate: 48_000, BitDepth: 16),
+        ],
+        bufferCapacity:   500,
+        supportedCommands: ["volume", "mute", "set_static_delay"]);
+
     // Signal-strength inputs — updated by clock sync and PlaybackEngine events.
     private TimeSpan _lastRtt        = TimeSpan.MaxValue; // unknown until first sync
     private int      _lastBufferCount = -1;               // -1 = engine not running
@@ -217,6 +237,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
             var hello = await _protocol.HandshakeAsync(
                 $"whirtle-{Environment.MachineName}", "Whirtle",
+                supportedRoles: SupportedRoles,
+                artworkSupport: ArtworkSupport,
+                playerSupport:  PlayerSupport,
                 cancellationToken: token);
 
             Log.Debug(
@@ -460,6 +483,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         {
             hello = await protocol.HandshakeAsync(
                 _settings.ClientId, _settings.ClientName,
+                supportedRoles: SupportedRoles,
+                artworkSupport: ArtworkSupport,
+                playerSupport:  PlayerSupport,
                 cancellationToken: serverModeCancellation);
         }
         catch (HandshakeException ex)
