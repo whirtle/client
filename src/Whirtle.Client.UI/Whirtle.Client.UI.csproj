@@ -5,6 +5,8 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>Whirtle.Client.UI</RootNamespace>
     <AssemblyName>Whirtle</AssemblyName>
+    <Product>Whirtle</Product>
+    <Description>Whirtle</Description>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWinUI>true</UseWinUI>
