@@ -44,7 +44,8 @@ public class MdnsAdvertiserTests
         await Task.Delay(50);
         cts.Cancel();
 
-        Assert.Single(socket.Sent); // one response sent
+        // Two initial announcements + one query response
+        Assert.Equal(3, socket.Sent.Count);
     }
 
     [Fact]
@@ -61,7 +62,8 @@ public class MdnsAdvertiserTests
         await Task.Delay(50);
         cts.Cancel();
 
-        Assert.Empty(socket.Sent);
+        // Two initial announcements only — no response to irrelevant query
+        Assert.Equal(2, socket.Sent.Count);
     }
 
     [Fact]
@@ -82,7 +84,8 @@ public class MdnsAdvertiserTests
         await Task.Delay(50);
         cts.Cancel();
 
-        Assert.Empty(socket.Sent);
+        // Two initial announcements only — mDNS responses are not queries
+        Assert.Equal(2, socket.Sent.Count);
     }
 
     [Fact]
@@ -98,7 +101,7 @@ public class MdnsAdvertiserTests
         await Task.Delay(50);
         cts.Cancel();
 
-        var response = DnsMessage.TryParse(socket.Sent[0].Datagram)!;
+        var response = DnsMessage.TryParse(socket.Sent.Last().Datagram)!;
         Assert.Equal("/sendspin", response.TxtRecords[0].Entries["path"]);
     }
 
@@ -115,7 +118,7 @@ public class MdnsAdvertiserTests
         await Task.Delay(50);
         cts.Cancel();
 
-        var response = DnsMessage.TryParse(socket.Sent[0].Datagram)!;
+        var response = DnsMessage.TryParse(socket.Sent.Last().Datagram)!;
         Assert.Equal("Kitchen", response.TxtRecords[0].Entries["name"]);
     }
 
