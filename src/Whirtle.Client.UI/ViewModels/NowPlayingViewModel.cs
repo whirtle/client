@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml;
 using Serilog;
 using Whirtle.Client.Audio;
+using Whirtle.Client.Clock;
 using Whirtle.Client.Discovery;
 using Whirtle.Client.Protocol;
 using Whirtle.Client.Role;
@@ -22,6 +23,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private ControllerClient? _controller;
     private CancellationTokenSource? _connectionCts;
     private Task _receiveLoopTask = Task.CompletedTask;
+
+    // Signal-strength inputs — updated by clock sync and PlaybackEngine events.
+    private TimeSpan _lastRtt        = TimeSpan.MaxValue; // unknown until first sync
+    private int      _lastBufferCount = -1;               // -1 = engine not running
 
     // ── Now-playing metadata ───────────────────────────────────────────────
 
@@ -60,11 +65,37 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
     [ObservableProperty] private string? _manualUrl;
 
+    // ── Status bar ─────────────────────────────────────────────────────────
+
+    [ObservableProperty] private string? _serverName;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CodecDisplay))]
+    private string? _codecName;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CodecDisplay))]
+    private int? _sampleRate;
+
+    [ObservableProperty] private int _signalStrength; // 0–3
+
     // ── Audio devices ──────────────────────────────────────────────────────
 
     [ObservableProperty] private AudioDeviceInfo? _selectedDevice;
 
     // ── Computed / derived properties ──────────────────────────────────────
+
+    public string CodecDisplay
+    {
+        get
+        {
+            if (_codecName is null) return "";
+            if (_sampleRate is null) return _codecName;
+            double kHz = _sampleRate.Value / 1000.0;
+            string kHzStr = kHz == Math.Floor(kHz) ? $"{kHz:0} kHz" : $"{kHz:0.0} kHz";
+            return $"{_codecName} · {kHzStr}";
+        }
+    }
 
     public int     VolumePercent      => (int)(_volume * 100);
     public string  PlayPauseGlyph     => _isPlaying ? "\uE769" : "\uE768"; // Pause : Play
@@ -136,8 +167,27 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             Log.Information("Connected to {ServerId} ({ServerName}), reason={Reason}",
                 hello.ServerId, hello.Name, hello.ConnectionReason);
 
-            _controller = new ControllerClient(_protocol);
+            var playerSupport = new PlayerV1Support(
+                SupportedFormats:
+                [
+                    new SupportedFormat("opus", Channels: 2, SampleRate: 48_000, BitDepth: 16),
+                    new SupportedFormat("flac", Channels: 2, SampleRate: 44_100, BitDepth: 16),
+                    new SupportedFormat("pcm",  Channels: 2, SampleRate: 48_000, BitDepth: 16),
+                ],
+                BufferCapacity:    1_000_000,
+                SupportedCommands: ["volume", "mute"]);
+
+            await _protocol.HandshakeAsync("1.0", playerSupport, token);
+
+            // Initial clock sync — establishes RTT for signal strength.
+            var syncer = new ClockSynchronizer(_protocol);
+            var sync   = await syncer.SyncOnceAsync(token);
+            _lastRtt = sync.RoundTripTime;
+            SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount);
+
+            _controller  = new ControllerClient(_protocol);
             IsConnected  = true;
+            ServerName   = endpoint.Name ?? endpoint.Host;
             ConnectionStatus = $"Connected — {endpoint.Name ?? endpoint.Host}:{endpoint.Port}";
 
             // Start background message loop; tracked so DisconnectAsync can await it.
@@ -196,6 +246,13 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _controller  = null;
         IsConnected  = false;
         ConnectionStatus = "Not connected";
+
+        ServerName     = null;
+        CodecName      = null;
+        SampleRate     = null;
+        SignalStrength  = 0;
+        _lastRtt        = TimeSpan.MaxValue;
+        _lastBufferCount = -1;
     }
 
     [RelayCommand]
@@ -282,6 +339,16 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                         }
                         break;
 
+                    case ProtocolFrame { Message: StreamStartMessage s }:
+                        var codec      = s.Player.Codec.ToUpperInvariant();
+                        var sampleRate = s.Player.SampleRate;
+                        _dispatcher.TryEnqueue(() =>
+                        {
+                            CodecName  = codec;
+                            SampleRate = sampleRate;
+                        });
+                        break;
+
                     case ArtworkFrame artwork:
                         _dispatcher.TryEnqueue(() => AlbumArtData = artwork.Data);
                         break;
@@ -298,5 +365,50 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 ConnectionStatus = "Connection lost";
             });
         }
+    }
+
+    // ── Signal strength ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Updates signal strength from the latest clock sync result.
+    /// Call from the UI thread or marshal via the dispatcher.
+    /// </summary>
+    internal void UpdateSignalStrength(TimeSpan rtt, int bufferCount)
+    {
+        _lastRtt         = rtt;
+        _lastBufferCount = bufferCount;
+        SignalStrength   = ComputeSignalStrength(rtt, bufferCount);
+    }
+
+    /// <summary>
+    /// Maps RTT and buffer count onto a 0–3 signal level.
+    /// Both metrics are scored independently; the lower score wins (worst-case).
+    /// When the playback engine is not running (<paramref name="bufferCount"/> == -1),
+    /// only the sync score is used.
+    /// </summary>
+    private static int ComputeSignalStrength(TimeSpan rtt, int bufferCount)
+    {
+        int syncScore = rtt.TotalMilliseconds switch
+        {
+            <= 5  => 4,
+            <= 15 => 3,
+            <= 30 => 2,
+            <= 50 => 1,
+            _     => 0,
+        };
+
+        if (bufferCount < 0)
+            return syncScore;
+
+        int bufferScore = bufferCount switch
+        {
+            >= 12 => 4,
+            >= 8  => 3,
+            >= 4  => 2,
+            >= 2  => 1,
+            _     => 0,
+        };
+
+        return Math.Min(syncScore, bufferScore);
     }
 }

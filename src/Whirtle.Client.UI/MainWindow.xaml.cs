@@ -53,7 +53,7 @@ public sealed partial class MainWindow : Window
         titleBar.ButtonInactiveForegroundColor = Colors.White;
 
         // Initial window size — sized to fit content
-        AppWindow.Resize(new SizeInt32(480, 560));
+        AppWindow.Resize(new SizeInt32(480, 584));
 
         // Navigate to Now Playing on launch
         ContentFrame.Navigate(typeof(NowPlayingPage));

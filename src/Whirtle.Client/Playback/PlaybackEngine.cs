@@ -44,6 +44,13 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     public PlaybackState State => _state;
 
+    /// <summary>
+    /// Raised when the playback state or buffer occupancy changes meaningfully.
+    /// Subscribers receive the current <see cref="PlaybackState"/> and the number
+    /// of frames currently held in the jitter buffer.
+    /// </summary>
+    public event Action<PlaybackState, int>? StatusChanged;
+
     internal PlaybackEngine(
         IWasapiRenderer     renderer,
         ProtocolClient      protocol,
@@ -74,7 +81,10 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// <summary>Enqueues a decoded frame for playback.</summary>
     /// <param name="serverTimestamp">Server-assigned UTC ticks at the time the frame was captured.</param>
     public void Enqueue(long serverTimestamp, AudioFrame frame)
-        => _buffer.Enqueue(serverTimestamp, frame);
+    {
+        _buffer.Enqueue(serverTimestamp, frame);
+        StatusChanged?.Invoke(_state, _buffer.Count);
+    }
 
     /// <summary>
     /// Updates the measured clock offset (from <see cref="ClockSynchronizer"/>).
@@ -203,7 +213,11 @@ public sealed class PlaybackEngine : IAsyncDisposable
         }
     }
 
-    private void TransitionTo(PlaybackState next) => _state = next;
+    private void TransitionTo(PlaybackState next)
+    {
+        _state = next;
+        StatusChanged?.Invoke(next, _buffer.Count);
+    }
 
     private async Task NotifySynchronizedAsync()
     {

@@ -31,6 +31,16 @@ public sealed class ProtocolClient : IAsyncDisposable
         string            clientName,
         string[]?         supportedRoles    = null,
         CancellationToken cancellationToken = default)
+        => HandshakeAsync(clientVersion, playerSupport: null, cancellationToken);
+
+    /// <summary>
+    /// Sends <see cref="HelloMessage"/> (with optional player capabilities) and waits for
+    /// the server's <see cref="WelcomeMessage"/>.
+    /// </summary>
+    public async Task<WelcomeMessage> HandshakeAsync(
+        string           clientVersion,
+        PlayerV1Support? playerSupport,
+        CancellationToken cancellationToken = default)
     {
         supportedRoles ??= ["metadata@v1", "controller@v1", "artwork@v1"];
 

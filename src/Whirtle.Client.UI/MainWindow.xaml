@@ -5,12 +5,14 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Whirtle.Client.UI"
     xmlns:tb="using:H.NotifyIcon"
+    xmlns:controls="using:Whirtle.Client.UI.Controls"
     Title="Whirtle">
 
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="32" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="24" />
         </Grid.RowDefinitions>
 
         <!--
@@ -42,5 +44,46 @@
 
         <!-- Player -->
         <Frame x:Name="ContentFrame" Grid.Row="1" />
+
+        <!-- Status bar -->
+        <Border
+            Grid.Row="2"
+            Padding="12,0"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="0,1,0,0">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />    <!-- server name: takes leftover space -->
+                    <ColumnDefinition Width="Auto" /> <!-- codec + sample rate -->
+                    <ColumnDefinition Width="Auto" /> <!-- signal bars -->
+                </Grid.ColumnDefinitions>
+
+                <!-- Server name (left, truncates when space is tight) -->
+                <TextBlock
+                    Grid.Column="0"
+                    VerticalAlignment="Center"
+                    Style="{ThemeResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind NowPlayingViewModel.ServerName, Mode=OneWay, FallbackValue='—'}"
+                    TextTrimming="CharacterEllipsis" />
+
+                <!-- Codec · sample rate (centre-ish) -->
+                <TextBlock
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Style="{ThemeResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind NowPlayingViewModel.CodecDisplay, Mode=OneWay}" />
+
+                <!-- Signal bars (right) -->
+                <controls:SignalBarsControl
+                    Grid.Column="2"
+                    VerticalAlignment="Center"
+                    Level="{x:Bind NowPlayingViewModel.SignalStrength, Mode=OneWay}" />
+
+            </Grid>
+        </Border>
+
     </Grid>
 </Window>
