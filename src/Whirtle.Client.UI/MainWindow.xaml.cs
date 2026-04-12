@@ -46,7 +46,7 @@ public sealed partial class MainWindow : Window
         AppWindow.Resize(new SizeInt32(1080, 740));
 
         // Navigate to Now Playing on launch
-        NavView.SelectedItem = NavView.MenuItems[0];
+        ContentFrame.Navigate(typeof(NowPlayingPage));
 
         // Intercept close → minimize to tray instead
         AppWindow.Closing += AppWindow_Closing;
@@ -129,15 +129,6 @@ public sealed partial class MainWindow : Window
         public event EventHandler? CanExecuteChanged { add { } remove { } }
         public bool CanExecute(object? _) => true;
         public void Execute(object? _)    => execute();
-    }
-
-    private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
-    {
-        if (args.SelectedItem is not NavigationViewItem { Tag: string tag })
-            return;
-
-        if (tag == "NowPlaying")
-            ContentFrame.Navigate(typeof(NowPlayingPage));
     }
 
     private SettingsWindow? _settingsWindow;
