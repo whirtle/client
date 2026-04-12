@@ -134,17 +134,19 @@ public sealed class MdnsAdvertiser : IDisposable
 
     private static string GetLocalIpAddress()
     {
-        foreach (var iface in NetworkInterface.GetAllNetworkInterfaces())
+        // Use a UDP socket connect so the OS routing table picks the correct
+        // outbound interface rather than returning the first adapter found
+        // (which may be a WSL, Hyper-V, or VPN virtual adapter).
+        try
         {
-            if (iface.OperationalStatus != OperationalStatus.Up) continue;
-            foreach (var addr in iface.GetIPProperties().UnicastAddresses)
-            {
-                if (addr.Address.AddressFamily == AddressFamily.InterNetwork &&
-                    !IPAddress.IsLoopback(addr.Address))
-                    return addr.Address.ToString();
-            }
+            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.Connect("224.0.0.251", 5353);
+            return ((IPEndPoint)socket.LocalEndPoint!).Address.ToString();
         }
-        return "127.0.0.1";
+        catch
+        {
+            return "127.0.0.1";
+        }
     }
 
     public void Dispose() => _socket.Dispose();
