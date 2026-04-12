@@ -84,8 +84,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    public ObservableCollection<AudioDeviceInfo> AudioDevices { get; } = new();
-
     // ── Static option lists ────────────────────────────────────────────────
 
     public IReadOnlyList<string> AudioFormatOptions { get; } =
@@ -188,6 +186,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             {
                 foreach (var s in servers)
                     SavedServers.Add(s);
+            }
+
             // Pre-load the preferred device's settings so they're ready before
             // the device ComboBox is populated.
             if (!string.IsNullOrEmpty(_preferredAudioDeviceId) &&
@@ -319,5 +319,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         string                             PreferredAudioDeviceId,
         Dictionary<string, DeviceSettings> DeviceSettings,
         ConnectionMode                     ConnectionMode,
-        string                             LogLevel);
+        string                             LogLevel,
+        List<PersistedServer>?             SavedServers);
 }
