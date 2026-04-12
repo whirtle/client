@@ -83,7 +83,7 @@ internal static class FlacResidualDecoder
                 for (int i = 0; i < partitionSize; i++)
                 {
                     // Unary-coded quotient: count 0-bits, then consume the 1-bit stop.
-                    int quotient = 0;
+                    uint quotient = 0u;
                     while (!reader.ReadBit())
                         quotient++;
 
@@ -91,7 +91,7 @@ internal static class FlacResidualDecoder
                     uint remainder = riceParam > 0 ? reader.ReadBits(riceParam) : 0u;
 
                     // Reconstruct the non-negative ZigZag value and fold to signed.
-                    uint raw = ((uint)quotient << riceParam) | remainder;
+                    uint raw = (quotient << riceParam) | remainder;
                     residuals[residualIndex++] = (raw & 1) == 0
                         ? (int)(raw >> 1)       // even → non-negative
                         : ~(int)(raw >> 1);     // odd  → negative (bitwise NOT = -(n+1))

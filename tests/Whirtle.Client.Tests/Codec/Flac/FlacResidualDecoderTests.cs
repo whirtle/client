@@ -179,7 +179,7 @@ public class FlacResidualDecoderTests
         bs.Write(-4, 4);  // -4 = 0b1100
 
         var result = Decode(bs, blockSize: 3, predictorOrder: 0);
-        Assert.Equal([3, -1, -4], result);
+        Assert.Equal(new[] { 3, -1, -4 }, result);
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public class FlacResidualDecoderTests
         bs.Write(-50, 8);  // -50 (8-bit signed, negative)
 
         var result = Decode(bs, blockSize: 2, predictorOrder: 0);
-        Assert.Equal([100, -50], result);
+        Assert.Equal(new[] { 100, -50 }, result);
     }
 
     // -----------------------------------------------------------------------
@@ -217,7 +217,7 @@ public class FlacResidualDecoderTests
         bs.WriteUnary(1); bs.Write(1, 2);
 
         var result = Decode(bs, blockSize: 2, predictorOrder: 0);
-        Assert.Equal([2, -3], result);
+        Assert.Equal(new[] { 2, -3 }, result);
     }
 
     // -----------------------------------------------------------------------
