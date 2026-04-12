@@ -40,14 +40,36 @@ public class ControllerClientTests
     }
 
     [Fact]
-    public async Task SkipAsync_SendsNextCommand()
+    public async Task NextAsync_SendsNextCommand()
     {
         var (controller, transport) = Build();
 
-        await controller.SkipAsync();
+        await controller.NextAsync();
 
         var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
         Assert.Equal("next", msg.Controller!.Command);
+    }
+
+    [Fact]
+    public async Task StopAsync_SendsStopCommand()
+    {
+        var (controller, transport) = Build();
+
+        await controller.StopAsync();
+
+        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        Assert.Equal("stop", msg.Controller!.Command);
+    }
+
+    [Fact]
+    public async Task PreviousAsync_SendsPreviousCommand()
+    {
+        var (controller, transport) = Build();
+
+        await controller.PreviousAsync();
+
+        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        Assert.Equal("previous", msg.Controller!.Command);
     }
 
     [Fact]
@@ -82,5 +104,46 @@ public class ControllerClientTests
 
         var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
         Assert.Equal(0, msg.Controller!.Volume);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SetMuteAsync_SendsMuteCommand(bool muted)
+    {
+        var (controller, transport) = Build();
+
+        await controller.SetMuteAsync(muted);
+
+        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        Assert.Equal("mute", msg.Controller!.Command);
+        Assert.Equal(muted, msg.Controller.Mute);
+    }
+
+    [Theory]
+    [InlineData("repeat_off")]
+    [InlineData("repeat_one")]
+    [InlineData("repeat_all")]
+    [InlineData("shuffle")]
+    [InlineData("unshuffle")]
+    [InlineData("switch")]
+    public async Task SimpleCommands_SendCorrectCommandString(string command)
+    {
+        var (controller, transport) = Build();
+
+        Task task = command switch
+        {
+            "repeat_off"  => controller.RepeatOffAsync(),
+            "repeat_one"  => controller.RepeatOneAsync(),
+            "repeat_all"  => controller.RepeatAllAsync(),
+            "shuffle"     => controller.ShuffleAsync(),
+            "unshuffle"   => controller.UnshuffleAsync(),
+            "switch"      => controller.SwitchAsync(),
+            _             => throw new ArgumentOutOfRangeException(nameof(command)),
+        };
+        await task;
+
+        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        Assert.Equal(command, msg.Controller!.Command);
     }
 }

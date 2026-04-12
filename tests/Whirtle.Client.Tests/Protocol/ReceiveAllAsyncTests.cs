@@ -33,9 +33,10 @@ public class ReceiveAllAsyncTests
     public async Task ReceiveAllAsync_YieldsArtworkFrame_ForBinaryData()
     {
         var (client, transport) = Build();
-        // Artwork binary frame: first byte = 8 (ARTWORK_CHANNEL_0), rest = JPEG
-        byte[] jpegBytes = [0xFF, 0xD8, 0xAA, 0xBB];
-        transport.EnqueueInbound([8, .. jpegBytes]);  // prepend type byte
+        // Artwork binary frame: type byte (8) + 8-byte timestamp + JPEG bytes.
+        byte[] jpegBytes   = [0xFF, 0xD8, 0xAA, 0xBB];
+        byte[] tsBytes     = [0, 0, 0, 0, 0, 0, 0, 0]; // timestamp = 0
+        transport.EnqueueInbound([8, .. tsBytes, .. jpegBytes]);
         transport.CloseInbound();
 
         var frames = new List<IncomingFrame>();

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Steve Peterson
 // SPDX-License-Identifier: MIT
 
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using Whirtle.Client.Transport;
 
@@ -115,9 +116,19 @@ public sealed class ProtocolClient : IAsyncDisposable
                 // 8–11 = artwork channel 0–3
                 var typeId  = data[0];
                 var payload = data[1..];
-                if (typeId is >= 8 and <= 11)
-                    yield return new ArtworkFrame(payload, DetectMimeType(payload), Channel: typeId - 8);
-                // Audio chunks (typeId == 4) are not yet handled at this layer.
+                if (typeId is >= 8 and <= 11 && payload.Length >= 8)
+                {
+                    long  timestamp = BinaryPrimitives.ReadInt64BigEndian(payload);
+                    var   imageData = payload[8..];
+                    yield return new ArtworkFrame(
+                        timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
+                }
+                else if (typeId == 4 && payload.Length >= 8)
+                {
+                    long timestamp   = BinaryPrimitives.ReadInt64BigEndian(payload);
+                    var  encodedData = payload[8..];
+                    yield return new AudioChunkFrame(timestamp, encodedData);
+                }
             }
         }
     }

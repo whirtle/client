@@ -200,7 +200,7 @@ internal class Program
                             break;
 
                         case "skip":
-                            await controller.SkipAsync(cts.Token);
+                            await controller.NextAsync(cts.Token);
                             Console.WriteLine("[CMD]  skip sent");
                             break;
 
