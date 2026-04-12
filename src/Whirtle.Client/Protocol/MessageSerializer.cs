@@ -35,10 +35,14 @@ internal sealed class MessageSerializer
         ["client/state"]   = typeof(ClientStateMessage),
         ["client/command"] = typeof(ClientCommandMessage),
         ["client/goodbye"] = typeof(ClientGoodbyeMessage),
-        ["server/hello"]   = typeof(ServerHelloMessage),
-        ["server/time"]    = typeof(ServerTimeMessage),
-        ["server/state"]   = typeof(ServerStateMessage),
-        ["group/update"]   = typeof(GroupUpdateMessage),
+        ["server/hello"]          = typeof(ServerHelloMessage),
+        ["server/time"]           = typeof(ServerTimeMessage),
+        ["server/state"]          = typeof(ServerStateMessage),
+        ["server/command"]        = typeof(ServerCommandMessage),
+        ["group/update"]          = typeof(GroupUpdateMessage),
+        ["stream/request-format"] = typeof(StreamRequestFormatMessage),
+        ["stream/start"]          = typeof(StreamStartMessage),
+        ["stream/clear"]          = typeof(StreamClearMessage),
     };
 
     // Maps CLR types → wire type strings (for serialisation).

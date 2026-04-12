@@ -82,6 +82,11 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// </summary>
     public void UpdateClockOffset(TimeSpan offset) => _clockOffset = offset;
 
+    /// <summary>
+    /// Discards all buffered frames. Call when a <c>stream/clear</c> message arrives.
+    /// </summary>
+    public void ClearBuffer() => _buffer.Clear();
+
     public async ValueTask DisposeAsync()
     {
         _cts.Cancel();

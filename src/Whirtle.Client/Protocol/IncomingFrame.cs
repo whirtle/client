@@ -24,3 +24,12 @@ public sealed record ProtocolFrame(Message Message) : IncomingFrame;
 /// </param>
 /// <param name="Channel">Artwork channel index (0–3).</param>
 public sealed record ArtworkFrame(byte[] Data, string MimeType, int Channel = 0) : IncomingFrame;
+
+/// <summary>
+/// A binary audio chunk received from the server (Player Role, message type 4).
+/// </summary>
+/// <param name="Timestamp">
+/// Server clock time in microseconds when the first sample should be output.
+/// </param>
+/// <param name="EncodedData">Encoded audio payload (codec determined by the active stream).</param>
+public sealed record AudioChunkFrame(long Timestamp, byte[] EncodedData) : IncomingFrame;
