@@ -26,6 +26,16 @@ public sealed partial class LogsWindow : Window
 
         AppWindow.Resize(new SizeInt32(900, 600));
         TryApplyMica();
+
+        // Closing the logs window should hide it, not destroy it.
+        // Destroying it when MainWindow is hidden to the tray would exit the app
+        // because the runtime sees no remaining visible windows.
+        AppWindow.Closing += (_, args) =>
+        {
+            args.Cancel = true;
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            NativeWindow.ShowWindow(hwnd, NativeWindow.SW_HIDE);
+        };
     }
 
     private void TryApplyMica()

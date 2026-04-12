@@ -29,22 +29,32 @@ public sealed partial class SettingsViewModel : ObservableObject
     // server picker, outside the Settings dialog lifecycle).
     private record SettingsSnapshot(
         string ClientName, string ClientId, string PreferredAudioDeviceId,
-        AudioFormat PreferredFormat, int StaticDelayMs, string LogLevel);
+        Dictionary<string, DeviceSettings> DeviceSettings,
+        ConnectionMode ConnectionMode, string LogLevel);
 
     private SettingsSnapshot? _snapshot;
     private bool _suppressSave;
+
+    // Per-device settings storage
+    private Dictionary<string, DeviceSettings> _deviceSettings = new();
 
     // ── Persistent settings ────────────────────────────────────────────────
 
     [ObservableProperty] private string _clientName = Environment.MachineName;
     [ObservableProperty] private string _clientId   = Guid.NewGuid().ToString("N");
 
+    [ObservableProperty] private string _preferredAudioDeviceId = string.Empty;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AudioFormatIndex))]
-    private AudioFormat _preferredFormat = AudioFormat.Opus;
+    private AudioFormat _currentDeviceFormat = AudioFormat.Opus;
 
-    [ObservableProperty] private string _preferredAudioDeviceId = string.Empty;
-    [ObservableProperty] private int    _staticDelayMs          = 0;
+    [ObservableProperty] private int _currentDeviceStaticDelayMs = 0;
+
+    partial void OnCurrentDeviceStaticDelayMsChanged(int value)
+    {
+        if (value < 0) CurrentDeviceStaticDelayMs = 0;
+    }
 
     [ObservableProperty] private ConnectionMode _connectionMode = ConnectionMode.ServerInitiated;
 
@@ -56,6 +66,25 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public ObservableCollection<AudioDeviceInfo>  AudioDevices  { get; } = new();
     public ObservableCollection<PersistedServer>  SavedServers  { get; } = new();
+    partial void OnSelectedAudioDeviceChanged(AudioDeviceInfo? value)
+    {
+        if (value is null) return;
+        // Suppress save while loading per-device values so switching devices
+        // does not trigger a spurious write.
+        _suppressSave = true;
+        try
+        {
+            var ds = GetDeviceSettings(value.Id);
+            CurrentDeviceFormat        = ds.PreferredFormat;
+            CurrentDeviceStaticDelayMs = ds.StaticDelayMs;
+        }
+        finally
+        {
+            _suppressSave = false;
+        }
+    }
+
+    public ObservableCollection<AudioDeviceInfo> AudioDevices { get; } = new();
 
     // ── Static option lists ────────────────────────────────────────────────
 
@@ -65,22 +94,30 @@ public sealed partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<string> LogLevelOptions { get; } =
         ["Verbose", "Debug", "Information", "Warning", "Error"];
 
-    // ── Index helpers ──────────────────────────────────────────────────────
+    // ── Index helpers (for ComboBox SelectedIndex binding) ─────────────────
 
     public int AudioFormatIndex
     {
-        get => _preferredFormat switch
+        get => _currentDeviceFormat switch
         {
             AudioFormat.Opus => 0,
             AudioFormat.Flac => 1,
             _                => 2,
         };
-        set => PreferredFormat = value switch
+        set => CurrentDeviceFormat = value switch
         {
             0 => AudioFormat.Opus,
             1 => AudioFormat.Flac,
             _ => AudioFormat.Pcm,
         };
+    }
+
+    public int ConnectionModeIndex
+    {
+        get => ConnectionMode == ConnectionMode.ServerInitiated ? 0 : 1;
+        set => ConnectionMode  = value == 0
+            ? ConnectionMode.ServerInitiated
+            : ConnectionMode.ClientInitiated;
     }
 
     // ── Constructor ────────────────────────────────────────────────────────
@@ -121,6 +158,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         SavedServers.Remove(server);
         Save();
     }
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    private DeviceSettings GetDeviceSettings(string deviceId)
+        => _deviceSettings.TryGetValue(deviceId, out var ds) ? ds : new DeviceSettings();
 
     // ── Load / save ────────────────────────────────────────────────────────
 
@@ -130,8 +171,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             if (!File.Exists(SettingsPath)) return;
 
-            var json     = File.ReadAllText(SettingsPath);
-            var saved    = JsonSerializer.Deserialize<SettingsData>(json, JsonOptions);
+            var json  = File.ReadAllText(SettingsPath);
+            var saved = JsonSerializer.Deserialize<SettingsData>(json, JsonOptions);
             if (saved is null) return;
 
             // Write directly to backing fields to avoid firing PropertyChanged
@@ -139,8 +180,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             _clientName             = saved.ClientName;
             _clientId               = saved.ClientId;
             _preferredAudioDeviceId = saved.PreferredAudioDeviceId;
-            _preferredFormat        = saved.PreferredFormat;
-            _staticDelayMs          = saved.StaticDelayMs;
+            _deviceSettings         = saved.DeviceSettings ?? new Dictionary<string, DeviceSettings>();
             _connectionMode         = saved.ConnectionMode;
             _logLevel               = saved.LogLevel;
 
@@ -148,6 +188,13 @@ public sealed partial class SettingsViewModel : ObservableObject
             {
                 foreach (var s in servers)
                     SavedServers.Add(s);
+            // Pre-load the preferred device's settings so they're ready before
+            // the device ComboBox is populated.
+            if (!string.IsNullOrEmpty(_preferredAudioDeviceId) &&
+                _deviceSettings.TryGetValue(_preferredAudioDeviceId, out var ds))
+            {
+                _currentDeviceFormat        = ds.PreferredFormat;
+                _currentDeviceStaticDelayMs = ds.StaticDelayMs;
             }
         }
         catch { /* first run or corrupted file — use defaults */ }
@@ -157,7 +204,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         _snapshot = new SettingsSnapshot(
             ClientName, ClientId, PreferredAudioDeviceId,
-            PreferredFormat, StaticDelayMs, LogLevel);
+            _deviceSettings.ToDictionary(
+                kvp => kvp.Key,
+                kvp => new DeviceSettings { PreferredFormat = kvp.Value.PreferredFormat, StaticDelayMs = kvp.Value.StaticDelayMs }),
+            ConnectionMode, LogLevel);
     }
 
     public void RestoreSnapshot()
@@ -169,9 +219,15 @@ public sealed partial class SettingsViewModel : ObservableObject
             ClientName             = _snapshot.ClientName;
             ClientId               = _snapshot.ClientId;
             PreferredAudioDeviceId = _snapshot.PreferredAudioDeviceId;
-            PreferredFormat        = _snapshot.PreferredFormat;
-            StaticDelayMs          = _snapshot.StaticDelayMs;
+            _deviceSettings        = _snapshot.DeviceSettings.ToDictionary(
+                kvp => kvp.Key,
+                kvp => new DeviceSettings { PreferredFormat = kvp.Value.PreferredFormat, StaticDelayMs = kvp.Value.StaticDelayMs });
+            ConnectionMode         = _snapshot.ConnectionMode;
             LogLevel               = _snapshot.LogLevel;
+
+            // Reload current device's settings after restoring the dict
+            SelectedAudioDevice = AudioDevices.FirstOrDefault(d => d.Id == PreferredAudioDeviceId)
+                               ?? SelectedAudioDevice;
         }
         finally
         {
@@ -217,16 +273,23 @@ public sealed partial class SettingsViewModel : ObservableObject
             var dir = Path.GetDirectoryName(SettingsPath)!;
             Directory.CreateDirectory(dir);
 
-            // Keep preferred device ID in sync with the live selection
+            // Keep preferred device ID and its per-device settings in sync with
+            // the live selection before serialising.
             if (SelectedAudioDevice is { } d)
+            {
                 _preferredAudioDeviceId = d.Id;
+                _deviceSettings[d.Id] = new DeviceSettings
+                {
+                    PreferredFormat = CurrentDeviceFormat,
+                    StaticDelayMs   = CurrentDeviceStaticDelayMs,
+                };
+            }
 
             var data = new SettingsData(
                 ClientName,
                 ClientId,
                 _preferredAudioDeviceId,
-                PreferredFormat,
-                StaticDelayMs,
+                _deviceSettings,
                 ConnectionMode,
                 LogLevel,
                 SavedServers.ToList());
@@ -242,15 +305,19 @@ public sealed partial class SettingsViewModel : ObservableObject
         catch { /* best-effort; non-fatal */ }
     }
 
-    // ── Settings data record (serialised to disk) ─────────────────────────
+    // ── Settings data types (serialised to disk) ──────────────────────────
+
+    public sealed class DeviceSettings
+    {
+        public AudioFormat PreferredFormat { get; set; } = AudioFormat.Opus;
+        public int         StaticDelayMs   { get; set; } = 0;
+    }
 
     private sealed record SettingsData(
-        string         ClientName,
-        string         ClientId,
-        string         PreferredAudioDeviceId,
-        AudioFormat    PreferredFormat,
-        int            StaticDelayMs,
-        ConnectionMode ConnectionMode,
-        string         LogLevel,
-        IReadOnlyList<PersistedServer>? SavedServers = null);
+        string                             ClientName,
+        string                             ClientId,
+        string                             PreferredAudioDeviceId,
+        Dictionary<string, DeviceSettings> DeviceSettings,
+        ConnectionMode                     ConnectionMode,
+        string                             LogLevel);
 }

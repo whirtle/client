@@ -8,17 +8,19 @@ public sealed partial class SettingsPage : Page
 {
     private SettingsViewModel ViewModel => App.Current.SettingsViewModel;
 
-    public event EventHandler? OKClicked;
-    public event EventHandler? CancelClicked;
+    public event EventHandler? SaveClicked;
 
     public SettingsPage()
     {
         InitializeComponent();
     }
 
-    private void OK_Click(object sender, RoutedEventArgs e)
-        => OKClicked?.Invoke(this, EventArgs.Empty);
+    private async void ConnectSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (ServerList.SelectedItem is ServiceEndpoint endpoint)
+            await NowPlayingViewModel.ConnectCommand.ExecuteAsync(endpoint);
+    }
 
-    private void Cancel_Click(object sender, RoutedEventArgs e)
-        => CancelClicked?.Invoke(this, EventArgs.Empty);
+    private void Save_Click(object sender, RoutedEventArgs e)
+        => SaveClicked?.Invoke(this, EventArgs.Empty);
 }

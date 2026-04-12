@@ -22,20 +22,24 @@ public sealed partial class SettingsWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(DragBar);
 
-        AppWindow.Resize(new SizeInt32(680, 860));
+        AppWindow.Resize(new SizeInt32(360, 860));
         TryApplyMica();
 
         App.Current.SettingsViewModel.CaptureSnapshot();
 
-        ContentPage.OKClicked += (_, _) =>
+        var saved = false;
+
+        ContentPage.SaveClicked += (_, _) =>
         {
+            saved = true;
             App.Current.SettingsViewModel.CommitNow();
             Close();
         };
-        ContentPage.CancelClicked += (_, _) =>
+
+        Closed += (_, _) =>
         {
-            App.Current.SettingsViewModel.RestoreSnapshot();
-            Close();
+            if (!saved)
+                App.Current.SettingsViewModel.RestoreSnapshot();
         };
     }
 

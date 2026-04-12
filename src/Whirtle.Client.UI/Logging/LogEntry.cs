@@ -7,4 +7,10 @@ namespace Whirtle.Client.UI.Logging;
 public sealed record LogEntry(
     DateTimeOffset Timestamp,
     string         Level,
-    string         Message);
+    string         Message)
+{
+    public string FormattedTimestamp { get; } = Timestamp.ToString("M/d HH:mm:ss");
+
+    public string FormattedLine =>
+        $"{FormattedTimestamp,-14}  {Level,-11}  {Message}";
+}
