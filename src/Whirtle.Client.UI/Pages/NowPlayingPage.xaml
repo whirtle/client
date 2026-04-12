@@ -5,8 +5,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Whirtle.Client.UI.Pages"
     xmlns:converters="using:Whirtle.Client.UI.Converters"
-    xmlns:discovery="using:Whirtle.Client.Discovery"
-    xmlns:audio="using:Whirtle.Client.Audio"
     Background="Transparent">
 
     <Page.Resources>
@@ -174,114 +172,6 @@
                         TextAlignment="Right"
                         Style="{ThemeResource CaptionTextBlockStyle}" />
                 </Grid>
-            </Border>
-
-            <!-- ═══ 4 · CONNECTIONS ══════════════════════════════════════════ -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Connections" Style="{ThemeResource SubtitleTextBlockStyle}" />
-
-                    <!-- Connection status pill -->
-                    <InfoBar
-                        IsOpen="True"
-                        IsClosable="False"
-                        Severity="{x:Bind ViewModel.ConnectionInfoSeverity, Mode=OneWay}"
-                        Message="{x:Bind ViewModel.ConnectionStatus, Mode=OneWay}" />
-
-                    <!-- Auto-discovered servers -->
-                    <TextBlock
-                        Text="Auto-discovered servers"
-                        Style="{ThemeResource BodyStrongTextBlockStyle}" />
-
-                    <ListView
-                        x:Name="ServerList"
-                        ItemsSource="{x:Bind ViewModel.DiscoveredServers}"
-                        SelectionMode="Single"
-                        MaxHeight="180"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="4">
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Padding="0,6" ColumnSpacing="10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <FontIcon
-                                        Grid.Column="0"
-                                        Glyph="&#xECA5;"
-                                        FontSize="14"
-                                        VerticalAlignment="Center"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                    <StackPanel Grid.Column="1" Spacing="2">
-                                        <TextBlock
-                                            Text="{Binding Name}"
-                                            Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                                        <TextBlock
-                                            Style="{ThemeResource CaptionTextBlockStyle}"
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                            <Run Text="{Binding Host}" /><Run Text=":" /><Run Text="{Binding Port}" />
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-
-                    <Button
-                        Content="Connect to Selected"
-                        IsEnabled="{x:Bind ViewModel.IsNotConnected, Mode=OneWay}"
-                        Click="ConnectSelected_Click" />
-
-                    <!-- Manual URL entry -->
-                    <TextBlock
-                        Text="Or connect manually:"
-                        Style="{ThemeResource BodyStrongTextBlockStyle}" />
-
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox
-                            Grid.Column="0"
-                            PlaceholderText="ws://192.168.1.x:8928/sendspin"
-                            Text="{x:Bind ViewModel.ManualUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        <Button
-                            Grid.Column="1"
-                            Content="Connect"
-                            IsEnabled="{x:Bind ViewModel.IsNotConnected, Mode=OneWay}"
-                            Command="{x:Bind ViewModel.ConnectManualCommand}" />
-                    </Grid>
-
-                    <!-- Disconnect (only visible while connected) -->
-                    <Button
-                        Content="Disconnect"
-                        Visibility="{x:Bind ViewModel.DisconnectVisibility, Mode=OneWay}"
-                        Command="{x:Bind ViewModel.DisconnectCommand}" />
-                </StackPanel>
-            </Border>
-
-            <!-- ═══ 5 · AUDIO OUTPUT DEVICE ══════════════════════════════════ -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Audio Output" Style="{ThemeResource SubtitleTextBlockStyle}" />
-                    <ComboBox
-                        ItemsSource="{x:Bind ViewModel.AudioDevices}"
-                        SelectedItem="{x:Bind ViewModel.SelectedDevice, Mode=TwoWay}"
-                        HorizontalAlignment="Stretch"
-                        MinWidth="240">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <FontIcon Glyph="&#xE7F3;" FontSize="14" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                </StackPanel>
             </Border>
 
         </StackPanel>

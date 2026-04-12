@@ -136,14 +136,22 @@ public sealed partial class MainWindow : Window
         if (args.SelectedItem is not NavigationViewItem { Tag: string tag })
             return;
 
-        var pageType = tag switch
-        {
-            "NowPlaying" => typeof(NowPlayingPage),
-            "Settings"   => typeof(SettingsPage),
-            _            => (Type?)null,
-        };
+        if (tag == "NowPlaying")
+            ContentFrame.Navigate(typeof(NowPlayingPage));
+    }
 
-        if (pageType is not null)
-            ContentFrame.Navigate(pageType);
+    private SettingsWindow? _settingsWindow;
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+
+        _settingsWindow = new SettingsWindow();
+        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Activate();
     }
 }

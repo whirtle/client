@@ -67,11 +67,4 @@ public sealed partial class NowPlayingPage : Page
         if (sender is Slider slider)
             await ViewModel.SeekCommand.ExecuteAsync(slider.Value);
     }
-
-    // Connect to the server currently selected in the ListView
-    private async void ConnectSelected_Click(object sender, RoutedEventArgs e)
-    {
-        if (ServerList.SelectedItem is Whirtle.Client.Discovery.ServiceEndpoint endpoint)
-            await ViewModel.ConnectCommand.ExecuteAsync(endpoint);
-    }
 }

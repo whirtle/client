@@ -58,13 +58,22 @@
                 </NavigationViewItem>
             </NavigationView.MenuItems>
 
-            <NavigationView.FooterMenuItems>
-                <NavigationViewItem Tag="Settings" Content="Settings">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE713;" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-            </NavigationView.FooterMenuItems>
+            <NavigationView.PaneFooter>
+                <Button
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Left"
+                    Margin="4,0,4,4"
+                    Padding="12,0"
+                    Height="40"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="SettingsButton_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <FontIcon Glyph="&#xE713;" FontSize="16" VerticalAlignment="Center" />
+                        <TextBlock Text="Settings" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </NavigationView.PaneFooter>
 
             <Frame x:Name="ContentFrame" />
         </NavigationView>
