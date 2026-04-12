@@ -134,19 +134,42 @@ public sealed class MdnsAdvertiser : IDisposable
 
     private static string GetLocalIpAddress()
     {
-        // Use a UDP socket connect so the OS routing table picks the correct
-        // outbound interface rather than returning the first adapter found
-        // (which may be a WSL, Hyper-V, or VPN virtual adapter).
-        try
+        // Score candidates so that a real LAN address is preferred over
+        // virtual adapters (WSL, Hyper-V, Docker) which occupy 172.16–31.x.x.
+        string? best = null;
+        int     bestScore = -1;
+
+        foreach (var iface in NetworkInterface.GetAllNetworkInterfaces())
         {
-            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            socket.Connect("224.0.0.251", 5353);
-            return ((IPEndPoint)socket.LocalEndPoint!).Address.ToString();
+            if (iface.OperationalStatus != OperationalStatus.Up) continue;
+            if (iface.NetworkInterfaceType is NetworkInterfaceType.Loopback
+                                           or NetworkInterfaceType.Tunnel) continue;
+
+            foreach (var addr in iface.GetIPProperties().UnicastAddresses)
+            {
+                if (addr.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+                if (IPAddress.IsLoopback(addr.Address)) continue;
+
+                int score = ScoreAddress(addr.Address);
+                if (score > bestScore) { bestScore = score; best = addr.Address.ToString(); }
+            }
         }
-        catch
-        {
-            return "127.0.0.1";
-        }
+
+        return best ?? "127.0.0.1";
+    }
+
+    /// <summary>
+    /// Higher score = more likely to be the real LAN address.
+    /// 172.16–31.x.x (Docker/WSL/Hyper-V) scores lowest.
+    /// </summary>
+    private static int ScoreAddress(IPAddress address)
+    {
+        var b = address.GetAddressBytes();
+        if (b[0] == 169 && b[1] == 254)                          return -1; // APIPA
+        if (b[0] == 192 && b[1] == 168)                          return  3; // typical home/office LAN
+        if (b[0] == 10)                                           return  2; // corporate LAN
+        if (b[0] == 172 && b[1] >= 16 && b[1] <= 31)            return  0; // virtual (Docker/WSL/Hyper-V)
+        return 1; // anything else (public IP, uncommon private range)
     }
 
     public void Dispose() => _socket.Dispose();
