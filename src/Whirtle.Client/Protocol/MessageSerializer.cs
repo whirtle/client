@@ -2,93 +2,97 @@
 // SPDX-License-Identifier: MIT
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Whirtle.Client.Protocol;
 
+/// <summary>
+/// Serialises and deserialises Sendspin protocol messages.
+///
+/// Wire format
+/// ───────────
+/// All messages use a typed envelope:
+/// <code>{"type":"client/hello","payload":{…}}</code>
+/// Payload field names follow <c>snake_case</c> (e.g. <c>client_id</c>,
+/// <c>server_id</c>, <c>connection_reason</c>).
+/// </summary>
 internal sealed class MessageSerializer
 {
-    private static readonly JsonSerializerOptions Options = new()
+    // snake_case serialisation for payload objects.
+    private static readonly JsonSerializerOptions PayloadOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNamingPolicy        = JsonNamingPolicy.SnakeCaseLower,
         PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
     };
 
+    // Maps wire type strings → CLR types (for deserialisation).
+    private static readonly Dictionary<string, Type> TypeMap =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["client/hello"]   = typeof(ClientHelloMessage),
+        ["client/time"]    = typeof(ClientTimeMessage),
+        ["client/state"]   = typeof(ClientStateMessage),
+        ["client/command"] = typeof(ClientCommandMessage),
+        ["client/goodbye"] = typeof(ClientGoodbyeMessage),
+        ["server/hello"]          = typeof(ServerHelloMessage),
+        ["server/time"]           = typeof(ServerTimeMessage),
+        ["server/state"]          = typeof(ServerStateMessage),
+        ["server/command"]        = typeof(ServerCommandMessage),
+        ["group/update"]          = typeof(GroupUpdateMessage),
+        ["stream/request-format"] = typeof(StreamRequestFormatMessage),
+        ["stream/start"]          = typeof(StreamStartMessage),
+        ["stream/clear"]          = typeof(StreamClearMessage),
+    };
+
+    // Maps CLR types → wire type strings (for serialisation).
+    private static readonly Dictionary<Type, string> NameMap =
+        TypeMap.ToDictionary(kv => kv.Value, kv => kv.Key);
+
+    // ── Public API ─────────────────────────────────────────────────────────
+
+    /// <summary>Serialises <paramref name="message"/> to UTF-8 JSON bytes.</summary>
     public byte[] Serialize(Message message)
-        => JsonSerializer.SerializeToUtf8Bytes(message, Options);
-
-    public Message Deserialize(byte[] data)
     {
-        // [JsonPolymorphic] discriminator matching is case-sensitive.
-        // Normalise the "type" value to lowercase so servers that capitalise
-        // the discriminator (e.g. "HELLO") are handled transparently.
-        data = NormalizeTypeDiscriminator(data);
+        if (!NameMap.TryGetValue(message.GetType(), out var typeName))
+            throw new InvalidOperationException(
+                $"Cannot serialise unknown message type '{message.GetType().Name}'.");
 
-        var msg = JsonSerializer.Deserialize<Message>(data, Options);
-        return msg ?? throw new InvalidOperationException("Received null message from server.");
-    }
-
-    /// <summary>
-    /// If the JSON object has a <c>"type"</c> property whose value is not already
-    /// lowercase, rebuilds the JSON with the value lowercased.  Returns the original
-    /// array unchanged when no normalisation is needed (the common path).
-    /// </summary>
-    private static byte[] NormalizeTypeDiscriminator(byte[] data)
-    {
-        // Fast path: use Utf8JsonReader (stack-only, no heap allocation) to find
-        // the "type" value and check whether it is already lowercase.  This avoids
-        // the JsonDocument allocation on every message — the vast majority of servers
-        // send lowercase type discriminators so this branch is almost always taken.
-        var typeValue = ReadTypeValue(data);
-        if (typeValue is null)
-            return data;
-
-        var lower = typeValue.ToLowerInvariant();
-        if (lower == typeValue)
-            return data;
-
-        // Slow path (non-lowercase discriminator): rebuild the JSON object with
-        // the lowercased value.  JsonDocument is only allocated here.
-        using var doc    = JsonDocument.Parse(data);
-        using var ms     = new MemoryStream(data.Length);
+        using var ms     = new MemoryStream();
         using var writer = new Utf8JsonWriter(ms);
 
         writer.WriteStartObject();
-        foreach (var prop in doc.RootElement.EnumerateObject())
-        {
-            if (prop.NameEquals("type"))
-                writer.WriteString("type", lower);
-            else
-                prop.WriteTo(writer);
-        }
+        writer.WriteString("type", typeName);
+        writer.WritePropertyName("payload");
+        JsonSerializer.Serialize(writer, message, message.GetType(), PayloadOptions);
         writer.WriteEndObject();
-        writer.Flush();
 
+        writer.Flush();
         return ms.ToArray();
     }
 
     /// <summary>
-    /// Scans <paramref name="data"/> with a <see cref="Utf8JsonReader"/> to locate
-    /// the top-level <c>"type"</c> property and return its string value.
-    /// Returns <see langword="null"/> when the property is absent or has a non-string
-    /// value.  Any parse errors are treated as "not found" — the caller's subsequent
-    /// <see cref="JsonSerializer.Deserialize"/> will surface the real error.
+    /// Deserialises UTF-8 JSON bytes to a <see cref="Message"/> instance.
+    /// Returns <see cref="UnknownMessage"/> for unrecognised type values rather
+    /// than throwing, so callers can ignore future protocol extensions gracefully.
     /// </summary>
-    private static string? ReadTypeValue(byte[] data)
+    public Message Deserialize(byte[] data)
     {
-        try
-        {
-            var reader = new Utf8JsonReader(data, isFinalBlock: true, state: default);
-            while (reader.Read())
-            {
-                if (reader.TokenType == JsonTokenType.PropertyName &&
-                    reader.ValueTextEquals("type"u8))
-                {
-                    return reader.Read() ? reader.GetString() : null;
-                }
-            }
-        }
-        catch { /* malformed JSON — let Deserialize report the error */ }
+        using var doc  = JsonDocument.Parse(data);
+        var        root = doc.RootElement;
 
-        return null;
+        if (!root.TryGetProperty("type", out var typeEl))
+            throw new InvalidOperationException("Received message is missing the 'type' field.");
+
+        var typeName = typeEl.GetString() ?? string.Empty;
+
+        if (!TypeMap.TryGetValue(typeName, out var clrType))
+            return new UnknownMessage(typeName);
+
+        if (!root.TryGetProperty("payload", out var payload))
+            throw new InvalidOperationException(
+                $"Received '{typeName}' message is missing the 'payload' field.");
+
+        return (Message)JsonSerializer.Deserialize(payload.GetRawText(), clrType, PayloadOptions)!;
     }
 }

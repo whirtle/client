@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml;
+using Serilog;
 using Whirtle.Client.Audio;
 using Whirtle.Client.Clock;
 using Whirtle.Client.Discovery;
@@ -159,6 +160,12 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _protocol     = new ProtocolClient(transport);
 
             await _protocol.ConnectAsync(endpoint.ToWebSocketUri(), token);
+            var hello = await _protocol.HandshakeAsync(
+                $"whirtle-{Environment.MachineName}", "Whirtle",
+                cancellationToken: token);
+
+            Log.Information("Connected to {ServerId} ({ServerName}), reason={Reason}",
+                hello.ServerId, hello.Name, hello.ConnectionReason);
 
             var playerSupport = new PlayerV1Support(
                 SupportedFormats:
@@ -192,6 +199,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "Connection to {Host}:{Port} failed", endpoint.Host, endpoint.Port);
             ConnectionStatus = $"Connection failed: {ex.Message}";
             IsConnected = false;
         }
@@ -309,22 +317,26 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             {
                 switch (frame)
                 {
-                    case ProtocolFrame { Message: NowPlayingMessage m }:
-                        _dispatcher.TryEnqueue(() =>
+                    case ProtocolFrame { Message: ServerStateMessage msg }:
+                        if (msg.Metadata is { } meta)
                         {
-                            Title           = m.Title;
-                            Artist          = m.Artist;
-                            Album           = m.Album;
-                            DurationSeconds = m.DurationSeconds ?? 0;
-                            PositionSeconds = m.PositionSeconds ?? 0;
-                            OnPropertyChanged(nameof(TrayTooltip));
-                        });
-                        break;
-
-                    case ProtocolFrame { Message: PingMessage }:
-                        // Respond to keepalive immediately
-                        try { await _protocol.SendAsync(new PongMessage(), cancellationToken); }
-                        catch { /* connection may be closing */ }
+                            _dispatcher.TryEnqueue(() =>
+                            {
+                                Title           = meta.Title;
+                                Artist          = meta.Artist;
+                                Album           = meta.Album;
+                                PositionSeconds = meta.Progress ?? 0;
+                                OnPropertyChanged(nameof(TrayTooltip));
+                            });
+                        }
+                        if (msg.Controller is { } ctrl)
+                        {
+                            _dispatcher.TryEnqueue(() =>
+                            {
+                                Volume  = ctrl.Volume / 100.0;
+                                IsMuted = ctrl.Muted;
+                            });
+                        }
                         break;
 
                     case ProtocolFrame { Message: StreamStartMessage s }:
@@ -344,8 +356,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             }
         }
         catch (OperationCanceledException) { /* normal shutdown */ }
-        catch
+        catch (Exception ex)
         {
+            Log.Warning(ex, "Connection lost");
             _dispatcher.TryEnqueue(() =>
             {
                 IsConnected      = false;

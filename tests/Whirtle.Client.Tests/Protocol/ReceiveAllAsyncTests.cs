@@ -16,8 +16,8 @@ public class ReceiveAllAsyncTests
     public async Task ReceiveAllAsync_YieldsProtocolFrames()
     {
         var (client, transport) = Build();
-        transport.EnqueueInbound(Serializer.Serialize(new PingMessage()));
-        transport.EnqueueInbound(Serializer.Serialize(new PongMessage()));
+        transport.EnqueueInbound(Serializer.Serialize(new ServerStateMessage()));
+        transport.EnqueueInbound(Serializer.Serialize(new GroupUpdateMessage("playing", "g1")));
         transport.CloseInbound();
 
         var frames = new List<IncomingFrame>();
@@ -25,31 +25,18 @@ public class ReceiveAllAsyncTests
             frames.Add(f);
 
         Assert.Equal(2, frames.Count);
-        Assert.IsType<PingMessage>(((ProtocolFrame)frames[0]).Message);
-        Assert.IsType<PongMessage>(((ProtocolFrame)frames[1]).Message);
-    }
-
-    [Fact]
-    public async Task ReceiveAllAsync_StopsOnGoodbye()
-    {
-        var (client, transport) = Build();
-        transport.EnqueueInbound(Serializer.Serialize(new PingMessage()));
-        transport.EnqueueInbound(Serializer.Serialize(new GoodbyeMessage("done")));
-        transport.EnqueueInbound(Serializer.Serialize(new PongMessage())); // never yielded
-
-        var frames = new List<IncomingFrame>();
-        await foreach (var f in client.ReceiveAllAsync())
-            frames.Add(f);
-
-        Assert.Single(frames); // only PingMessage
+        Assert.IsType<ServerStateMessage>(((ProtocolFrame)frames[0]).Message);
+        Assert.IsType<GroupUpdateMessage>(((ProtocolFrame)frames[1]).Message);
     }
 
     [Fact]
     public async Task ReceiveAllAsync_YieldsArtworkFrame_ForBinaryData()
     {
         var (client, transport) = Build();
-        byte[] jpegBytes = [0xFF, 0xD8, 0xAA, 0xBB];
-        transport.EnqueueInbound(jpegBytes);
+        // Artwork binary frame: type byte (8) + 8-byte timestamp + JPEG bytes.
+        byte[] jpegBytes   = [0xFF, 0xD8, 0xAA, 0xBB];
+        byte[] tsBytes     = [0, 0, 0, 0, 0, 0, 0, 0]; // timestamp = 0
+        transport.EnqueueInbound([8, .. tsBytes, .. jpegBytes]);
         transport.CloseInbound();
 
         var frames = new List<IncomingFrame>();
@@ -59,15 +46,16 @@ public class ReceiveAllAsyncTests
         Assert.Single(frames);
         var art = Assert.IsType<ArtworkFrame>(frames[0]);
         Assert.Equal("image/jpeg", art.MimeType);
-        Assert.Equal(jpegBytes, art.Data);
+        Assert.Equal(0,            art.Channel);
+        Assert.Equal(jpegBytes,    art.Data);
     }
 
     [Fact]
     public async Task ReceiveAllAsync_SkipsEmptyFrames()
     {
         var (client, transport) = Build();
-        transport.EnqueueInbound([]);                                     // empty — skipped
-        transport.EnqueueInbound(Serializer.Serialize(new PingMessage())); // yielded
+        transport.EnqueueInbound([]);
+        transport.EnqueueInbound(Serializer.Serialize(new ServerStateMessage()));
         transport.CloseInbound();
 
         var frames = new List<IncomingFrame>();
@@ -81,9 +69,8 @@ public class ReceiveAllAsyncTests
     public async Task ReceiveAsync_SkipsBinaryFrames()
     {
         var (client, transport) = Build();
-        byte[] binary = [0xFF, 0xD8, 0x00];
-        transport.EnqueueInbound(binary);                                 // binary — skipped
-        transport.EnqueueInbound(Serializer.Serialize(new PingMessage())); // yielded
+        transport.EnqueueInbound([8, 0xFF, 0xD8, 0x00]); // binary — skipped
+        transport.EnqueueInbound(Serializer.Serialize(new ServerStateMessage()));
         transport.CloseInbound();
 
         var messages = new List<Message>();
@@ -91,14 +78,15 @@ public class ReceiveAllAsyncTests
             messages.Add(m);
 
         Assert.Single(messages);
-        Assert.IsType<PingMessage>(messages[0]);
+        Assert.IsType<ServerStateMessage>(messages[0]);
     }
 
     [Fact]
-    public async Task ReceiveAllAsync_YieldsNowPlayingAsProtocolFrame()
+    public async Task ReceiveAllAsync_YieldsServerStateAsProtocolFrame()
     {
         var (client, transport) = Build();
-        var msg = new NowPlayingMessage("Track", "Band", "Album", 180.0, 15.0);
+        var msg = new ServerStateMessage(
+            Metadata: new ServerMetadataState(Title: "Track", Artist: "Band"));
         transport.EnqueueInbound(Serializer.Serialize(msg));
         transport.CloseInbound();
 
@@ -106,17 +94,16 @@ public class ReceiveAllAsyncTests
         await foreach (var f in client.ReceiveAllAsync())
             frames.Add(f);
 
-        var pf = Assert.IsType<ProtocolFrame>(frames[0]);
-        var np = Assert.IsType<NowPlayingMessage>(pf.Message);
-        Assert.Equal("Track", np.Title);
-        Assert.Equal(180.0,   np.DurationSeconds);
+        var pf  = Assert.IsType<ProtocolFrame>(frames[0]);
+        var ssm = Assert.IsType<ServerStateMessage>(pf.Message);
+        Assert.Equal("Track", ssm.Metadata!.Title);
     }
 
     [Fact]
     public async Task ReceiveAllAsync_YieldsClientCommandRoundtrip()
     {
         var (client, transport) = Build();
-        var cmd = new ClientCommandMessage("volume", 0.5);
+        var cmd = new ClientCommandMessage(new ClientControllerCommand("volume", Volume: 50));
         transport.EnqueueInbound(Serializer.Serialize(cmd));
         transport.CloseInbound();
 
@@ -124,15 +111,15 @@ public class ReceiveAllAsyncTests
         {
             var pf = Assert.IsType<ProtocolFrame>(f);
             var c  = Assert.IsType<ClientCommandMessage>(pf.Message);
-            Assert.Equal("volume", c.Command);
-            Assert.Equal(0.5,      c.Value);
+            Assert.Equal("volume", c.Controller!.Command);
+            Assert.Equal(50,       c.Controller.Volume);
             return;
         }
 
         Assert.Fail("No frame received.");
     }
 
-    // ── Connection-loss / error propagation ──────────────────────────────────
+    // ── Connection-loss / error propagation ───────────────────────────────────
 
     [Fact]
     public async Task ReceiveAllAsync_PropagatesTransportError()
@@ -150,8 +137,8 @@ public class ReceiveAllAsyncTests
     public async Task ReceiveAllAsync_DeliversFramesBeforeTransportError()
     {
         var (client, transport) = Build();
-        transport.EnqueueInbound(Serializer.Serialize(new PingMessage()));
-        transport.EnqueueInbound(Serializer.Serialize(new PongMessage()));
+        transport.EnqueueInbound(Serializer.Serialize(new ServerStateMessage()));
+        transport.EnqueueInbound(Serializer.Serialize(new GroupUpdateMessage("playing", "g1")));
         transport.CompleteWithError(new IOException("socket reset"));
 
         var received = new List<IncomingFrame>();
@@ -161,7 +148,7 @@ public class ReceiveAllAsyncTests
                 received.Add(f);
         });
 
-        Assert.Equal(2, received.Count); // both messages arrived before the error
+        Assert.Equal(2, received.Count);
     }
 
     [Fact]

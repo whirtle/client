@@ -7,5 +7,7 @@ internal sealed class SystemClock : ISystemClock
 {
     public static readonly SystemClock Instance = new();
 
-    public long UtcNowTicks => DateTime.UtcNow.Ticks;
+    /// <inheritdoc/>
+    public long UtcNowMicroseconds
+        => (DateTimeOffset.UtcNow.Ticks - DateTimeOffset.UnixEpoch.Ticks) / 10;
 }

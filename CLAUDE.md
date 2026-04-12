@@ -40,49 +40,132 @@ client/
 ├── .gitignore
 ├── Whirtle.Client.slnx
 ├── src/
-│   └── Whirtle.Client/
-│       ├── Whirtle.Client.csproj
-│       ├── Program.cs
-│       ├── Properties/
-│       │   └── AssemblyInfo.cs
-│       ├── Transport/
-│       │   ├── ITransport.cs             # Transport abstraction
-│       │   ├── IClientWebSocket.cs       # Internal WebSocket seam
-│       │   ├── SystemClientWebSocket.cs  # Wraps ClientWebSocket
-│       │   └── WebSocketTransport.cs     # WebSocket implementation
-│       ├── Protocol/
-│       │   ├── Message.cs                # All message records + polymorphic JSON
-│       │   ├── MessageSerializer.cs      # Internal JSON encoder/decoder
-│       │   ├── HandshakeException.cs     # Thrown on handshake failure
-│       │   └── ProtocolClient.cs         # Handshake + send/receive over ITransport
-│       ├── Clock/
-│       │   ├── ISystemClock.cs           # Internal clock seam
-│       │   ├── SystemClock.cs            # Production DateTime.UtcNow wrapper
-│       │   ├── ClockSyncResult.cs        # Offset + RTT result record
-│       │   └── ClockSynchronizer.cs      # NTP-style sync over ProtocolClient
-│       └── Discovery/
-│           ├── ServiceEndpoint.cs        # Discovered host + port
-│           ├── IMulticastSocket.cs       # Internal UDP socket seam
-│           ├── SystemMulticastSocket.cs  # Production UdpClient wrapper
-│           ├── DnsMessage.cs             # DNS wire-format encoder/decoder (PTR/SRV/A)
-│           └── MdnsDiscovery.cs          # mDNS PTR query + response parsing
+│   ├── Whirtle.Client/
+│   │   ├── Whirtle.Client.csproj
+│   │   ├── Program.cs
+│   │   ├── AppLogger.cs
+│   │   ├── Properties/
+│   │   │   └── AssemblyInfo.cs
+│   │   ├── Audio/
+│   │   │   ├── IAudioDeviceEnumerator.cs
+│   │   │   ├── AudioDeviceEnumerator.cs
+│   │   │   ├── AudioDeviceInfo.cs
+│   │   │   ├── AudioDeviceKind.cs
+│   │   │   ├── NullAudioDeviceEnumerator.cs
+│   │   │   └── WindowsAudioDeviceEnumerator.cs
+│   │   ├── Clock/
+│   │   │   ├── ISystemClock.cs           # Internal clock seam
+│   │   │   ├── SystemClock.cs            # Production DateTime.UtcNow wrapper
+│   │   │   ├── ClockSyncResult.cs        # Offset + RTT result record
+│   │   │   └── ClockSynchronizer.cs      # NTP-style sync over ProtocolClient
+│   │   ├── Codec/
+│   │   │   ├── IAudioDecoder.cs
+│   │   │   ├── AudioDecoderFactory.cs
+│   │   │   ├── AudioFormat.cs
+│   │   │   ├── AudioFrame.cs
+│   │   │   ├── FlacAudioDecoder.cs
+│   │   │   ├── OpusAudioDecoder.cs
+│   │   │   └── PcmAudioDecoder.cs
+│   │   ├── Discovery/
+│   │   │   ├── ServiceEndpoint.cs        # Discovered host + port
+│   │   │   ├── IMulticastSocket.cs       # Internal UDP socket seam
+│   │   │   ├── SystemMulticastSocket.cs  # Production UdpClient wrapper
+│   │   │   ├── DnsMessage.cs             # DNS wire-format encoder/decoder (PTR/SRV/A)
+│   │   │   └── MdnsAdvertiser.cs         # mDNS advertisement
+│   │   ├── Playback/
+│   │   │   ├── IWasapiRenderer.cs
+│   │   │   ├── WasapiRenderer.cs
+│   │   │   ├── PlaybackEngine.cs
+│   │   │   ├── PlaybackState.cs
+│   │   │   ├── JitterBuffer.cs
+│   │   │   └── SampleInterpolator.cs
+│   │   ├── Protocol/
+│   │   │   ├── Message.cs                # All message records + polymorphic JSON
+│   │   │   ├── MessageSerializer.cs      # Internal JSON encoder/decoder
+│   │   │   ├── HandshakeException.cs     # Thrown on handshake failure
+│   │   │   ├── ProtocolClient.cs         # Handshake + send/receive over ITransport
+│   │   │   ├── ConnectionManager.cs
+│   │   │   └── IncomingFrame.cs
+│   │   ├── Transport/
+│   │   │   ├── ITransport.cs             # Transport abstraction
+│   │   │   ├── IClientWebSocket.cs       # Internal WebSocket seam
+│   │   │   ├── SystemClientWebSocket.cs  # Wraps ClientWebSocket
+│   │   │   ├── WebSocketTransport.cs     # WebSocket implementation
+│   │   │   ├── AcceptedWebSocket.cs
+│   │   │   └── WebSocketListener.cs
+│   │   ├── role.artwork/
+│   │   │   └── ArtworkReceiver.cs
+│   │   ├── role.controller/
+│   │   │   └── ControllerClient.cs
+│   │   └── role.metadata/
+│   │       └── NowPlayingState.cs
+│   └── Whirtle.Client.UI/
+│       ├── Whirtle.Client.UI.csproj
+│       ├── App.xaml
+│       ├── App.xaml.cs
+│       ├── MainWindow.xaml
+│       ├── MainWindow.xaml.cs
+│       ├── LogsWindow.xaml
+│       ├── LogsWindow.xaml.cs
+│       ├── SettingsWindow.xaml
+│       ├── SettingsWindow.xaml.cs
+│       ├── Converters/
+│       │   └── SecondsToTimeConverter.cs
+│       ├── Logging/
+│       │   ├── InMemorySink.cs
+│       │   └── LogEntry.cs
+│       ├── Pages/
+│       │   ├── LogsPage.xaml
+│       │   ├── LogsPage.xaml.cs
+│       │   ├── NowPlayingPage.xaml
+│       │   ├── NowPlayingPage.xaml.cs
+│       │   ├── SettingsPage.xaml
+│       │   └── SettingsPage.xaml.cs
+│       └── ViewModels/
+│           ├── ConnectionMode.cs
+│           ├── LogsViewModel.cs
+│           ├── NowPlayingViewModel.cs
+│           └── SettingsViewModel.cs
 └── tests/
-    └── Whirtle.Client.Tests/
-        ├── Whirtle.Client.Tests.csproj
-        ├── Transport/
-        │   ├── FakeClientWebSocket.cs        # Test double
-        │   └── WebSocketTransportTests.cs
-        ├── Protocol/
-        │   ├── FakeTransport.cs              # Test double
-        │   ├── MessageSerializerTests.cs
-        │   └── ProtocolClientTests.cs
-        ├── Clock/
-        │   ├── FakeClock.cs                  # Test double
-        │   └── ClockSynchronizerTests.cs
-        └── Discovery/
-            ├── FakeMulticastSocket.cs        # Test double
-            ├── DnsMessageTests.cs
-            └── MdnsDiscoveryTests.cs
+    ├── Whirtle.Client.Tests/
+    │   ├── Whirtle.Client.Tests.csproj
+    │   ├── Audio/
+    │   │   ├── AudioDeviceEnumeratorTests.cs
+    │   │   └── FakeAudioDeviceEnumerator.cs
+    │   ├── Clock/
+    │   │   ├── FakeClock.cs                  # Test double
+    │   │   └── ClockSynchronizerTests.cs
+    │   ├── Codec/
+    │   │   ├── AudioDecoderContractTests.cs
+    │   │   └── PcmAudioDecoderTests.cs
+    │   ├── Discovery/
+    │   │   ├── FakeMulticastSocket.cs        # Test double
+    │   │   ├── DnsMessageTests.cs
+    │   │   └── MdnsAdvertiserTests.cs
+    │   ├── Playback/
+    │   │   ├── FakeWasapiRenderer.cs         # Test double
+    │   │   ├── JitterBufferTests.cs
+    │   │   ├── PlaybackEngineTests.cs
+    │   │   └── SampleInterpolatorTests.cs
+    │   ├── Protocol/
+    │   │   ├── FakeTransport.cs              # Test double
+    │   │   ├── MessageSerializerTests.cs
+    │   │   ├── ProtocolClientTests.cs
+    │   │   ├── ConnectionManagerTests.cs
+    │   │   └── ReceiveAllAsyncTests.cs
+    │   ├── Transport/
+    │   │   ├── FakeClientWebSocket.cs        # Test double
+    │   │   └── WebSocketTransportTests.cs
+    │   ├── role.artwork/
+    │   │   └── ArtworkReceiverTests.cs
+    │   ├── role.controller/
+    │   │   └── ControllerClientTests.cs
+    │   └── role.metadata/
+    │       └── NowPlayingStateTests.cs
+    └── Whirtle.Client.IntegrationTests/
+        ├── Whirtle.Client.IntegrationTests.csproj
+        ├── SendspinIntegrationTests.cs
+        └── SendspinServerFixture.cs
 ```
 
 ## Development Notes
@@ -98,6 +181,8 @@ Use _ as leading character on instance variables.
 
 - Development happens on feature branches; merge to `main` via pull request.
 - Write clear, descriptive commit messages.
+- The `gh` CLI is not available. Push branches with `git push -u origin <branch>` and open a PR at:
+  https://github.com/whirtle/client/compare/<branch>?expand=1
 
 ## Before pushing
 

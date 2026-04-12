@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Steve Peterson
 // SPDX-License-Identifier: MIT
 
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using Whirtle.Client.Transport;
 
@@ -8,7 +9,7 @@ namespace Whirtle.Client.Protocol;
 
 public sealed class ProtocolClient : IAsyncDisposable
 {
-    private readonly ITransport _transport;
+    private readonly ITransport       _transport;
     private readonly MessageSerializer _serializer = new();
 
     public ProtocolClient(ITransport transport)
@@ -20,12 +21,15 @@ public sealed class ProtocolClient : IAsyncDisposable
         => _transport.ConnectAsync(uri, cancellationToken);
 
     /// <summary>
-    /// Sends <see cref="HelloMessage"/> and waits for the server's <see cref="WelcomeMessage"/>.
-    /// Throws <see cref="HandshakeException"/> if the server replies with an error or
-    /// closes the connection before welcoming.
+    /// Sends <see cref="ClientHelloMessage"/> and waits for the server's
+    /// <see cref="ServerHelloMessage"/>.
+    /// Throws <see cref="HandshakeException"/> if the connection closes before the
+    /// server replies or if an unexpected message arrives.
     /// </summary>
-    public Task<WelcomeMessage> HandshakeAsync(
-        string clientVersion,
+    public async Task<ServerHelloMessage> HandshakeAsync(
+        string            clientId,
+        string            clientName,
+        string[]?         supportedRoles    = null,
         CancellationToken cancellationToken = default)
         => HandshakeAsync(clientVersion, playerSupport: null, cancellationToken);
 
@@ -38,17 +42,23 @@ public sealed class ProtocolClient : IAsyncDisposable
         PlayerV1Support? playerSupport,
         CancellationToken cancellationToken = default)
     {
-        await SendAsync(new HelloMessage(clientVersion, playerSupport), cancellationToken);
+        supportedRoles ??= ["metadata@v1", "controller@v1", "artwork@v1"];
+
+        await SendAsync(
+            new ClientHelloMessage(clientId, clientName, Version: 1, supportedRoles),
+            cancellationToken);
 
         await foreach (var msg in ReceiveRawAsync(cancellationToken))
         {
             return msg switch
             {
-                WelcomeMessage welcome => welcome,
-                ErrorMessage error     => throw new HandshakeException(error.Code, error.Description),
-                _                      => throw new HandshakeException(
-                                              "unexpected_message",
-                                              $"Expected Welcome but received {msg.GetType().Name}."),
+                ServerHelloMessage hello => hello,
+                UnknownMessage     u     => throw new HandshakeException(
+                                               "unexpected_message",
+                                               $"Expected server/hello but received '{u.Type}'."),
+                _                        => throw new HandshakeException(
+                                               "unexpected_message",
+                                               $"Expected server/hello but received {msg.GetType().Name}."),
             };
         }
 
@@ -64,26 +74,22 @@ public sealed class ProtocolClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// Yields decoded messages until the connection closes or a
-    /// <see cref="GoodbyeMessage"/> is received (which is consumed, not yielded).
+    /// Yields decoded messages until the connection closes.
+    /// Binary (non-JSON) frames are skipped — consume via <see cref="ReceiveAllAsync"/>
+    /// to handle artwork and audio.
     /// </summary>
     public async IAsyncEnumerable<Message> ReceiveAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await foreach (var msg in ReceiveRawAsync(cancellationToken))
-        {
-            if (msg is GoodbyeMessage)
-                yield break;
-
             yield return msg;
-        }
     }
 
     public async Task DisconnectAsync(
-        string reason = "normal",
+        string reason = "shutdown",
         CancellationToken cancellationToken = default)
     {
-        await SendAsync(new GoodbyeMessage(reason), cancellationToken);
+        try { await SendAsync(new ClientGoodbyeMessage(reason), cancellationToken); } catch { }
         await _transport.DisconnectAsync(cancellationToken);
     }
 
@@ -97,10 +103,10 @@ public sealed class ProtocolClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// Yields all incoming frames — both JSON protocol messages and binary artwork data —
-    /// until the connection closes or a <see cref="GoodbyeMessage"/> is received.
-    /// Use this instead of <see cref="ReceiveAsync"/> once the session is fully established.
-    /// Do not call both concurrently; they share the same underlying transport stream.
+    /// Yields all incoming frames — both JSON protocol messages and binary artwork
+    /// or audio data — until the connection closes.
+    /// Do not call <see cref="ReceiveAsync"/> and <see cref="ReceiveAllAsync"/>
+    /// concurrently; they share the same underlying transport stream.
     /// </summary>
     public async IAsyncEnumerable<IncomingFrame> ReceiveAllAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -111,21 +117,34 @@ public sealed class ProtocolClient : IAsyncDisposable
 
             if (data[0] == (byte)'{')
             {
-                var msg = _serializer.Deserialize(data);
-                if (msg is GoodbyeMessage) yield break;
-                yield return new ProtocolFrame(msg);
+                yield return new ProtocolFrame(_serializer.Deserialize(data));
             }
             else
             {
-                yield return new ArtworkFrame(data, DetectMimeType(data));
+                // Binary frames: first byte is the Sendspin binary message type.
+                // 4  = audio chunk
+                // 8–11 = artwork channel 0–3
+                var typeId  = data[0];
+                var payload = data[1..];
+                if (typeId is >= 8 and <= 11 && payload.Length >= 8)
+                {
+                    long  timestamp = BinaryPrimitives.ReadInt64BigEndian(payload);
+                    var   imageData = payload[8..];
+                    yield return new ArtworkFrame(
+                        timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
+                }
+                else if (typeId == 4 && payload.Length >= 8)
+                {
+                    long timestamp   = BinaryPrimitives.ReadInt64BigEndian(payload);
+                    var  encodedData = payload[8..];
+                    yield return new AudioChunkFrame(timestamp, encodedData);
+                }
             }
         }
     }
 
-    // Deserializes the raw byte stream without Goodbye filtering,
-    // so HandshakeAsync can inspect all message types including errors.
-    // Binary (non-JSON) frames are skipped — they are artwork and should
-    // be consumed via ReceiveAllAsync instead.
+    // Deserialises the raw byte stream without any filtering.
+    // Binary (non-JSON) frames are skipped — artwork is consumed via ReceiveAllAsync.
     private async IAsyncEnumerable<Message> ReceiveRawAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
