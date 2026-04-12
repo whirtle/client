@@ -4,6 +4,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using Serilog;
 
 namespace Whirtle.Client.Discovery;
 
@@ -67,6 +68,10 @@ public sealed class MdnsAdvertiser : IDisposable
 
         var label     = friendlyName ?? hostname;
         _instanceName = $"{label}.{ServiceType}";
+
+        Log.Debug(
+            "mDNS advertiser configured: hostname={Hostname}, friendlyName={FriendlyName}, port={Port}, path={Path}, instance={Instance}",
+            _hostname, _friendlyName, _port, _path, _instanceName);
     }
 
     /// <summary>
@@ -94,6 +99,12 @@ public sealed class MdnsAdvertiser : IDisposable
             bool asksForUs = parsed.Questions.Any(q =>
                 string.Equals(q.TrimEnd('.'), ServiceType.TrimEnd('.'), StringComparison.OrdinalIgnoreCase));
 
+            Log.Debug(
+                "mDNS query received from {Remote}: questions=[{Questions}], asksForUs={AsksForUs}",
+                received.RemoteEndPoint,
+                string.Join(", ", parsed.Questions),
+                asksForUs);
+
             if (!asksForUs) continue;
 
             var response = DnsMessage.BuildAdvertisement(
@@ -103,6 +114,10 @@ public sealed class MdnsAdvertiser : IDisposable
                 _port,
                 _path,
                 _friendlyName);
+
+            Log.Debug(
+                "mDNS response sent to {Endpoint}: instance={Instance}, host={Hostname}, port={Port}, path={Path}",
+                MdnsEndpoint, _instanceName, _hostname, _port, _path);
 
             try
             {
