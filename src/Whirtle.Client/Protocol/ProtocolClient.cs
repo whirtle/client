@@ -24,11 +24,21 @@ public sealed class ProtocolClient : IAsyncDisposable
     /// Throws <see cref="HandshakeException"/> if the server replies with an error or
     /// closes the connection before welcoming.
     /// </summary>
-    public async Task<WelcomeMessage> HandshakeAsync(
+    public Task<WelcomeMessage> HandshakeAsync(
         string clientVersion,
         CancellationToken cancellationToken = default)
+        => HandshakeAsync(clientVersion, playerSupport: null, cancellationToken);
+
+    /// <summary>
+    /// Sends <see cref="HelloMessage"/> (with optional player capabilities) and waits for
+    /// the server's <see cref="WelcomeMessage"/>.
+    /// </summary>
+    public async Task<WelcomeMessage> HandshakeAsync(
+        string           clientVersion,
+        PlayerV1Support? playerSupport,
+        CancellationToken cancellationToken = default)
     {
-        await SendAsync(new HelloMessage(clientVersion), cancellationToken);
+        await SendAsync(new HelloMessage(clientVersion, playerSupport), cancellationToken);
 
         await foreach (var msg in ReceiveRawAsync(cancellationToken))
         {

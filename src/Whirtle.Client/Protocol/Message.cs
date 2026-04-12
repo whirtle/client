@@ -16,10 +16,32 @@ namespace Whirtle.Client.Protocol;
 [JsonDerivedType(typeof(SyncReplyMessage),      "sync_reply")]
 [JsonDerivedType(typeof(ClientCommandMessage),  "client/command")]
 [JsonDerivedType(typeof(NowPlayingMessage),     "now_playing")]
+[JsonDerivedType(typeof(StreamStartMessage),    "stream/start")]
 public abstract record Message;
 
+/// <summary>
+/// One audio format the client is willing to receive, in priority order.
+/// Used inside <see cref="PlayerV1Support"/>.
+/// </summary>
+public sealed record SupportedFormat(
+    string Codec,
+    int    Channels,
+    [property: JsonPropertyName("sample_rate")] int SampleRate,
+    [property: JsonPropertyName("bit_depth")]   int BitDepth);
+
+/// <summary>
+/// Advertises playback capabilities in the <c>client/hello</c> message.
+/// </summary>
+public sealed record PlayerV1Support(
+    [property: JsonPropertyName("supported_formats")]  SupportedFormat[] SupportedFormats,
+    [property: JsonPropertyName("buffer_capacity")]    int               BufferCapacity,
+    [property: JsonPropertyName("supported_commands")] string[]          SupportedCommands);
+
 /// <summary>Sent by the client immediately after the WebSocket connection opens.</summary>
-public sealed record HelloMessage(string Version) : Message;
+public sealed record HelloMessage(
+    string Version,
+    [property: JsonPropertyName("player@v1_support")] PlayerV1Support? PlayerV1Support = null
+) : Message;
 
 /// <summary>Sent by the server to accept the handshake.</summary>
 public sealed record WelcomeMessage(string SessionId, string ServerVersion) : Message;
@@ -63,3 +85,18 @@ public sealed record NowPlayingMessage(
     string? Album,
     double? DurationSeconds,
     double? PositionSeconds) : Message;
+
+/// <summary>
+/// Format parameters the server has chosen for the audio stream (sent in <c>stream/start</c>).
+/// </summary>
+public sealed record StreamPlayer(
+    string  Codec,
+    int     Channels,
+    [property: JsonPropertyName("sample_rate")]  int     SampleRate,
+    [property: JsonPropertyName("bit_depth")]    int     BitDepth,
+    [property: JsonPropertyName("codec_header")] string? CodecHeader = null);
+
+/// <summary>
+/// Sent by the server when it begins streaming audio, carrying the negotiated format.
+/// </summary>
+public sealed record StreamStartMessage(StreamPlayer Player) : Message;

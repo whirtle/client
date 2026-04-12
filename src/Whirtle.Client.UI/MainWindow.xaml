@@ -5,12 +5,14 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Whirtle.Client.UI"
     xmlns:tb="using:H.NotifyIcon"
+    xmlns:controls="using:Whirtle.Client.UI.Controls"
     Title="Whirtle">
 
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="32" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="24" />
         </Grid.RowDefinitions>
 
         <!--
@@ -42,5 +44,42 @@
 
         <!-- Player -->
         <Frame x:Name="ContentFrame" Grid.Row="1" />
+
+        <!-- Status bar -->
+        <Border
+            Grid.Row="2"
+            Padding="12,0"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="0,1,0,0">
+            <Grid>
+
+                <!-- Server name (left) -->
+                <TextBlock
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Style="{ThemeResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind NowPlayingViewModel.ServerName, Mode=OneWay, FallbackValue='—'}"
+                    TextTrimming="CharacterEllipsis"
+                    MaxWidth="180" />
+
+                <!-- Codec (center) -->
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Style="{ThemeResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind NowPlayingViewModel.CodecName, Mode=OneWay, FallbackValue='—'}" />
+
+                <!-- Signal bars (right) -->
+                <controls:SignalBarsControl
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Level="{x:Bind NowPlayingViewModel.SignalStrength, Mode=OneWay}" />
+
+            </Grid>
+        </Border>
+
     </Grid>
 </Window>
