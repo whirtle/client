@@ -13,7 +13,7 @@
             <Setter Property="BorderBrush"     Value="{ThemeResource CardStrokeColorDefaultBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius"    Value="8" />
-            <Setter Property="Padding"         Value="20,16" />
+            <Setter Property="Padding"         Value="8,6" />
         </Style>
 
         <Style x:Key="SettingLabelStyle" TargetType="TextBlock"
@@ -30,10 +30,8 @@
 
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
             <StackPanel
-                Padding="24"
-                Spacing="16"
-                MaxWidth="660"
-                HorizontalAlignment="Left">
+                Padding="10"
+                Spacing="6">
 
                 <!-- ═══ IDENTITY ══════════════════════════════════════════════════ -->
                 <Border Style="{StaticResource CardStyle}">
@@ -86,31 +84,41 @@
                             </ComboBox>
                         </StackPanel>
 
-                        <!-- Format preference -->
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Preferred stream format" Style="{StaticResource SettingLabelStyle}" />
-                            <ComboBox
-                                ItemsSource="{x:Bind ViewModel.AudioFormatOptions}"
-                                SelectedIndex="{x:Bind ViewModel.AudioFormatIndex, Mode=TwoWay}"
-                                HorizontalAlignment="Stretch"
-                                MinWidth="280" />
-                        </StackPanel>
+                        <!-- Per-device settings, visually nested under the device selection -->
+                        <Border
+                            Padding="16,0,0,0"
+                            BorderBrush="{ThemeResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="2,0,0,0">
+                            <StackPanel Spacing="12">
 
-                        <!-- Static delay -->
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Static delay (ms)" Style="{StaticResource SettingLabelStyle}" />
-                            <NumberBox
-                                Minimum="0"
-                                Maximum="5000"
-                                SmallChange="10"
-                                LargeChange="100"
-                                SpinButtonPlacementMode="Inline"
-                                Value="{x:Bind ViewModel.StaticDelayMs, Mode=TwoWay}" />
-                            <TextBlock
-                                Text="Positive values delay this client relative to the group (room correction)."
-                                Style="{ThemeResource CaptionTextBlockStyle}"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        </StackPanel>
+                                <!-- Format preference -->
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Stream format" Style="{StaticResource SettingLabelStyle}" />
+                                    <ComboBox
+                                        ItemsSource="{x:Bind ViewModel.AudioFormatOptions}"
+                                        SelectedIndex="{x:Bind ViewModel.AudioFormatIndex, Mode=TwoWay}"
+                                        HorizontalAlignment="Stretch"
+                                        MinWidth="280" />
+                                </StackPanel>
+
+                                <!-- Static delay -->
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Static delay (ms)" Style="{StaticResource SettingLabelStyle}" />
+                                    <NumberBox
+                                        Minimum="0"
+                                        Maximum="5000"
+                                        SmallChange="10"
+                                        LargeChange="100"
+                                        SpinButtonPlacementMode="Inline"
+                                        Value="{x:Bind ViewModel.CurrentDeviceStaticDelayMs, Mode=TwoWay}" />
+                                    <TextBlock
+                                        Text="Positive values delay this client relative to the group (room correction)."
+                                        Style="{ThemeResource CaptionTextBlockStyle}"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
 

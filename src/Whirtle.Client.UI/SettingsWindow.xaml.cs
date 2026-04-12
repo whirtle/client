@@ -22,7 +22,7 @@ public sealed partial class SettingsWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(DragBar);
 
-        AppWindow.Resize(new SizeInt32(680, 860));
+        AppWindow.Resize(new SizeInt32(360, 860));
         TryApplyMica();
 
         App.Current.SettingsViewModel.CaptureSnapshot();
