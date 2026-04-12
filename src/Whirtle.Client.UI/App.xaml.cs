@@ -59,7 +59,14 @@ public partial class App : Application
         };
 
         _mainWindow.Activate();
-        _ = CheckFirewallAsync();
+
+        // Defer until the window is fully activated so XamlRoot is available.
+        void OnFirstActivated(object sender, WindowActivatedEventArgs e)
+        {
+            _mainWindow!.Activated -= OnFirstActivated;
+            _ = CheckFirewallAsync();
+        }
+        _mainWindow.Activated += OnFirstActivated;
     }
 
     private async Task CheckFirewallAsync()
