@@ -138,7 +138,7 @@ public class FlacAudioDecoderTests
         var bytes = FlacFileBuilder.BuildEmptyFlacFile(sampleRate: 44_100);
         using var decoder = new FlacAudioDecoder();
         var frame = decoder.Decode(bytes);
-        Assert.Equal(0, frame.Samples.Length);
+        Assert.Empty(frame.Samples);
     }
 
     // -----------------------------------------------------------------------
