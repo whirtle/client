@@ -16,48 +16,127 @@ namespace Whirtle.Client.Clock;
 ///
 ///  RTT         = t2 − t0             [μs → converted to TimeSpan]
 ///  ClockOffset = t1 − t0 − RTT/2    [μs → converted to TimeSpan]
+///
+/// Usage
+/// ─────
+/// Call <see cref="RunAsync"/> to maintain a continuous sync.
+/// While it is running, route every incoming <see cref="ServerTimeMessage"/>
+/// from the main receive loop to <see cref="Deliver"/>.
 /// </summary>
 public sealed class ClockSynchronizer
 {
     private static readonly TimeSpan DefaultSyncTimeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>Default interval between sync rounds.</summary>
+    public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(5);
+
     private readonly ProtocolClient _client;
     private readonly ISystemClock   _clock;
+    private readonly TimeSpan       _syncTimeout;
+
+    // Ensures at most one sync round is in-flight at a time.
+    private readonly SemaphoreSlim _syncLock = new(1, 1);
+
+    // Non-null while a sync is waiting for the server reply.
+    private sealed record PendingSync(long T0, TaskCompletionSource<ClockSyncResult> Tcs);
+    private PendingSync? _pending;
 
     public ClockSynchronizer(ProtocolClient client)
         : this(client, SystemClock.Instance) { }
 
-    internal ClockSynchronizer(ProtocolClient client, ISystemClock clock)
+    internal ClockSynchronizer(ProtocolClient client, ISystemClock clock, TimeSpan? syncTimeout = null)
     {
-        _client = client;
-        _clock  = clock;
+        _client      = client;
+        _clock       = clock;
+        _syncTimeout = syncTimeout ?? DefaultSyncTimeout;
     }
 
     /// <summary>
-    /// Executes one sync round trip and returns the measured
-    /// <see cref="ClockSyncResult"/>.
+    /// Delivers a <see cref="ServerTimeMessage"/> reply from the main receive loop,
+    /// completing any in-flight <see cref="SyncOnceAsync"/> call.
+    /// </summary>
+    /// <returns><see langword="true"/> if a pending sync was completed.</returns>
+    public bool Deliver(ServerTimeMessage msg)
+    {
+        var pending = Interlocked.Exchange(ref _pending, null);
+        if (pending is null) return false;
+
+        var t2 = _clock.UtcNowMicroseconds;
+        pending.Tcs.TrySetResult(Compute(pending.T0, msg.ServerReceived, t2));
+        return true;
+    }
+
+    /// <summary>
+    /// Sends one <c>client/time</c> message and returns the measured
+    /// <see cref="ClockSyncResult"/> once <see cref="Deliver"/> is called with
+    /// the server's reply.
     /// </summary>
     public async Task<ClockSyncResult> SyncOnceAsync(CancellationToken cancellationToken = default)
     {
-        using var deadline = new CancellationTokenSource(DefaultSyncTimeout);
-        using var linked   = CancellationTokenSource.CreateLinkedTokenSource(
-                                 cancellationToken, deadline.Token);
-        var token = linked.Token;
-
-        var t0 = _clock.UtcNowMicroseconds;
-        await _client.SendAsync(new ClientTimeMessage(t0), token);
-
-        await foreach (var msg in _client.ReceiveAsync(token))
+        await _syncLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            if (msg is not ServerTimeMessage reply)
-                continue;
+            using var deadline = new CancellationTokenSource(_syncTimeout);
+            using var linked   = CancellationTokenSource.CreateLinkedTokenSource(
+                                     cancellationToken, deadline.Token);
+            var token = linked.Token;
 
-            var t2 = _clock.UtcNowMicroseconds;
-            return Compute(reply.ClientTransmitted, reply.ServerReceived, t2);
+            var tcs = new TaskCompletionSource<ClockSyncResult>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            using var reg = token.Register(
+                () => tcs.TrySetCanceled(token), useSynchronizationContext: false);
+
+            var t0 = _clock.UtcNowMicroseconds;
+            Interlocked.Exchange(ref _pending, new PendingSync(t0, tcs));
+
+            await _client.SendAsync(new ClientTimeMessage(t0), token).ConfigureAwait(false);
+            return await tcs.Task.ConfigureAwait(false);
         }
+        finally
+        {
+            Interlocked.Exchange(ref _pending, null);
+            _syncLock.Release();
+        }
+    }
 
-        throw new InvalidOperationException(
-            "Connection closed before a server/time reply was received.");
+    /// <summary>
+    /// Continuously syncs the clock at <paramref name="interval"/> intervals,
+    /// invoking <paramref name="onSync"/> after each successful measurement.
+    /// Throws <see cref="OperationCanceledException"/> when
+    /// <paramref name="cancellationToken"/> is cancelled.
+    /// </summary>
+    /// <remarks>
+    /// The caller must route every incoming <see cref="ServerTimeMessage"/> to
+    /// <see cref="Deliver"/> while this method is active; otherwise each round
+    /// will time out and be retried.
+    /// </remarks>
+    public async Task RunAsync(
+        Action<ClockSyncResult> onSync,
+        TimeSpan?               interval          = null,
+        CancellationToken       cancellationToken = default)
+    {
+        var period = interval ?? DefaultInterval;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                var result = await SyncOnceAsync(cancellationToken).ConfigureAwait(false);
+                onSync(result);
+            }
+            catch (OperationCanceledException)
+            {
+                // If the outer token fired, propagate; otherwise it was the
+                // per-round deadline — swallow and retry after the interval.
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch { /* transient failure (e.g. send error) — retry after interval */ }
+
+            await Task.Delay(period, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private static ClockSyncResult Compute(long t0, long t1, long t2)

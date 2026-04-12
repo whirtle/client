@@ -36,7 +36,7 @@ public sealed class WebSocketTransport : ITransport, IAsyncDisposable
         try
         {
             await _webSocket
-                .SendAsync(data, WebSocketMessageType.Binary, endOfMessage: true, cancellationToken)
+                .SendAsync(data, WebSocketMessageType.Text, endOfMessage: true, cancellationToken)
                 .ConfigureAwait(false);
         }
         finally

@@ -22,8 +22,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
     private ProtocolClient? _protocol;
     private ControllerClient? _controller;
+    private ClockSynchronizer? _syncer;
     private CancellationTokenSource? _connectionCts;
     private Task _receiveLoopTask = Task.CompletedTask;
+    private Task _syncTask        = Task.CompletedTask;
 
     // Server-initiated mode
     private CancellationTokenSource? _serverModeCts;
@@ -223,18 +225,21 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             Log.Information("Connected to {ServerId} ({ServerName}), reason={Reason}",
                 hello.ServerId, hello.Name, hello.ConnectionReason);
 
-            // Initial clock sync — establishes RTT for signal strength.
-            var syncer = new ClockSynchronizer(_protocol);
-            var sync   = await syncer.SyncOnceAsync(token);
-            _lastRtt = sync.RoundTripTime;
-            SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount);
-
+            _syncer      = new ClockSynchronizer(_protocol);
             _controller  = new ControllerClient(_protocol);
             IsConnected  = true;
             ConnectionStatus = $"Connected — {endpoint.Host}:{endpoint.Port}";
 
-            // Start background message loop; tracked so DisconnectAsync can await it.
+            // Start background tasks — receive loop routes server/time to the syncer.
             _receiveLoopTask = ReceiveLoopAsync(token);
+            _syncTask = _syncer.RunAsync(
+                r =>
+                {
+                    _lastRtt = r.RoundTripTime;
+                    _dispatcher.TryEnqueue(
+                        () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
+                },
+                cancellationToken: token);
         }
         catch (OperationCanceledException)
         {
@@ -326,9 +331,12 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _connectionCts?.Cancel();
         _connectionCts = null;
 
-        // Wait for the receive loop to finish before tearing down the protocol.
+        // Wait for background tasks to finish before tearing down the protocol.
         try { await _receiveLoopTask.ConfigureAwait(false); } catch { /* already handled inside */ }
+        try { await _syncTask.ConfigureAwait(false); } catch { /* OperationCanceledException on disconnect */ }
         _receiveLoopTask = Task.CompletedTask;
+        _syncTask        = Task.CompletedTask;
+        _syncer          = null;
 
         if (_protocol is not null)
         {
@@ -483,29 +491,22 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         // Tear down any existing session before taking over.
         await TearDownSessionAsync();
 
-        // Clock sync — non-fatal if it fails.
-        try
-        {
-            var sync = await new ClockSynchronizer(protocol).SyncOnceAsync(serverModeCancellation);
-            _lastRtt = sync.RoundTripTime;
-            _dispatcher.TryEnqueue(() =>
-                SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
-        }
-        catch (OperationCanceledException)
-        {
-            await protocol.DisposeAsync();
-            return;
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Clock sync failed after inbound connection");
-        }
-
         // Hand ownership of protocol to the session fields.
         _protocol    = protocol;
+        _syncer      = new ClockSynchronizer(protocol);
         _controller  = new ControllerClient(protocol);
         _connectionCts  = new CancellationTokenSource();
+
+        // Start background tasks — receive loop routes server/time to the syncer.
         _receiveLoopTask = ReceiveLoopAsync(_connectionCts.Token);
+        _syncTask = _syncer.RunAsync(
+            r =>
+            {
+                _lastRtt = r.RoundTripTime;
+                _dispatcher.TryEnqueue(
+                    () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
+            },
+            cancellationToken: _connectionCts.Token);
 
         var displayName = hello.Name ?? hello.ServerId ?? "Server";
         Log.Information(
@@ -582,6 +583,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             {
                 switch (frame)
                 {
+                    case ProtocolFrame { Message: ServerTimeMessage timeMsg }:
+                        _syncer?.Deliver(timeMsg);
+                        break;
+
                     case ProtocolFrame { Message: ServerStateMessage msg }:
                         if (msg.Metadata is { } meta)
                         {
