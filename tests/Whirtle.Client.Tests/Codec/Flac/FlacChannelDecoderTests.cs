@@ -207,8 +207,8 @@ public class FlacChannelDecoderTests
 
     private static FlacFrameHeader MakeHeader(
         int blockSize, int bitsPerSample, int channels, ChannelAssignment assignment)
-        => new(blockSize, sampleRate: 44100, channels, assignment, bitsPerSample,
-               frameOrSampleNumber: 0, isVariableBlockSize: false);
+        => new(blockSize, SampleRate: 44100, channels, assignment, bitsPerSample,
+               FrameOrSampleNumber: 0, IsVariableBlockSize: false);
 
     /// <summary>
     /// Writes a CONSTANT subframe whose single value fits in <paramref name="bitsPerSample"/> bits.

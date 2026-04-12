@@ -176,7 +176,7 @@ internal static class FlacFrameHeaderReader
             if ((cont & 0xC0) != 0x80)
                 throw new InvalidDataException(
                     $"Invalid UTF-8 continuation byte: 0x{cont:X2}.");
-            value = (value << 6) | (cont & 0x3F);
+            value = (value << 6) | (uint)(cont & 0x3F);
         }
 
         return value;
