@@ -86,14 +86,7 @@ public sealed partial class NowPlayingPage : Page
 
     private void LogsButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_logsWindow is not null)
-        {
-            _logsWindow.Activate();
-            return;
-        }
-
-        _logsWindow = new LogsWindow();
-        _logsWindow.Closed += (_, _) => _logsWindow = null;
+        _logsWindow ??= new LogsWindow();
         _logsWindow.Activate();
     }
 }
