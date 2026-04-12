@@ -89,30 +89,30 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         get
         {
-            if (_codecName is null) return "";
-            if (_sampleRate is null) return _codecName;
-            double kHz = _sampleRate.Value / 1000.0;
+            if (CodecName is null) return "";
+            if (SampleRate is null) return CodecName;
+            double kHz = SampleRate.Value / 1000.0;
             string kHzStr = kHz == Math.Floor(kHz) ? $"{kHz:0} kHz" : $"{kHz:0.0} kHz";
-            return $"{_codecName} · {kHzStr}";
+            return $"{CodecName} · {kHzStr}";
         }
     }
 
-    public int     VolumePercent      => (int)(_volume * 100);
-    public string  PlayPauseGlyph     => _isPlaying ? "\uE769" : "\uE768"; // Pause : Play
-    public string  VolumeGlyph        => _isMuted   ? "\uE74F" : "\uE767"; // Muted : Speaker
-    public string  MuteButtonTooltip  => _isMuted   ? "Unmute" : "Mute";
-    public bool    IsNotConnected     => !_isConnected;
-    public Visibility DisconnectVisibility => _isConnected ? Visibility.Visible : Visibility.Collapsed;
+    public int     VolumePercent      => (int)(Volume * 100);
+    public string  PlayPauseGlyph     => IsPlaying ? "\uE769" : "\uE768"; // Pause : Play
+    public string  VolumeGlyph        => IsMuted   ? "\uE74F" : "\uE767"; // Muted : Speaker
+    public string  MuteButtonTooltip  => IsMuted   ? "Unmute" : "Mute";
+    public bool    IsNotConnected     => !IsConnected;
+    public Visibility DisconnectVisibility => IsConnected ? Visibility.Visible : Visibility.Collapsed;
 
     public InfoBarSeverity ConnectionInfoSeverity
-        => _isConnected ? InfoBarSeverity.Success : InfoBarSeverity.Informational;
+        => IsConnected ? InfoBarSeverity.Success : InfoBarSeverity.Informational;
 
     public string TrayTooltip
     {
         get
         {
-            if (!_isConnected) return "Whirtle — Not connected";
-            var parts = new[] { _title, _artist }.Where(s => s is not null);
+            if (!IsConnected) return "Whirtle — Not connected";
+            var parts = new[] { Title, Artist }.Where(s => s is not null);
             var desc  = string.Join(" — ", parts);
             return string.IsNullOrEmpty(desc) ? "Whirtle" : $"Whirtle — {desc}";
         }
@@ -244,7 +244,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task PlayPauseAsync() => _isPlaying ? PauseAsync() : PlayAsync();
+    private Task PlayPauseAsync() => IsPlaying ? PauseAsync() : PlayAsync();
 
     [RelayCommand]
     private async Task PlayAsync()
@@ -273,16 +273,16 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task SetVolumeAsync(double normalised)
     {
         Volume = normalised;
-        if (_controller is null || _isMuted) return;
+        if (_controller is null || IsMuted) return;
         await _controller.SetVolumeAsync(normalised);
     }
 
     [RelayCommand]
     private async Task ToggleMuteAsync()
     {
-        IsMuted = !_isMuted;
+        IsMuted = !IsMuted;
         if (_controller is null) return;
-        await _controller.SetVolumeAsync(_isMuted ? 0.0 : _volume);
+        await _controller.SetVolumeAsync(IsMuted ? 0.0 : Volume);
     }
 
     [RelayCommand]
