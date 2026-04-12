@@ -100,7 +100,7 @@
                         <StackPanel Spacing="4">
                             <TextBlock Text="Static delay (ms)" Style="{StaticResource SettingLabelStyle}" />
                             <NumberBox
-                                Minimum="-2000"
+                                Minimum="0"
                                 Maximum="5000"
                                 SmallChange="10"
                                 LargeChange="100"
