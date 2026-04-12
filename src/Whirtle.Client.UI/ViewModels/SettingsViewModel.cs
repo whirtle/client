@@ -38,6 +38,20 @@ public sealed partial class SettingsViewModel : ObservableObject
     // Per-device settings storage
     private Dictionary<string, DeviceSettings> _deviceSettings = new();
 
+    // ── Window position ────────────────────────────────────────────────────
+    private int? _windowX;
+    private int? _windowY;
+
+    public int? WindowX => _windowX;
+    public int? WindowY => _windowY;
+
+    public void SaveWindowPosition(int x, int y)
+    {
+        _windowX = x;
+        _windowY = y;
+        Save();
+    }
+
     // ── Persistent settings ────────────────────────────────────────────────
 
     [ObservableProperty] private string _clientName = Environment.MachineName;
@@ -181,6 +195,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             _deviceSettings         = saved.DeviceSettings ?? new Dictionary<string, DeviceSettings>();
             _connectionMode         = saved.ConnectionMode;
             _logLevel               = saved.LogLevel;
+            _windowX                = saved.WindowX;
+            _windowY                = saved.WindowY;
 
             if (saved.SavedServers is { } servers)
             {
@@ -292,7 +308,9 @@ public sealed partial class SettingsViewModel : ObservableObject
                 _deviceSettings,
                 ConnectionMode,
                 LogLevel,
-                SavedServers.ToList());
+                SavedServers.ToList(),
+                _windowX,
+                _windowY);
 
             var json    = JsonSerializer.Serialize(data, JsonOptions);
             var tmpPath = SettingsPath + ".tmp";
@@ -320,5 +338,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Dictionary<string, DeviceSettings> DeviceSettings,
         ConnectionMode                     ConnectionMode,
         string                             LogLevel,
-        List<PersistedServer>?             SavedServers);
+        List<PersistedServer>?             SavedServers,
+        int?                               WindowX = null,
+        int?                               WindowY = null);
 }
