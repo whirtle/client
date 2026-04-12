@@ -67,14 +67,34 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     // ── Status bar ─────────────────────────────────────────────────────────
 
     [ObservableProperty] private string? _serverName;
-    [ObservableProperty] private string? _codecName;
-    [ObservableProperty] private int     _signalStrength; // 0–3
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CodecDisplay))]
+    private string? _codecName;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CodecDisplay))]
+    private int? _sampleRate;
+
+    [ObservableProperty] private int _signalStrength; // 0–3
 
     // ── Audio devices ──────────────────────────────────────────────────────
 
     [ObservableProperty] private AudioDeviceInfo? _selectedDevice;
 
     // ── Computed / derived properties ──────────────────────────────────────
+
+    public string CodecDisplay
+    {
+        get
+        {
+            if (_codecName is null) return "—";
+            if (_sampleRate is null) return _codecName;
+            double kHz = _sampleRate.Value / 1000.0;
+            string kHzStr = kHz == Math.Floor(kHz) ? $"{kHz:0} kHz" : $"{kHz:0.0} kHz";
+            return $"{_codecName} · {kHzStr}";
+        }
+    }
 
     public int     VolumePercent      => (int)(_volume * 100);
     public string  PlayPauseGlyph     => _isPlaying ? "\uE769" : "\uE768"; // Pause : Play
@@ -219,9 +239,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         IsConnected  = false;
         ConnectionStatus = "Not connected";
 
-        ServerName    = null;
-        CodecName     = null;
-        SignalStrength = 0;
+        ServerName     = null;
+        CodecName      = null;
+        SampleRate     = null;
+        SignalStrength  = 0;
         _lastRtt        = TimeSpan.MaxValue;
         _lastBufferCount = -1;
     }
@@ -307,8 +328,13 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                         break;
 
                     case ProtocolFrame { Message: StreamStartMessage s }:
-                        var codecDisplay = s.Player.Codec.ToUpperInvariant();
-                        _dispatcher.TryEnqueue(() => CodecName = codecDisplay);
+                        var codec      = s.Player.Codec.ToUpperInvariant();
+                        var sampleRate = s.Player.SampleRate;
+                        _dispatcher.TryEnqueue(() =>
+                        {
+                            CodecName  = codec;
+                            SampleRate = sampleRate;
+                        });
                         break;
 
                     case ArtworkFrame artwork:

@@ -52,29 +52,33 @@
             Background="{ThemeResource LayerFillColorDefaultBrush}"
             BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
             BorderThickness="0,1,0,0">
-            <Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />    <!-- server name: takes leftover space -->
+                    <ColumnDefinition Width="Auto" /> <!-- codec + sample rate -->
+                    <ColumnDefinition Width="Auto" /> <!-- signal bars -->
+                </Grid.ColumnDefinitions>
 
-                <!-- Server name (left) -->
+                <!-- Server name (left, truncates when space is tight) -->
                 <TextBlock
-                    HorizontalAlignment="Left"
+                    Grid.Column="0"
                     VerticalAlignment="Center"
                     Style="{ThemeResource CaptionTextBlockStyle}"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Text="{x:Bind NowPlayingViewModel.ServerName, Mode=OneWay, FallbackValue='—'}"
-                    TextTrimming="CharacterEllipsis"
-                    MaxWidth="180" />
+                    TextTrimming="CharacterEllipsis" />
 
-                <!-- Codec (center) -->
+                <!-- Codec · sample rate (centre-ish) -->
                 <TextBlock
-                    HorizontalAlignment="Center"
+                    Grid.Column="1"
                     VerticalAlignment="Center"
                     Style="{ThemeResource CaptionTextBlockStyle}"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="{x:Bind NowPlayingViewModel.CodecName, Mode=OneWay, FallbackValue='—'}" />
+                    Text="{x:Bind NowPlayingViewModel.CodecDisplay, Mode=OneWay}" />
 
                 <!-- Signal bars (right) -->
                 <controls:SignalBarsControl
-                    HorizontalAlignment="Right"
+                    Grid.Column="2"
                     VerticalAlignment="Center"
                     Level="{x:Bind NowPlayingViewModel.SignalStrength, Mode=OneWay}" />
 
