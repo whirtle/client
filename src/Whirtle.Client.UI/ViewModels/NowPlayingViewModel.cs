@@ -25,6 +25,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private CancellationTokenSource? _connectionCts;
     private Task _receiveLoopTask = Task.CompletedTask;
 
+    // Server-initiated mode
+    private CancellationTokenSource? _serverModeCts;
+    private readonly ConnectionManager _connectionManager = new();
+
     // Signal-strength inputs — updated by clock sync and PlaybackEngine events.
     private TimeSpan _lastRtt        = TimeSpan.MaxValue; // unknown until first sync
     private int      _lastBufferCount = -1;               // -1 = engine not running
@@ -163,6 +167,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         };
 
         LoadAudioDevices();
+
+        if (_settings.ConnectionMode == ConnectionMode.ServerInitiated)
+            StartServerInitiatedMode();
     }
 
     private void LoadAudioDevices()
@@ -180,7 +187,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     [RelayCommand]
     private async Task ConnectAsync(ServiceEndpoint endpoint)
     {
-        await DisconnectAsync();
+        StopServerInitiatedMode();
+        await TearDownSessionAsync();
+        ResetPlaybackState();
 
         // Show the target in the status bar immediately, before any awaits.
         ServerName = endpoint.DisplayName;
@@ -251,8 +260,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         _settings.ConnectionMode = ConnectionMode.ServerInitiated;
         ServerName = null;  // Update status bar immediately; don't wait for graceful close
-        if (_isConnected)
-            await DisconnectAsync();
+        StopServerInitiatedMode();
+        await TearDownSessionAsync();
+        ResetPlaybackState();
+        StartServerInitiatedMode();
     }
 
     /// <summary>
@@ -289,11 +300,22 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     [RelayCommand]
     private async Task DisconnectAsync()
     {
+        StopServerInitiatedMode();
+        await TearDownSessionAsync();
+        ResetPlaybackState();
+    }
+
+    /// <summary>
+    /// Tears down the active protocol session (cancels the receive loop,
+    /// sends goodbye, disposes the transport). Does not touch server-mode
+    /// infrastructure or UI state.
+    /// </summary>
+    private async Task TearDownSessionAsync()
+    {
         _connectionCts?.Cancel();
         _connectionCts = null;
 
-        // Wait for the receive loop to finish before tearing down the protocol,
-        // so it cannot access _protocol after it has been disposed.
+        // Wait for the receive loop to finish before tearing down the protocol.
         try { await _receiveLoopTask.ConfigureAwait(false); } catch { /* already handled inside */ }
         _receiveLoopTask = Task.CompletedTask;
 
@@ -304,16 +326,172 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _protocol = null;
         }
 
-        _controller  = null;
-        IsConnected  = false;
-        ConnectionStatus = "Not connected";
+        _controller = null;
+    }
 
-        ServerName     = null;
-        CodecName      = null;
-        SampleRate     = null;
-        SignalStrength  = 0;
-        _lastRtt        = TimeSpan.MaxValue;
+    /// <summary>Resets all playback / connection UI state to "not connected".</summary>
+    private void ResetPlaybackState()
+    {
+        _connectionManager.Clear();
+        IsConnected      = false;
+        ConnectionStatus = "Not connected";
+        ServerName       = null;
+        CodecName        = null;
+        SampleRate       = null;
+        SignalStrength   = 0;
+        _lastRtt         = TimeSpan.MaxValue;
         _lastBufferCount = -1;
+    }
+
+    private void StopServerInitiatedMode()
+    {
+        _serverModeCts?.Cancel();
+        _serverModeCts?.Dispose();
+        _serverModeCts = null;
+    }
+
+    private void StartServerInitiatedMode()
+    {
+        _serverModeCts = new CancellationTokenSource();
+        ConnectionStatus = "Listening for server…";
+        _ = RunServerAcceptLoopAsync(_serverModeCts.Token);
+    }
+
+    private async Task RunServerAcceptLoopAsync(CancellationToken cancellationToken)
+    {
+        WebSocketListener listener;
+        try
+        {
+            listener = new WebSocketListener();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to start WebSocket listener on port {Port}",
+                MdnsAdvertiser.DefaultPort);
+            _dispatcher.TryEnqueue(() =>
+                ConnectionStatus = $"Failed to listen on port {MdnsAdvertiser.DefaultPort}: {ex.Message}");
+            return;
+        }
+
+        var hostname   = Environment.MachineName;
+        var advertiser = new MdnsAdvertiser(hostname, _settings.ClientName, MdnsAdvertiser.DefaultPort);
+        _ = advertiser.AdvertiseAsync(cancellationToken);
+
+        Log.Information(
+            "Server-initiated mode: listening on :{Port}{Path}, advertising as \"{Name}\"",
+            MdnsAdvertiser.DefaultPort, MdnsAdvertiser.DefaultPath, _settings.ClientName);
+
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                ITransport candidate;
+                try
+                {
+                    candidate = await listener.AcceptAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Error accepting inbound connection");
+                    continue;
+                }
+
+                await HandleInboundConnectionAsync(candidate, cancellationToken);
+            }
+        }
+        finally
+        {
+            await listener.DisposeAsync();
+            advertiser.Dispose();
+        }
+    }
+
+    private async Task HandleInboundConnectionAsync(
+        ITransport        candidate,
+        CancellationToken serverModeCancellation)
+    {
+        var protocol = new ProtocolClient(candidate);
+
+        ServerHelloMessage hello;
+        try
+        {
+            hello = await protocol.HandshakeAsync(
+                _settings.ClientId, _settings.ClientName,
+                cancellationToken: serverModeCancellation);
+        }
+        catch (HandshakeException ex)
+        {
+            Log.Warning("Inbound handshake failed ({Code}): {Message}", ex.Code, ex.Message);
+            await protocol.DisposeAsync();
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            await protocol.DisposeAsync();
+            return;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Inbound connection error during handshake");
+            await protocol.DisposeAsync();
+            return;
+        }
+
+        if (!_connectionManager.ShouldAccept(hello.ServerId, hello.ConnectionReason))
+        {
+            Log.Information(
+                "Rejected lower-priority server {ServerId} (reason={Reason})",
+                hello.ServerId, hello.ConnectionReason);
+            try { await protocol.DisconnectAsync("another_server", serverModeCancellation); }
+            catch { /* best-effort */ }
+            await protocol.DisposeAsync();
+            return;
+        }
+
+        _connectionManager.Accept(hello.ServerId, hello.ConnectionReason);
+
+        // Tear down any existing session before taking over.
+        await TearDownSessionAsync();
+
+        // Clock sync — non-fatal if it fails.
+        try
+        {
+            var sync = await new ClockSynchronizer(protocol).SyncOnceAsync(serverModeCancellation);
+            _lastRtt = sync.RoundTripTime;
+            _dispatcher.TryEnqueue(() =>
+                SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
+        }
+        catch (OperationCanceledException)
+        {
+            await protocol.DisposeAsync();
+            return;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Clock sync failed after inbound connection");
+        }
+
+        // Hand ownership of protocol to the session fields.
+        _protocol    = protocol;
+        _controller  = new ControllerClient(protocol);
+        _connectionCts  = new CancellationTokenSource();
+        _receiveLoopTask = ReceiveLoopAsync(_connectionCts.Token);
+
+        var displayName = hello.Name ?? hello.ServerId ?? "Server";
+        Log.Information(
+            "Inbound connection accepted: server={ServerId} name={ServerName} reason={Reason}",
+            hello.ServerId, hello.Name, hello.ConnectionReason);
+
+        _dispatcher.TryEnqueue(() =>
+        {
+            ServerName       = displayName;
+            IsConnected      = true;
+            ConnectionStatus = $"Connected — {displayName}";
+        });
     }
 
     [RelayCommand]
