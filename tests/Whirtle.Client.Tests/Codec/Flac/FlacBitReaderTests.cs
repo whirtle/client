@@ -95,8 +95,14 @@ public class FlacBitReaderTests
     [Fact]
     public void ReadBits_CountAbove32_Throws()
     {
+        // ref struct cannot be captured in a lambda; use try/catch instead.
         var reader = Make(0x00, 0x00, 0x00, 0x00, 0x00);
-        Assert.Throws<ArgumentOutOfRangeException>(() => reader.ReadBits(33));
+        try
+        {
+            reader.ReadBits(33);
+            Assert.Fail("Expected ArgumentOutOfRangeException.");
+        }
+        catch (ArgumentOutOfRangeException) { }
     }
 
     // -----------------------------------------------------------------------
@@ -253,9 +259,15 @@ public class FlacBitReaderTests
     [Fact]
     public void ReadBytes_WhenUnaligned_Throws()
     {
+        // ref struct cannot be captured in a lambda; use try/catch instead.
         var reader = Make(0xFF, 0xFF);
         reader.ReadBits(1);
-        Assert.Throws<InvalidOperationException>(() => reader.ReadBytes(1));
+        try
+        {
+            reader.ReadBytes(1);
+            Assert.Fail("Expected InvalidOperationException.");
+        }
+        catch (InvalidOperationException) { }
     }
 
     // -----------------------------------------------------------------------
