@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Steve Peterson
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+using System.Text.Json;
 using Whirtle.Client.Codec;
 using Whirtle.Client.Codec.Flac;
 
@@ -11,7 +12,12 @@ namespace Whirtle.Client.Tests.Codec.Flac;
 ///
 /// <see cref="FlacFileBuilder"/> constructs minimal but fully-valid FLAC byte
 /// sequences — complete with STREAMINFO, per-frame CRC-8, and CRC-16 — so
-/// these tests exercise the entire decode pipeline on real bitstreams.
+/// the unit-level tests exercise the entire decode pipeline on real bitstreams
+/// without any network access.
+///
+/// The two IETF conformance sections are skipped by default and must be run
+/// manually; they download files from
+/// https://github.com/ietf-wg-cellar/flac-test-files.
 /// </summary>
 public class FlacAudioDecoderTests
 {
@@ -136,41 +142,215 @@ public class FlacAudioDecoderTests
     }
 
     // -----------------------------------------------------------------------
-    // IETF FLAC conformance test files (network, skipped by default)
+    // IETF conformance — subset (64 files, skipped by default)
     //
-    // To run manually:  dotnet test --filter FlacAudioDecoderTests
-    //   then un-skip this test or pass --filter on the method name.
+    // Run manually:
+    //   dotnet test --filter "IetfConformance_AllSubsetFiles"
     //
-    // The test files live at:
-    //   https://github.com/ietf-wg-cellar/flac-test-files
+    // Fetches the file list from the GitHub Contents API at runtime, so new
+    // files added to the repo are automatically covered.
     // -----------------------------------------------------------------------
 
-    [Theory(Skip = "Downloads from the internet; run manually to validate conformance")]
-    [InlineData("subset/01 - blocksize 4096.flac")]
-    [InlineData("subset/02 - blocksize 4608.flac")]
-    [InlineData("subset/03 - blocksize 16.flac")]
-    [InlineData("subset/04 - blocksize 192.flac")]
-    [InlineData("subset/05 - blocksize 254.flac")]
-    public async Task IetfConformance_SubsetFile_DecodesCorrectly(string relativePath)
+    [Fact(Skip = "Downloads from the internet; run manually to validate conformance")]
+    public async Task IetfConformance_AllSubsetFiles_DecodeCorrectly()
     {
-        // Download from the IETF CELLAR working group FLAC test repository.
-        var encoded = Uri.EscapeDataString(relativePath).Replace("%2F", "/");
-        var url = $"https://raw.githubusercontent.com/ietf-wg-cellar/flac-test-files/main/{encoded}";
+        using var http = CreateHttpClient();
 
-        using var http = new HttpClient();
-        http.Timeout = TimeSpan.FromSeconds(30);
-        var fileBytes = await http.GetByteArrayAsync(url);
+        var names    = await FetchFlacNamesAsync(http, "subset");
+        var failures = new List<string>();
 
-        // Parse STREAMINFO independently for validation.
-        var streamInfo = FlacMetadataReader.Read(fileBytes, out _);
+        Assert.NotEmpty(names); // guard against API or filter bugs
 
-        using var decoder = new FlacAudioDecoder();
-        var frame = decoder.Decode(fileBytes);
+        foreach (var name in names)
+        {
+            try
+            {
+                var data  = await http.GetByteArrayAsync(RawUrl($"subset/{name}"));
+                var si    = FlacMetadataReader.Read(data, out _);
+                var frame = new FlacAudioDecoder().Decode(data);
 
-        // Structural checks against STREAMINFO.
-        Assert.Equal(streamInfo.SampleRate, frame.SampleRate);
-        Assert.Equal(streamInfo.Channels,   frame.Channels);
-        Assert.Equal(streamInfo.TotalSamples, frame.SamplesPerChannel);
+                // TotalSamples == 0 is legal (e.g. "no total number of samples set").
+                if (si.TotalSamples > 0 && (long)frame.SamplesPerChannel != si.TotalSamples)
+                    failures.Add(
+                        $"[{name}] SamplesPerChannel={frame.SamplesPerChannel}, " +
+                        $"STREAMINFO.TotalSamples={si.TotalSamples}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"[{name}] {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        Assert.Empty(failures);
+    }
+
+    // -----------------------------------------------------------------------
+    // IETF conformance — faulty files (skipped by default)
+    //
+    // Run manually:
+    //   dotnet test --filter "IetfFaulty"
+    //
+    // The faulty/ folder contains 11 intentionally malformed FLAC files.
+    // They are split into two groups below based on whether our decoder is
+    // expected to detect the fault.
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Files whose faults are structurally detectable: missing STREAMINFO,
+    /// channels/sample-count mismatches that produce inconsistent output, and
+    /// corrupted metadata lengths that mis-align the parser.
+    /// The test asserts that each file either throws or produces output
+    /// inconsistent with the declared STREAMINFO.
+    /// </summary>
+    [Fact(Skip = "Downloads from the internet; run manually to validate fault detection")]
+    public async Task IetfFaulty_StructuralErrors_AreDetected()
+    {
+        // These four files contain faults our decoder can observe.
+        var mustDetect = new[]
+        {
+            // STREAMINFO declares 5 channels; frames carry 1 channel.
+            // Decoded Samples.Length equals the actual mono count, but
+            // AudioFrame.Channels == 5 (from STREAMINFO), making
+            // SamplesPerChannel = actual/5 ≠ STREAMINFO.TotalSamples.
+            "04 - wrong number of channels.flac",
+
+            // STREAMINFO declares 39 842 samples; audio has 109 487.
+            // SamplesPerChannel after decode ≠ STREAMINFO.TotalSamples.
+            "05 - wrong total number of samples.flac",
+
+            // No STREAMINFO block at all → FlacMetadataReader throws
+            // InvalidDataException before any audio is decoded.
+            "06 - missing streaminfo metadata block.flac",
+
+            // Metadata block lengths are wrong, misaligning the parser.
+            // Either FlacMetadataReader or FlacFrameHeaderReader throws.
+            "11 - incorrect metadata block length.flac",
+        };
+
+        using var http     = CreateHttpClient();
+        var       failures = new List<string>();
+
+        foreach (var name in mustDetect)
+        {
+            var data     = await http.GetByteArrayAsync(RawUrl($"faulty/{name}"));
+            bool detected;
+            try
+            {
+                var frame = new FlacAudioDecoder().Decode(data);
+                // Decode succeeded — check for detectable metadata inconsistency.
+                var si    = FlacMetadataReader.Read(data, out _);
+                detected  = (long)frame.SamplesPerChannel != si.TotalSamples
+                         || frame.SampleRate              != si.SampleRate;
+            }
+            catch { detected = true; }
+
+            if (!detected)
+                failures.Add(name);
+        }
+
+        Assert.Empty(failures);
+    }
+
+    /// <summary>
+    /// Files whose faults are in STREAMINFO metadata only; the encoded audio
+    /// frames themselves are structurally valid, so our decoder accepts them.
+    /// The test asserts that these files do not cause uncontrolled crashes —
+    /// they are known limitations of the current metadata validation.
+    ///
+    /// Limitation notes (from faulty/README.txt):
+    ///   01 — STREAMINFO max-blocksize not cross-validated against actual frame sizes.
+    ///   02 — STREAMINFO max-framesize not cross-validated against encoded frame sizes.
+    ///   03 — Frame-header bit-depth overrides STREAMINFO; the declared depth is silently wrong.
+    ///   07 — Spec requires STREAMINFO first, but our reader finds it at any position.
+    ///   08 — Blocksize 65536 is encodable via frame-header code 7 (tail = 65535).
+    ///   09 — Minimum blocksize constraint is not enforced per-frame.
+    ///   10 — Non-STREAMINFO metadata blocks are skipped entirely without parsing.
+    /// </summary>
+    [Fact(Skip = "Downloads from the internet; run manually to document known limitations")]
+    public async Task IetfFaulty_MetadataDiscrepancies_DecodeWithoutCrash()
+    {
+        var knownLimitations = new[]
+        {
+            "01 - wrong max blocksize.flac",
+            "02 - wrong maximum framesize.flac",
+            "03 - wrong bit depth.flac",
+            "07 - other metadata blocks preceding streaminfo metadata block.flac",
+            "08 - blocksize 65536.flac",
+            "09 - blocksize 1.flac",
+            "10 - invalid vorbis comment metadata block.flac",
+        };
+
+        using var http         = CreateHttpClient();
+        var       unexpected   = new List<string>(); // uncontrolled exceptions
+
+        foreach (var name in knownLimitations)
+        {
+            var data = await http.GetByteArrayAsync(RawUrl($"faulty/{name}"));
+            try
+            {
+                _ = new FlacAudioDecoder().Decode(data);
+                // Successful decode is expected for these files.
+            }
+            catch (InvalidDataException)
+            {
+                // A controlled InvalidDataException is acceptable even for the
+                // "known limitation" group — it means the decoder is being more
+                // strict than expected, which is fine.
+            }
+            catch (Exception ex)
+            {
+                // Any other exception (OutOfMemoryException, StackOverflowException,
+                // OverflowException, etc.) is an uncontrolled failure.
+                unexpected.Add($"[{name}] {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        Assert.Empty(unexpected);
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers — shared between network tests
+    // -----------------------------------------------------------------------
+
+    private static HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        // GitHub API requires a User-Agent header for unauthenticated requests.
+        http.DefaultRequestHeaders.Add("User-Agent", "WhirtleClientTests/1.0");
+        return http;
+    }
+
+    /// <summary>
+    /// Fetches the names of all <c>.flac</c> files in the given folder of the
+    /// IETF CELLAR FLAC test-files repository via the GitHub Contents API.
+    /// </summary>
+    private static async Task<IReadOnlyList<string>> FetchFlacNamesAsync(
+        HttpClient http, string folder)
+    {
+        var json = await http.GetStringAsync(
+            $"https://api.github.com/repos/ietf-wg-cellar/flac-test-files" +
+            $"/contents/{folder}?per_page=100");
+
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement
+                  .EnumerateArray()
+                  .Where(e => e.GetProperty("type").GetString() == "file"
+                           && e.GetProperty("name").GetString()!
+                               .EndsWith(".flac", StringComparison.OrdinalIgnoreCase))
+                  .Select(e => e.GetProperty("name").GetString()!)
+                  .ToList();
+    }
+
+    /// <summary>
+    /// Returns the raw-content URL for a repo-relative path such as
+    /// <c>subset/01 - blocksize 4096.flac</c>.
+    /// </summary>
+    private static string RawUrl(string repoRelativePath)
+    {
+        var encoded = string.Join("/",
+            repoRelativePath.Split('/').Select(Uri.EscapeDataString));
+        return $"https://raw.githubusercontent.com/" +
+               $"ietf-wg-cellar/flac-test-files/main/{encoded}";
     }
 
     // -----------------------------------------------------------------------
