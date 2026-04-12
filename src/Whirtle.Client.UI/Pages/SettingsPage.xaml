@@ -4,8 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Whirtle.Client.UI.Pages"
-    xmlns:discovery="using:Whirtle.Client.Discovery"
-    Background="Transparent">
+Background="Transparent">
 
     <Page.Resources>
         <Style x:Key="CardStyle" TargetType="Border">
@@ -122,103 +121,7 @@
                     </StackPanel>
                 </Border>
 
-                <!-- ═══ CONNECTION ════════════════════════════════════════════════ -->
-                <Border Style="{StaticResource CardStyle}">
-                    <StackPanel Spacing="16">
-                        <TextBlock Text="Connection" Style="{ThemeResource SubtitleTextBlockStyle}" />
-
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Connection mode" Style="{StaticResource SettingLabelStyle}" />
-                            <RadioButtons
-                                SelectedIndex="{x:Bind ViewModel.ConnectionModeIndex, Mode=TwoWay}">
-                                <RadioButton Content="Server-initiated  (advertise via mDNS; server connects)" />
-                                <RadioButton Content="Client-initiated  (discover or manually enter server URL)" />
-                            </RadioButtons>
-                        </StackPanel>
-
-                        <!-- Live connection status -->
-                        <InfoBar
-                            IsOpen="True"
-                            IsClosable="False"
-                            Severity="{x:Bind NowPlayingViewModel.ConnectionInfoSeverity, Mode=OneWay}"
-                            Message="{x:Bind NowPlayingViewModel.ConnectionStatus, Mode=OneWay}" />
-
-                        <!-- Auto-discovered servers -->
-                        <TextBlock
-                            Text="Auto-discovered servers"
-                            Style="{StaticResource SettingLabelStyle}" />
-
-                        <ListView
-                            x:Name="ServerList"
-                            ItemsSource="{x:Bind NowPlayingViewModel.DiscoveredServers}"
-                            SelectionMode="Single"
-                            MaxHeight="180"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            CornerRadius="4">
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Padding="0,6" ColumnSpacing="10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <FontIcon
-                                            Grid.Column="0"
-                                            Glyph="&#xECA5;"
-                                            FontSize="14"
-                                            VerticalAlignment="Center"
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        <StackPanel Grid.Column="1" Spacing="2">
-                                            <TextBlock
-                                                Text="{Binding Name}"
-                                                Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                                            <TextBlock
-                                                Style="{ThemeResource CaptionTextBlockStyle}"
-                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                                <Run Text="{Binding Host}" /><Run Text=":" /><Run Text="{Binding Port}" />
-                                            </TextBlock>
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-
-                        <Button
-                            Content="Connect to Selected"
-                            IsEnabled="{x:Bind NowPlayingViewModel.IsNotConnected, Mode=OneWay}"
-                            Click="ConnectSelected_Click" />
-
-                        <!-- Manual URL entry -->
-                        <TextBlock
-                            Text="Or connect manually:"
-                            Style="{StaticResource SettingLabelStyle}" />
-
-                        <Grid ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBox
-                                Grid.Column="0"
-                                PlaceholderText="ws://192.168.1.x:8928/sendspin"
-                                Text="{x:Bind NowPlayingViewModel.ManualUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button
-                                Grid.Column="1"
-                                Content="Connect"
-                                IsEnabled="{x:Bind NowPlayingViewModel.IsNotConnected, Mode=OneWay}"
-                                Command="{x:Bind NowPlayingViewModel.ConnectManualCommand}" />
-                        </Grid>
-
-                        <!-- Disconnect (only visible while connected) -->
-                        <Button
-                            Content="Disconnect"
-                            Visibility="{x:Bind NowPlayingViewModel.DisconnectVisibility, Mode=OneWay}"
-                            Command="{x:Bind NowPlayingViewModel.DisconnectCommand}" />
-                    </StackPanel>
-                </Border>
-
-                <!-- ═══ DIAGNOSTICS ═══════════════════════════════════════════════ -->
+<!-- ═══ DIAGNOSTICS ═══════════════════════════════════════════════ -->
                 <Border Style="{StaticResource CardStyle}">
                     <StackPanel Spacing="16">
                         <TextBlock Text="Diagnostics" Style="{ThemeResource SubtitleTextBlockStyle}" />

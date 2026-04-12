@@ -14,5 +14,6 @@ public sealed record ServiceEndpoint(
     string  Path = MdnsAdvertiser.DefaultPath,
     string? Name = null)
 {
-    public Uri ToWebSocketUri() => new($"ws://{Host}:{Port}{Path}");
+    public Uri    ToWebSocketUri() => new($"ws://{Host}:{Port}{Path}");
+    public string DisplayName     => Name ?? Host;
 }

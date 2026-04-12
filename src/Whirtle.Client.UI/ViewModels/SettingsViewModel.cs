@@ -25,7 +25,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     private CancellationTokenSource? _saveCts;
     private readonly object _saveCtsLock = new();
 
-    // Snapshot for OK/Cancel support
+    // Snapshot for OK/Cancel support (connection mode excluded: it changes via the
+    // server picker, outside the Settings dialog lifecycle).
     private record SettingsSnapshot(
         string ClientName, string ClientId, string PreferredAudioDeviceId,
         Dictionary<string, DeviceSettings> DeviceSettings,
@@ -55,9 +56,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (value < 0) CurrentDeviceStaticDelayMs = 0;
     }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ConnectionModeIndex))]
-    private ConnectionMode _connectionMode = ConnectionMode.ServerInitiated;
+    [ObservableProperty] private ConnectionMode _connectionMode = ConnectionMode.ServerInitiated;
 
     [ObservableProperty] private string _logLevel = "Information";
 
@@ -65,6 +64,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private AudioDeviceInfo? _selectedAudioDevice;
 
+    public ObservableCollection<AudioDeviceInfo>  AudioDevices  { get; } = new();
+    public ObservableCollection<PersistedServer>  SavedServers  { get; } = new();
     partial void OnSelectedAudioDeviceChanged(AudioDeviceInfo? value)
     {
         if (value is null) return;
@@ -82,8 +83,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             _suppressSave = false;
         }
     }
-
-    public ObservableCollection<AudioDeviceInfo> AudioDevices { get; } = new();
 
     // ── Static option lists ────────────────────────────────────────────────
 
@@ -144,6 +143,19 @@ public sealed partial class SettingsViewModel : ObservableObject
         catch { /* non-Windows build or no audio devices */ }
     }
 
+    // ── Saved server management ────────────────────────────────────────────
+
+    public void AddSavedServer(PersistedServer server)
+    {
+        SavedServers.Add(server);
+        Save();
+    }
+
+    public void RemoveSavedServer(PersistedServer server)
+    {
+        SavedServers.Remove(server);
+        Save();
+    }
     // ── Helpers ────────────────────────────────────────────────────────────
 
     private DeviceSettings GetDeviceSettings(string deviceId)
@@ -169,6 +181,12 @@ public sealed partial class SettingsViewModel : ObservableObject
             _deviceSettings         = saved.DeviceSettings ?? new Dictionary<string, DeviceSettings>();
             _connectionMode         = saved.ConnectionMode;
             _logLevel               = saved.LogLevel;
+
+            if (saved.SavedServers is { } servers)
+            {
+                foreach (var s in servers)
+                    SavedServers.Add(s);
+            }
 
             // Pre-load the preferred device's settings so they're ready before
             // the device ComboBox is populated.
@@ -273,7 +291,8 @@ public sealed partial class SettingsViewModel : ObservableObject
                 _preferredAudioDeviceId,
                 _deviceSettings,
                 ConnectionMode,
-                LogLevel);
+                LogLevel,
+                SavedServers.ToList());
 
             var json    = JsonSerializer.Serialize(data, JsonOptions);
             var tmpPath = SettingsPath + ".tmp";
@@ -300,5 +319,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         string                             PreferredAudioDeviceId,
         Dictionary<string, DeviceSettings> DeviceSettings,
         ConnectionMode                     ConnectionMode,
-        string                             LogLevel);
+        string                             LogLevel,
+        List<PersistedServer>?             SavedServers);
 }
