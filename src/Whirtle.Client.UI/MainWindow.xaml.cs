@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows.Input;
 using H.NotifyIcon;
+using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
@@ -43,6 +44,13 @@ public sealed partial class MainWindow : Window
         // Extend XAML content into the title bar area
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
+
+        // White caption buttons to match the dark theme
+        var titleBar = AppWindow.TitleBar;
+        titleBar.ButtonForegroundColor         = Colors.White;
+        titleBar.ButtonHoverForegroundColor    = Colors.White;
+        titleBar.ButtonPressedForegroundColor  = Colors.White;
+        titleBar.ButtonInactiveForegroundColor = Colors.White;
 
         // Initial window size — sized to fit content
         AppWindow.Resize(new SizeInt32(480, 560));
