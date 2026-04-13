@@ -190,9 +190,6 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         };
 
         LoadAudioDevices();
-
-        if (_settings.ConnectionMode == ConnectionMode.ServerInitiated)
-            StartServerInitiatedMode();
     }
 
     private void LoadAudioDevices()
@@ -402,7 +399,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _serverModeCts = null;
     }
 
-    private void StartServerInitiatedMode()
+    internal void StartServerInitiatedMode()
     {
         Log.Debug("Server-initiated mode starting");
         _serverModeCts = new CancellationTokenSource();
