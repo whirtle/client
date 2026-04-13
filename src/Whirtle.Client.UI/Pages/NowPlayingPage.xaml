@@ -27,113 +27,151 @@
             MaxWidth="860"
             HorizontalAlignment="Center">
 
-            <!-- ═══ 1 · NOW PLAYING HEADER ═══════════════════════════════════ -->
-            <Border Style="{StaticResource CardStyle}">
-                <Grid ColumnSpacing="20">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+            <!-- Artwork + Transport wrapped in a Grid so the waiting overlay
+                 can dim just these two cards without covering Volume or the
+                 Settings / Logs buttons below. -->
+            <Grid>
+                <StackPanel Spacing="16">
 
-                    <!-- Album art (rounded square, accent colour fill when no art) -->
-                    <Border
-                        Grid.Column="0"
-                        Width="112" Height="112"
-                        CornerRadius="8"
-                        Background="{ThemeResource SystemAccentColorDark1}">
-                        <Image
-                            x:Name="AlbumArtImage"
-                            Stretch="UniformToFill" />
+                    <!-- ═══ 1 · NOW PLAYING HEADER ═══════════════════════════ -->
+                    <Border Style="{StaticResource CardStyle}">
+                        <Grid ColumnSpacing="20">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Album art (rounded square, accent colour fill when no art) -->
+                            <Border
+                                Grid.Column="0"
+                                Width="112" Height="112"
+                                CornerRadius="8"
+                                Background="{ThemeResource SystemAccentColorDark1}">
+                                <Image
+                                    x:Name="AlbumArtImage"
+                                    Stretch="UniformToFill" />
+                            </Border>
+
+                            <!-- Track metadata -->
+                            <StackPanel
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Spacing="6">
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.Title, Mode=OneWay, FallbackValue='Nothing playing'}"
+                                    Style="{ThemeResource TitleTextBlockStyle}"
+                                    TextTrimming="CharacterEllipsis"
+                                    MaxLines="2" />
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.Artist, Mode=OneWay}"
+                                    Style="{ThemeResource SubtitleTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.Album, Mode=OneWay}"
+                                    Style="{ThemeResource BodyTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                            </StackPanel>
+                        </Grid>
                     </Border>
 
-                    <!-- Track metadata -->
-                    <StackPanel
-                        Grid.Column="1"
-                        VerticalAlignment="Center"
-                        Spacing="6">
-                        <TextBlock
-                            Text="{x:Bind ViewModel.Title, Mode=OneWay, FallbackValue='Nothing playing'}"
-                            Style="{ThemeResource TitleTextBlockStyle}"
-                            TextTrimming="CharacterEllipsis"
-                            MaxLines="2" />
-                        <TextBlock
-                            Text="{x:Bind ViewModel.Artist, Mode=OneWay}"
-                            Style="{ThemeResource SubtitleTextBlockStyle}"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock
-                            Text="{x:Bind ViewModel.Album, Mode=OneWay}"
-                            Style="{ThemeResource BodyTextBlockStyle}"
-                            Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                    </StackPanel>
-                </Grid>
-            </Border>
+                    <!-- ═══ 2 · TRANSPORT ════════════════════════════════════ -->
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel Spacing="12" HorizontalAlignment="Center">
 
-            <!-- ═══ 2 · TRANSPORT ════════════════════════════════════════════ -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="12" HorizontalAlignment="Center">
+                            <!-- Time stamps flanking the seek bar -->
+                            <Grid>
+                                <TextBlock
+                                    HorizontalAlignment="Left"
+                                    Style="{ThemeResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="{x:Bind ViewModel.PositionSeconds,
+                                                  Converter={StaticResource SecondsToTime},
+                                                  Mode=OneWay}" />
+                                <TextBlock
+                                    HorizontalAlignment="Right"
+                                    Style="{ThemeResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="{x:Bind ViewModel.DurationSeconds,
+                                                  Converter={StaticResource SecondsToTime},
+                                                  Mode=OneWay}" />
+                            </Grid>
 
-                    <!-- Time stamps flanking the seek bar -->
-                    <Grid>
-                        <TextBlock
-                            HorizontalAlignment="Left"
-                            Style="{ThemeResource CaptionTextBlockStyle}"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="{x:Bind ViewModel.PositionSeconds,
-                                          Converter={StaticResource SecondsToTime},
-                                          Mode=OneWay}" />
-                        <TextBlock
-                            HorizontalAlignment="Right"
-                            Style="{ThemeResource CaptionTextBlockStyle}"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="{x:Bind ViewModel.DurationSeconds,
-                                          Converter={StaticResource SecondsToTime},
-                                          Mode=OneWay}" />
-                    </Grid>
+                            <!--
+                                Seek bar — value is updated from the server; dragging sends a seek
+                                command once the pointer is released.  The underlying protocol does
+                                not yet define a seek message, so SeekCommand is a stub.
+                            -->
+                            <Slider
+                                x:Name="SeekBar"
+                                Minimum="0"
+                                Maximum="{x:Bind ViewModel.DurationSeconds, Mode=OneWay}"
+                                Value="{x:Bind ViewModel.PositionSeconds, Mode=OneWay}"
+                                IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
+                                MinWidth="360"
+                                PointerCaptureLost="SeekBar_PointerCaptureLost" />
 
-                    <!--
-                        Seek bar — value is updated from the server; dragging sends a seek
-                        command once the pointer is released.  The underlying protocol does
-                        not yet define a seek message, so SeekCommand is a stub.
-                    -->
-                    <Slider
-                        x:Name="SeekBar"
-                        Minimum="0"
-                        Maximum="{x:Bind ViewModel.DurationSeconds, Mode=OneWay}"
-                        Value="{x:Bind ViewModel.PositionSeconds, Mode=OneWay}"
-                        IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
-                        MinWidth="360"
-                        PointerCaptureLost="SeekBar_PointerCaptureLost" />
+                            <!-- Playback buttons -->
+                            <StackPanel
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                HorizontalAlignment="Center">
 
-                    <!-- Playback buttons -->
-                    <StackPanel
-                        Orientation="Horizontal"
-                        Spacing="8"
-                        HorizontalAlignment="Center">
+                                <!-- Skip forward -->
+                                <Button
+                                    Width="44" Height="44"
+                                    CornerRadius="22"
+                                    ToolTipService.ToolTip="Skip"
+                                    IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
+                                    Command="{x:Bind ViewModel.SkipCommand}">
+                                    <FontIcon Glyph="&#xE893;" FontSize="16" />
+                                </Button>
 
-                        <!-- Skip forward -->
-                        <Button
-                            Width="44" Height="44"
-                            CornerRadius="22"
-                            ToolTipService.ToolTip="Skip"
-                            IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
-                            Command="{x:Bind ViewModel.SkipCommand}">
-                            <FontIcon Glyph="&#xE893;" FontSize="16" />
-                        </Button>
+                                <!-- Play / Pause (accent-coloured circle) -->
+                                <Button
+                                    Width="56" Height="56"
+                                    CornerRadius="28"
+                                    Style="{ThemeResource AccentButtonStyle}"
+                                    IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
+                                    Command="{x:Bind ViewModel.PlayPauseCommand}">
+                                    <FontIcon
+                                        Glyph="{x:Bind ViewModel.PlayPauseGlyph, Mode=OneWay}"
+                                        FontSize="22" />
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
 
-                        <!-- Play / Pause (accent-coloured circle) -->
-                        <Button
-                            Width="56" Height="56"
-                            CornerRadius="28"
-                            Style="{ThemeResource AccentButtonStyle}"
-                            IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
-                            Command="{x:Bind ViewModel.PlayPauseCommand}">
-                            <FontIcon
-                                Glyph="{x:Bind ViewModel.PlayPauseGlyph, Mode=OneWay}"
-                                FontSize="22" />
-                        </Button>
-                    </StackPanel>
                 </StackPanel>
-            </Border>
+
+                <!-- ═══ WAITING OVERLAY ══════════════════════════════════════
+                     Dims just the artwork and transport cards when no session
+                     is active. Volume and the Settings / Logs buttons below
+                     remain fully accessible.                                 -->
+                <Grid Visibility="{x:Bind WaitingVisibility(ViewModel.IsNotConnected), Mode=OneWay}">
+                    <Rectangle Fill="#CC000000" IsHitTestVisible="False" />
+                    <Border
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="24,20"
+                        MinWidth="220">
+                        <StackPanel Spacing="10" HorizontalAlignment="Center">
+                            <ProgressRing
+                                IsActive="True"
+                                Width="28" Height="28"
+                                HorizontalAlignment="Center" />
+                            <TextBlock
+                                Text="{x:Bind ViewModel.ConnectionStatus, Mode=OneWay}"
+                                HorizontalAlignment="Center"
+                                Style="{ThemeResource BodyTextBlockStyle}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+            </Grid>
 
             <!-- ═══ 3 · VOLUME ═══════════════════════════════════════════════ -->
             <Border Style="{StaticResource CardStyle}">
