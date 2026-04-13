@@ -44,6 +44,9 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     public PlaybackState State => _state;
 
+    /// <summary>Number of frames currently held in the jitter buffer.</summary>
+    public int BufferedFrameCount => _buffer.Count;
+
     /// <summary>
     /// Raised when the playback state or buffer occupancy changes meaningfully.
     /// Subscribers receive the current <see cref="PlaybackState"/> and the number
