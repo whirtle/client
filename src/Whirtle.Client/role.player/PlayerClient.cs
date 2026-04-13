@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Steve Peterson
 // SPDX-License-Identifier: MIT
 
+using Serilog;
 using Whirtle.Client.Codec;
 using Whirtle.Client.Playback;
 using Whirtle.Client.Protocol;
@@ -173,7 +174,11 @@ public sealed class PlayerClient : IAsyncDisposable
                 await HandleCommandAsync(cmd, cancellationToken).ConfigureAwait(false);
                 break;
 
-            case AudioChunkFrame chunk when _streamActive && _decoder is not null:
+            case AudioChunkFrame when !_streamActive || _decoder is null:
+                Log.Debug("Audio chunk received but no active stream; dropping");
+                break;
+
+            case AudioChunkFrame chunk:
                 HandleAudioChunk(chunk);
                 break;
         }
