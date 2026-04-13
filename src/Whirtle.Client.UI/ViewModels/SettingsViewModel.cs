@@ -53,6 +53,20 @@ public sealed partial class SettingsViewModel : ObservableObject
         Save();
     }
 
+    // ── Volume / mute (global, persisted) ─────────────────────────────────
+    private double _volume  = 0.8;
+    private bool   _isMuted = false;
+
+    public double Volume  => _volume;
+    public bool   IsMuted => _isMuted;
+
+    public void SaveVolume(double volume, bool isMuted)
+    {
+        _volume  = volume;
+        _isMuted = isMuted;
+        Save();
+    }
+
     // ── Persistent settings ────────────────────────────────────────────────
 
     [ObservableProperty] private string _clientName = Environment.MachineName;
@@ -224,6 +238,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             _telemetryConsent       = saved.TelemetryConsent;
             _windowX                = saved.WindowX;
             _windowY                = saved.WindowY;
+            _volume                 = saved.Volume  ?? 0.8;
+            _isMuted                = saved.IsMuted ?? false;
 
             if (saved.SavedServers is { } servers)
             {
@@ -341,7 +357,9 @@ public sealed partial class SettingsViewModel : ObservableObject
                 _windowX,
                 _windowY,
                 TermsAccepted,
-                TelemetryConsent);
+                TelemetryConsent,
+                _volume,
+                _isMuted);
 
             var json    = JsonSerializer.Serialize(data, JsonOptions);
             var tmpPath = SettingsPath + ".tmp";
@@ -370,8 +388,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         ConnectionMode                     ConnectionMode,
         string                             LogLevel,
         List<PersistedServer>?             SavedServers,
-        int?                               WindowX         = null,
-        int?                               WindowY         = null,
-        bool                               TermsAccepted   = false,
-        bool                               TelemetryConsent = false);
+        int?                               WindowX          = null,
+        int?                               WindowY          = null,
+        bool                               TermsAccepted    = false,
+        bool                               TelemetryConsent = false,
+        double?                            Volume           = null,
+        bool?                              IsMuted          = null);
 }

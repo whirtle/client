@@ -11,6 +11,8 @@ internal sealed class FakeClientWebSocket : IClientWebSocket
     private readonly record struct Queued(byte[]? Data, WebSocketMessageType Type, Exception? Error);
     private readonly Channel<Queued> _incoming = Channel.CreateUnbounded<Queued>();
 
+    private TaskCompletionSource? _connectBlock;
+
     public WebSocketState State => _state;
 
     public void EnqueueMessage(byte[] data, WebSocketMessageType type = WebSocketMessageType.Binary)
@@ -23,10 +25,20 @@ internal sealed class FakeClientWebSocket : IClientWebSocket
     public void EnqueueException(Exception ex)
         => _incoming.Writer.TryWrite(new Queued(null, WebSocketMessageType.Binary, ex));
 
-    public Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
+    /// <summary>
+    /// Makes the next <see cref="ConnectAsync"/> call block until the caller's
+    /// cancellation token is cancelled or <see cref="UnblockConnect"/> is called.
+    /// </summary>
+    public void BlockConnect() => _connectBlock = new TaskCompletionSource();
+
+    /// <summary>Unblocks a previously blocked <see cref="ConnectAsync"/>.</summary>
+    public void UnblockConnect() => _connectBlock?.TrySetResult();
+
+    public async Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
     {
+        if (_connectBlock is { } block)
+            await block.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         _state = WebSocketState.Open;
-        return Task.CompletedTask;
     }
 
     public ValueTask SendAsync(ReadOnlyMemory<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)

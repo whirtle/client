@@ -109,6 +109,14 @@ public sealed partial class MainWindow : Window
         }
         else
         {
+            // Dispose Mica before the XAML compositor tears down; otherwise the
+            // MicaController tries to release its DirectComposition target after
+            // the backing objects are gone, causing an access violation (0xc0000005).
+            _micaController?.Dispose();
+            _micaController = null;
+
+            App.Current.NowPlayingViewModel.CancelBackgroundWork();
+
             Application.Current.Exit();
         }
     }
