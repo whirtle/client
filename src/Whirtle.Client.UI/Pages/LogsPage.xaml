@@ -83,7 +83,8 @@
                             FontFamily="Consolas"
                             TextWrapping="NoWrap"
                             TextTrimming="CharacterEllipsis"
-                            VerticalAlignment="Center" />
+                            VerticalAlignment="Center"
+                            PointerEntered="OnMessagePointerEntered" />
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
