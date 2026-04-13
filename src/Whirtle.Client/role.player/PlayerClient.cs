@@ -112,6 +112,23 @@ public sealed class PlayerClient : IAsyncDisposable
             cancellationToken);
 
     /// <summary>
+    /// Sends the initial <c>client/state</c> and <c>stream/request-format</c>
+    /// messages that must be issued once after the handshake completes.
+    /// </summary>
+    public async Task SendInitialRequestsAsync(CancellationToken cancellationToken = default)
+    {
+        await SendStateAsync(cancellationToken).ConfigureAwait(false);
+        await _protocol.SendAsync(
+            new StreamRequestFormatMessage(
+                Player: new StreamRequestFormatPlayer(
+                    Codec:      "opus",
+                    Channels:   2,
+                    SampleRate: 48_000,
+                    BitDepth:   24)),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Sends a <c>stream/request-format</c> message to ask the server to
     /// switch to a different encoding (e.g. to adapt to network conditions).
     /// </summary>

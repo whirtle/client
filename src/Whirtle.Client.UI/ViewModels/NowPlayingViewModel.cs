@@ -252,6 +252,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _syncer      = new ClockSynchronizer(_protocol);
             _controller  = new ControllerClient(_protocol);
             _player      = new PlayerClient(_protocol, SelectedDevice?.Id);
+            await _player.SendInitialRequestsAsync(token);
             IsConnected  = true;
             ConnectionStatus = $"Connected — {endpoint.Host}:{endpoint.Port}";
 
@@ -531,6 +532,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _syncer      = new ClockSynchronizer(protocol);
         _controller  = new ControllerClient(protocol);
         _player      = new PlayerClient(protocol, SelectedDevice?.Id);
+        await _player.SendInitialRequestsAsync(serverModeCancellation);
         _connectionCts  = new CancellationTokenSource();
 
         // Start background tasks — receive loop routes server/time to the syncer.
