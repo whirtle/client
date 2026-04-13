@@ -11,6 +11,7 @@ using Microsoft.UI.Windowing;
 using Windows.Graphics;
 using WinRT;
 using Whirtle.Client.Discovery;
+using Whirtle.Client.State;
 using Whirtle.Client.UI.Pages;
 using Whirtle.Client.UI.ViewModels;
 
@@ -29,6 +30,22 @@ public sealed partial class MainWindow : Window
     private Flyout? _serverPickerFlyout;
 
     public NowPlayingViewModel NowPlayingViewModel => App.Current.NowPlayingViewModel;
+    public AppUiStateService   UiStateService      => App.Current.UiStateService;
+
+    // ── Scrim visibility functions (used by x:Bind in XAML) ──────────────────
+
+    public Visibility StatusBarVisibility(AppUiState state)
+        => state != AppUiState.FirstRun ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility WaitingScrimVisibility(AppUiState state)
+        => state == AppUiState.Waiting ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility FreScrimVisibility(AppUiState state)
+        => state == AppUiState.FirstRun ? Visibility.Visible : Visibility.Collapsed;
+
+    // Window references owned by MainWindow for the scrims.
+    private SettingsWindow? _settingsWindow;
+    private LogsWindow?     _logsWindow;
 
     public MainWindow()
     {
@@ -51,6 +68,8 @@ public sealed partial class MainWindow : Window
         RestoreWindowPosition();
 
         ContentFrame.Navigate(typeof(NowPlayingPage));
+
+        LicenseTextBlock.Text = LoadLicenseText();
 
         AppWindow.Closing += AppWindow_Closing;
 
@@ -344,6 +363,78 @@ public sealed partial class MainWindow : Window
 
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             NowPlayingViewModel.RemoveSavedServer(saved);
+    }
+
+    // ── First-run scrim ────────────────────────────────────────────────────
+
+    private static string LoadLicenseText()
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "LICENSE");
+            if (File.Exists(path))
+                return File.ReadAllText(path);
+        }
+        catch { /* best-effort */ }
+
+        // Fallback: standard GPLv3 program notice.
+        return
+            "Whirtle is free software: you can redistribute it and/or modify it " +
+            "under the terms of the GNU General Public License as published by the " +
+            "Free Software Foundation, either version 3 of the License, or (at your " +
+            "option) any later version.\n\n" +
+            "This program is distributed in the hope that it will be useful, but " +
+            "WITHOUT ANY WARRANTY; without even the implied warranty of " +
+            "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU " +
+            "General Public License for more details.\n\n" +
+            "You should have received a copy of the GNU General Public License " +
+            "along with this program. If not, see https://www.gnu.org/licenses/.";
+    }
+
+    private void TermsCheckBox_Changed(object sender, RoutedEventArgs e)
+        => FreAcceptButton.IsEnabled = TermsCheckBox.IsChecked == true;
+
+    private void FreAcceptButton_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = App.Current.SettingsViewModel;
+        settings.TelemetryConsent = TelemetryCheckBox.IsChecked == true;
+        settings.TermsAccepted    = true; // triggers CommitNow() and AppUiState transition
+    }
+
+    private void FreDeclineButton_Click(object sender, RoutedEventArgs e)
+        => Application.Current.Exit();
+
+    // ── Waiting scrim ───────────────────────────────────────────────────────
+
+    private bool _waitingVolumeChanging;
+
+    private void WaitingVolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_waitingVolumeChanging) return;
+        _waitingVolumeChanging = true;
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            await NowPlayingViewModel.SetVolumeCommand.ExecuteAsync(e.NewValue / 100.0);
+            _waitingVolumeChanging = false;
+        });
+    }
+
+    private void WaitingSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+        _settingsWindow = new SettingsWindow();
+        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Activate();
+    }
+
+    private void WaitingLogsButton_Click(object sender, RoutedEventArgs e)
+    {
+        _logsWindow ??= new LogsWindow();
+        _logsWindow.Activate();
     }
 
     // ── Navigation ─────────────────────────────────────────────────────────
