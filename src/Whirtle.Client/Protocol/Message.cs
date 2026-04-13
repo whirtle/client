@@ -279,6 +279,12 @@ public sealed record ArtworkStreamStartChannel(
 public sealed record StreamClearMessage : Message;
 
 /// <summary>
+/// Sent by the server when the stream ends (e.g. playback stopped or track list exhausted).
+/// Wire type: <c>stream/end</c>
+/// </summary>
+public sealed record StreamEndMessage : Message;
+
+/// <summary>
 /// Returned by <see cref="MessageSerializer"/> when the wire <c>type</c> is not
 /// recognised, allowing callers to ignore unknown messages gracefully rather than
 /// throwing.

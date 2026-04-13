@@ -43,6 +43,7 @@ internal sealed class MessageSerializer
         ["stream/request-format"] = typeof(StreamRequestFormatMessage),
         ["stream/start"]          = typeof(StreamStartMessage),
         ["stream/clear"]          = typeof(StreamClearMessage),
+        ["stream/end"]            = typeof(StreamEndMessage),
     };
 
     // Maps CLR types → wire type strings (for serialisation).
