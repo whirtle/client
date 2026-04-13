@@ -195,12 +195,27 @@ Title="Whirtle">
                     <ScrollViewer
                         MaxHeight="180"
                         VerticalScrollBarVisibility="Auto">
-                        <TextBlock
-                            x:Name="LicenseTextBlock"
-                            Style="{ThemeResource CaptionTextBlockStyle}"
+                        <RichTextBlock
+                            FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             TextWrapping="Wrap"
-                            IsTextSelectionEnabled="True" />
+                            IsTextSelectionEnabled="True">
+                            <Paragraph>
+                                Whirtle is free software: you can redistribute it and/or
+                                modify it under the terms of the GNU General Public License
+                                as published by the Free Software Foundation, either version
+                                3 of the License, or (at your option) any later version.
+                            </Paragraph>
+                            <Paragraph Margin="0,8,0,0">
+                                This program is distributed in the hope that it will be
+                                useful, but WITHOUT ANY WARRANTY; without even the implied
+                                warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+                                PURPOSE. See the GNU General Public License for more details.
+                            </Paragraph>
+                            <Paragraph Margin="0,8,0,0">
+                                <Run>The full license is available at </Run><Hyperlink NavigateUri="https://github.com/whirtle/client/blob/main/LICENSE">github.com/whirtle/client/blob/main/LICENSE</Hyperlink><Run>.</Run>
+                            </Paragraph>
+                        </RichTextBlock>
                     </ScrollViewer>
 
                     <!-- Consent checkboxes -->
