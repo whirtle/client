@@ -127,12 +127,13 @@ public class ClockSynchronizerTests
             interval: TimeSpan.FromMilliseconds(10),
             cancellationToken: cts.Token);
 
-        // Drive two sync rounds.
+        // Drive two sync rounds: wait until a pending sync is registered, then deliver.
         for (var round = 0; round < 2; round++)
         {
-            await Task.Yield(); // let RunAsync reach SyncOnceAsync and set _pending
-            syncer.Deliver(new ServerTimeMessage(0, 100));
-            await Task.Delay(20); // wait past the inter-round interval
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            while (!syncer.Deliver(new ServerTimeMessage(0, 100)))
+                await Task.Delay(1, deadline.Token);
+            await Task.Delay(20); // wait past the inter-round interval so RunAsync loops
         }
 
         cts.Cancel();

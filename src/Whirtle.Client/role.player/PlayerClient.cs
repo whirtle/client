@@ -163,7 +163,8 @@ public sealed class PlayerClient : IAsyncDisposable
                 break;
 
             case ProtocolFrame { Message: StreamClearMessage }:
-                _streamActive = false;
+                // Spec: discard buffered audio and continue accepting new chunks.
+                // _streamActive intentionally stays true — the stream is still live.
                 _playbackEngine?.ClearBuffer();
                 break;
 
