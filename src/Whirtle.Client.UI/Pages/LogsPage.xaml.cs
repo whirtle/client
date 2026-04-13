@@ -116,6 +116,12 @@ public sealed partial class LogsPage : Page
         await FileIO.WriteTextAsync(file, SystemInfo.BuildHeader() + '\n' + log);
     }
 
+    private void OnMessagePointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is TextBlock tb)
+            ToolTipService.SetToolTip(tb, tb.IsTextTrimmed ? tb.Text : null);
+    }
+
     private static void SetClipboardText(string text)
     {
         var package = new DataPackage();
