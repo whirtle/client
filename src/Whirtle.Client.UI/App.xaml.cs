@@ -70,6 +70,20 @@ public partial class App : Application
                 _uiStateService.Update(_settingsViewModel!.TermsAccepted, _nowPlayingViewModel.IsConnected);
         };
 
+        // Start networking now if we're past the first-run gate; otherwise wait
+        // for the FRE to complete before advertising or accepting connections.
+        if (_uiStateService.CurrentState != AppUiState.FirstRun)
+            MaybeStartServerInitiatedMode();
+
+        _uiStateService.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AppUiStateService.CurrentState)
+                && _uiStateService.CurrentState == AppUiState.Waiting)
+            {
+                MaybeStartServerInitiatedMode();
+            }
+        };
+
         _mainWindow = new MainWindow();
         _mainWindow.Closed += (_, _) =>
         {
@@ -86,6 +100,12 @@ public partial class App : Application
             _ = CheckFirewallAsync();
         }
         _mainWindow.Activated += OnFirstActivated;
+    }
+
+    private void MaybeStartServerInitiatedMode()
+    {
+        if (_settingsViewModel!.ConnectionMode == ConnectionMode.ServerInitiated)
+            _nowPlayingViewModel!.StartServerInitiatedMode();
     }
 
     private async Task CheckFirewallAsync()
