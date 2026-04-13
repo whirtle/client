@@ -24,7 +24,7 @@ public sealed partial class LogsWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(DragBar);
 
-        AppWindow.Resize(new SizeInt32(900, 600));
+        RestoreWindowBounds();
         TryApplyMica();
 
         // Closing the logs window should hide it, not destroy it.
@@ -33,9 +33,27 @@ public sealed partial class LogsWindow : Window
         AppWindow.Closing += (_, args) =>
         {
             args.Cancel = true;
+            SaveWindowBounds();
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             NativeWindow.ShowWindow(hwnd, NativeWindow.SW_HIDE);
         };
+    }
+
+    private void RestoreWindowBounds()
+    {
+        var settings = App.Current.SettingsViewModel;
+        var w = settings.LogsWindowWidth  ?? 900;
+        var h = settings.LogsWindowHeight ?? 600;
+        AppWindow.Resize(new SizeInt32(w, h));
+        if (settings.LogsWindowX is { } x && settings.LogsWindowY is { } y)
+            AppWindow.Move(new PointInt32(x, y));
+    }
+
+    private void SaveWindowBounds()
+    {
+        var pos  = AppWindow.Position;
+        var size = AppWindow.Size;
+        App.Current.SettingsViewModel.SaveLogsWindowBounds(pos.X, pos.Y, size.Width, size.Height);
     }
 
     private void TryApplyMica()
