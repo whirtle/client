@@ -181,6 +181,8 @@ client/
 ## C# style notes
 Use _ as leading character on instance variables.
 
+Take particular care to handle `IDisposable` properly: implement `Dispose()` on any class that owns disposable resources, call `Dispose()` (or use `using`) on all disposable objects, and avoid leaking resources such as sockets, streams, or audio handles.
+
 ## Git Workflow
 
 - Development happens on feature branches; merge to `main` via pull request.
