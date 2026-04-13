@@ -212,7 +212,7 @@ Title="Whirtle">
                             Unchecked="TermsCheckBox_Changed" />
                         <CheckBox
                             x:Name="TelemetryCheckBox"
-                            Content="Send anonymous usage data to help improve Whirtle" />
+                            Content="Help improve the reliability and performance of Whirtle by sending anonymous telemetry." />
                     </StackPanel>
 
                     <!-- Accept / Decline -->
