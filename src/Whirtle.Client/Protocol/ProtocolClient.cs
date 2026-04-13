@@ -3,6 +3,7 @@
 
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using Serilog;
 using Whirtle.Client.Transport;
 
 namespace Whirtle.Client.Protocol;
@@ -59,6 +60,7 @@ public sealed class ProtocolClient : IAsyncDisposable
 
     public async Task SendAsync(Message message, CancellationToken cancellationToken = default)
     {
+        Log.Debug("Send {Type} {Message}", _serializer.GetWireType(message), message);
         var data = _serializer.Serialize(message);
         await _transport.SendAsync(data, cancellationToken);
     }
@@ -107,7 +109,9 @@ public sealed class ProtocolClient : IAsyncDisposable
 
             if (data[0] == (byte)'{')
             {
-                yield return new ProtocolFrame(_serializer.Deserialize(data));
+                var msg = _serializer.Deserialize(data);
+                Log.Debug("Recv {Type} {Message}", _serializer.GetWireType(msg), msg);
+                yield return new ProtocolFrame(msg);
             }
             else
             {
@@ -120,6 +124,8 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long  timestamp = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var   imageData = payload[8..];
+                    Log.Debug("Recv artwork channel={Channel} timestamp={Timestamp} bytes={Bytes}",
+                        typeId - 8, timestamp, imageData.Length);
                     yield return new ArtworkFrame(
                         timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
                 }
@@ -127,6 +133,7 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long timestamp   = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var  encodedData = payload[8..];
+                    Log.Debug("Recv audio-chunk timestamp={Timestamp} bytes={Bytes}", timestamp, encodedData.Length);
                     yield return new AudioChunkFrame(timestamp, encodedData);
                 }
             }
@@ -141,7 +148,9 @@ public sealed class ProtocolClient : IAsyncDisposable
         await foreach (var data in _transport.ReceiveAsync(cancellationToken))
         {
             if (data.Length == 0 || data[0] != (byte)'{') continue;
-            yield return _serializer.Deserialize(data);
+            var msg = _serializer.Deserialize(data);
+            Log.Debug("Recv {Type} {Message}", _serializer.GetWireType(msg), msg);
+            yield return msg;
         }
     }
 
