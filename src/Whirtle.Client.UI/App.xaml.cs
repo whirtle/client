@@ -254,7 +254,13 @@ public partial class App : Application
 
         UnhandledException += (_, e) =>
         {
-            Log.Fatal(e.Exception, "Unhandled WinUI exception: {Message}", e.Message);
+            var ex    = e.Exception;
+            var hres  = (ex as System.Runtime.InteropServices.COMException)?.HResult ?? 0;
+            Log.Fatal(ex,
+                "Unhandled WinUI exception [{Type}] HRESULT=0x{HResult:X8}: {Message}",
+                ex?.GetType().FullName ?? "(null)",
+                unchecked((uint)hres),
+                e.Message);
             e.Handled = true;   // prevent crash; log and keep running where possible
             AppLogger.CloseAndFlush();
         };
