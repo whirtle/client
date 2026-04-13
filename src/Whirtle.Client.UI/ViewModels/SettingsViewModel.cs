@@ -76,7 +76,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AudioFormatIndex))]
-    private AudioFormat _currentDeviceFormat = AudioFormat.Opus;
+    private AudioFormat _currentDeviceFormat = AudioFormat.Flac;
 
     [ObservableProperty] private int _currentDeviceStaticDelayMs = 0;
 
@@ -124,7 +124,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     // ── Static option lists ────────────────────────────────────────────────
 
     public IReadOnlyList<string> AudioFormatOptions { get; } =
-        ["Opus (recommended)", "FLAC (lossless)", "PCM (uncompressed)"];
+        ["FLAC (lossless, recommended)", "Opus", "PCM (uncompressed)"];
 
     public IReadOnlyList<string> LogLevelOptions { get; } =
         ["Verbose", "Debug", "Information", "Warning", "Error"];
@@ -135,14 +135,14 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         get => _currentDeviceFormat switch
         {
-            AudioFormat.Opus => 0,
-            AudioFormat.Flac => 1,
+            AudioFormat.Flac => 0,
+            AudioFormat.Opus => 1,
             _                => 2,
         };
         set => CurrentDeviceFormat = value switch
         {
-            0 => AudioFormat.Opus,
-            1 => AudioFormat.Flac,
+            0 => AudioFormat.Flac,
+            1 => AudioFormat.Opus,
             _ => AudioFormat.Pcm,
         };
     }
@@ -398,7 +398,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public sealed class DeviceSettings
     {
-        public AudioFormat PreferredFormat { get; set; } = AudioFormat.Opus;
+        public AudioFormat PreferredFormat { get; set; } = AudioFormat.Flac;
         public int         StaticDelayMs   { get; set; } = 0;
     }
 

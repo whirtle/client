@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Serilog;
 using Whirtle.Client.Audio;
 using Whirtle.Client.Clock;
+using Whirtle.Client.Codec;
 using Whirtle.Client.Discovery;
 using Whirtle.Client.Protocol;
 using Whirtle.Client.Role;
@@ -285,6 +286,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _controller  = new ControllerClient(_protocol);
             _player      = new PlayerClient(_protocol, SelectedDevice?.Id);
             await _player.SendInitialRequestsAsync(
+                _settings.CurrentDeviceFormat,
                 SelectedDevice?.MaxSampleRate ?? 48_000,
                 SelectedDevice?.MaxChannels   ?? 2,
                 SelectedDevice?.MaxBitDepth   ?? 24,
@@ -649,6 +651,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _controller  = new ControllerClient(protocol);
         _player      = new PlayerClient(protocol, SelectedDevice?.Id);
         await _player.SendInitialRequestsAsync(
+            PreferredCodecString(),
             SelectedDevice?.MaxSampleRate ?? 48_000,
             SelectedDevice?.MaxChannels   ?? 2,
             SelectedDevice?.MaxBitDepth   ?? 24,

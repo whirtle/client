@@ -117,11 +117,13 @@ public sealed class PlayerClient : IAsyncDisposable
     /// Sends the initial <c>client/state</c> and <c>stream/request-format</c>
     /// messages that must be issued once after the handshake completes.
     /// </summary>
+    /// <param name="preferredFormat">Preferred audio format to request from the server.</param>
     /// <param name="sampleRate">Preferred sample rate derived from the output device's max capability.</param>
     /// <param name="channels">Preferred channel count derived from the output device's max capability.</param>
     /// <param name="bitDepth">Preferred bit depth derived from the output device's max capability.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     public async Task SendInitialRequestsAsync(
+        AudioFormat       preferredFormat   = AudioFormat.Flac,
         int               sampleRate        = 48_000,
         int               channels          = 2,
         int               bitDepth          = 24,
@@ -131,7 +133,7 @@ public sealed class PlayerClient : IAsyncDisposable
         await _protocol.SendAsync(
             new StreamRequestFormatMessage(
                 Player: new StreamRequestFormatPlayer(
-                    Codec:      "opus",
+                    Codec:      preferredFormat.ToCodecString(),
                     Channels:   channels,
                     SampleRate: sampleRate,
                     BitDepth:   bitDepth)),
@@ -212,12 +214,7 @@ public sealed class PlayerClient : IAsyncDisposable
 
         _decoder?.Dispose();
 
-        var format = player.Codec.ToLowerInvariant() switch
-        {
-            "opus" => AudioFormat.Opus,
-            "flac" => AudioFormat.Flac,
-            _      => AudioFormat.Pcm,
-        };
+        var format = AudioFormatExtensions.FromCodecString(player.Codec);
 
         _decoder = AudioDecoderFactory.Create(format, player.SampleRate, player.Channels);
 
