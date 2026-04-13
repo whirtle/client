@@ -209,6 +209,28 @@ public sealed partial class SettingsViewModel : ObservableObject
         SavedServers.Remove(server);
         Save();
     }
+
+    /// <summary>
+    /// Updates the cached <see cref="PersistedServer.ServerId"/> and
+    /// <see cref="PersistedServer.ServerName"/> for the saved entry that matches
+    /// this server. Matches by <paramref name="serverId"/> first (stable across IP
+    /// changes), then falls back to host+port. No-ops if no saved entry matches.
+    /// </summary>
+    public void UpdateServerInfo(string? serverId, string? serverName, string host, int port)
+    {
+        if (string.IsNullOrEmpty(serverId)) return;
+
+        var existing = SavedServers.FirstOrDefault(s => s.ServerId == serverId)
+                    ?? SavedServers.FirstOrDefault(s => s.Host == host && s.Port == port);
+        if (existing is null) return;
+
+        var updated = existing with { ServerId = serverId, ServerName = serverName };
+        if (updated == existing) return;
+
+        var idx = SavedServers.IndexOf(existing);
+        SavedServers[idx] = updated;
+        Save();
+    }
     // ── Helpers ────────────────────────────────────────────────────────────
 
     private DeviceSettings GetDeviceSettings(string deviceId)
