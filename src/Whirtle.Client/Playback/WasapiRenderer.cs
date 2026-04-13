@@ -18,6 +18,7 @@ internal sealed class WasapiRenderer : IWasapiRenderer
     private readonly BufferedWaveProvider _provider;
     private readonly byte[]               _scratch;
     private volatile bool                 _muted;
+    private volatile float                _volume = 1.0f;
 
     public int  SampleRate          { get; }
     public int  Channels            { get; }
@@ -71,18 +72,21 @@ internal sealed class WasapiRenderer : IWasapiRenderer
 
     public void SetMuted(bool muted) => _muted = muted;
 
+    public void SetVolume(float volume) => _volume = Math.Clamp(volume, 0f, 1f);
+
     public void Write(ReadOnlySpan<short> samples)
     {
         if (_muted || samples.IsEmpty)
             return;
 
-        // Convert int16 PCM → float32 PCM in-place via scratch buffer
-        int floatCount = samples.Length;
+        // Convert int16 PCM → float32 PCM in-place via scratch buffer, applying volume scaling.
+        float vol       = _volume;
+        int   floatCount = samples.Length;
         Span<float> floats = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(
             _scratch.AsSpan(0, floatCount * sizeof(float)));
 
         for (int i = 0; i < floatCount; i++)
-            floats[i] = samples[i] / 32768f;
+            floats[i] = samples[i] / 32768f * vol;
 
         _provider.AddSamples(_scratch, 0, floatCount * sizeof(float));
     }

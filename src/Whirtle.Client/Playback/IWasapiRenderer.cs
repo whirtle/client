@@ -33,4 +33,7 @@ internal interface IWasapiRenderer : IDisposable
 
     /// <summary>Mutes or unmutes the output without stopping the stream.</summary>
     void SetMuted(bool muted);
+
+    /// <summary>Sets the output volume. <paramref name="volume"/> is a linear scalar in [0.0, 1.0].</summary>
+    void SetVolume(float volume);
 }

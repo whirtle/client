@@ -9,13 +9,15 @@ internal sealed class FakeWasapiRenderer : IWasapiRenderer
     public int  LatencyMs           => 100;
     public int  BufferCapacityBytes => SampleRate * Channels * sizeof(float);
     public bool IsRunning           { get; private set; }
-    public bool Muted      { get; private set; }
+    public bool  Muted  { get; private set; }
+    public float Volume { get; private set; } = 1.0f;
 
     public List<short[]> Written { get; } = [];
 
     public void Start()  => IsRunning = true;
     public void Stop()   => IsRunning = false;
-    public void SetMuted(bool muted) => Muted = muted;
+    public void SetMuted(bool muted)     => Muted  = muted;
+    public void SetVolume(float volume)  => Volume = volume;
 
     public void Write(ReadOnlySpan<short> samples)
     {
