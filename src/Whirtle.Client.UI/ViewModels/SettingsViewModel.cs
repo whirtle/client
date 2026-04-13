@@ -30,7 +30,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     private record SettingsSnapshot(
         string ClientName, string ClientId, string PreferredAudioDeviceId,
         Dictionary<string, DeviceSettings> DeviceSettings,
-        ConnectionMode ConnectionMode, string LogLevel);
+        ConnectionMode ConnectionMode, string LogLevel,
+        bool TermsAccepted, bool TelemetryConsent);
 
     private SettingsSnapshot? _snapshot;
     private bool _suppressSave;
@@ -70,9 +71,17 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (value < 0) CurrentDeviceStaticDelayMs = 0;
     }
 
+    partial void OnTermsAcceptedChanged(bool value)
+    {
+        if (value) CommitNow();
+    }
+
     [ObservableProperty] private ConnectionMode _connectionMode = ConnectionMode.ServerInitiated;
 
     [ObservableProperty] private string _logLevel = "Information";
+
+    [ObservableProperty] private bool _termsAccepted;
+    [ObservableProperty] private bool _telemetryConsent;
 
     // ── Non-persisted: populated at runtime ───────────────────────────────
 
@@ -130,6 +139,22 @@ public sealed partial class SettingsViewModel : ObservableObject
         set => ConnectionMode  = value == 0
             ? ConnectionMode.ServerInitiated
             : ConnectionMode.ClientInitiated;
+    }
+
+    // ── Clean start ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Deletes the persisted settings file. Call before constructing
+    /// <see cref="SettingsViewModel"/> to force a clean first-run state.
+    /// </summary>
+    public static void DeleteSettingsFile()
+    {
+        try
+        {
+            if (File.Exists(SettingsPath))
+                File.Delete(SettingsPath);
+        }
+        catch { /* best-effort */ }
     }
 
     // ── Constructor ────────────────────────────────────────────────────────
@@ -195,6 +220,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             _deviceSettings         = saved.DeviceSettings ?? new Dictionary<string, DeviceSettings>();
             _connectionMode         = saved.ConnectionMode;
             _logLevel               = saved.LogLevel;
+            _termsAccepted          = saved.TermsAccepted;
+            _telemetryConsent       = saved.TelemetryConsent;
             _windowX                = saved.WindowX;
             _windowY                = saved.WindowY;
 
@@ -223,7 +250,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             _deviceSettings.ToDictionary(
                 kvp => kvp.Key,
                 kvp => new DeviceSettings { PreferredFormat = kvp.Value.PreferredFormat, StaticDelayMs = kvp.Value.StaticDelayMs }),
-            ConnectionMode, LogLevel);
+            ConnectionMode, LogLevel, TermsAccepted, TelemetryConsent);
     }
 
     public void RestoreSnapshot()
@@ -240,6 +267,8 @@ public sealed partial class SettingsViewModel : ObservableObject
                 kvp => new DeviceSettings { PreferredFormat = kvp.Value.PreferredFormat, StaticDelayMs = kvp.Value.StaticDelayMs });
             ConnectionMode         = _snapshot.ConnectionMode;
             LogLevel               = _snapshot.LogLevel;
+            TermsAccepted          = _snapshot.TermsAccepted;
+            TelemetryConsent       = _snapshot.TelemetryConsent;
 
             // Reload current device's settings after restoring the dict
             SelectedAudioDevice = AudioDevices.FirstOrDefault(d => d.Id == PreferredAudioDeviceId)
@@ -310,7 +339,9 @@ public sealed partial class SettingsViewModel : ObservableObject
                 LogLevel,
                 SavedServers.ToList(),
                 _windowX,
-                _windowY);
+                _windowY,
+                TermsAccepted,
+                TelemetryConsent);
 
             var json    = JsonSerializer.Serialize(data, JsonOptions);
             var tmpPath = SettingsPath + ".tmp";
@@ -339,6 +370,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         ConnectionMode                     ConnectionMode,
         string                             LogLevel,
         List<PersistedServer>?             SavedServers,
-        int?                               WindowX = null,
-        int?                               WindowY = null);
+        int?                               WindowX         = null,
+        int?                               WindowY         = null,
+        bool                               TermsAccepted   = false,
+        bool                               TelemetryConsent = false);
 }
