@@ -45,8 +45,7 @@
             x:Name="LogList"
             Grid.Row="1"
             ItemsSource="{x:Bind ViewModel.Entries}"
-            SelectionMode="Multiple"
-            IsItemClickEnabled="False"
+            SelectionMode="Extended"
             SelectionChanged="LogList_SelectionChanged"
 >
             <ListView.ItemTemplate>
@@ -89,7 +88,7 @@
                 </DataTemplate>
             </ListView.ItemTemplate>
             <ListView.ItemContainerStyle>
-                <Style TargetType="ListViewItem">
+                <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
                     <Setter Property="Padding" Value="4,2" />
                     <Setter Property="MinHeight" Value="0" />
                 </Style>
