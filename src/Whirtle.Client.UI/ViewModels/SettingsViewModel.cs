@@ -141,6 +141,22 @@ public sealed partial class SettingsViewModel : ObservableObject
             : ConnectionMode.ClientInitiated;
     }
 
+    // ── Clean start ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Deletes the persisted settings file. Call before constructing
+    /// <see cref="SettingsViewModel"/> to force a clean first-run state.
+    /// </summary>
+    public static void DeleteSettingsFile()
+    {
+        try
+        {
+            if (File.Exists(SettingsPath))
+                File.Delete(SettingsPath);
+        }
+        catch { /* best-effort */ }
+    }
+
     // ── Constructor ────────────────────────────────────────────────────────
 
     public SettingsViewModel()

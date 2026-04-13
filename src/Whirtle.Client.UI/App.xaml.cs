@@ -47,6 +47,13 @@ public partial class App : Application
 
         Log.Information("Whirtle starting up");
 
+        // ── Command line ─────────────────────────────────────────────────────
+        if (Environment.GetCommandLineArgs().Contains("--clean-start"))
+        {
+            Log.Information("--clean-start: removing persisted settings and restarting clean");
+            SettingsViewModel.DeleteSettingsFile();
+        }
+
         // ── ViewModels ───────────────────────────────────────────────────────
         _settingsViewModel   = new SettingsViewModel();
         _nowPlayingViewModel = new NowPlayingViewModel(
