@@ -2,6 +2,7 @@ using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Input;
 using Windows.Graphics;
 using WinRT;
 
@@ -41,6 +42,12 @@ public sealed partial class SettingsWindow : Window
             if (!saved)
                 App.Current.SettingsViewModel.RestoreSnapshot();
         };
+    }
+
+    private void OnEscapeKey(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    {
+        e.Handled = true;
+        Close();
     }
 
     private void TryApplyMica()
