@@ -27,6 +27,11 @@ public sealed partial class LogsPage : Page
         };
     }
 
+    private void LogList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        CopySelectedButton.IsEnabled = LogList.SelectedItems.Count > 0;
+    }
+
     private void CopySelected_Click(object sender, RoutedEventArgs e)
     {
         var lines = LogList.SelectedItems
