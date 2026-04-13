@@ -65,8 +65,8 @@ public sealed class ProtocolClient : IAsyncDisposable
 
     public async Task SendAsync(Message message, CancellationToken cancellationToken = default)
     {
-        Log.Debug("Send {Type} {Message}", _serializer.GetWireType(message), message);
         var data = _serializer.Serialize(message);
+        Log.Debug("Send {Type} {Json}", _serializer.GetWireType(message), System.Text.Encoding.UTF8.GetString(data));
         await _transport.SendAsync(data, cancellationToken);
     }
 
@@ -115,7 +115,7 @@ public sealed class ProtocolClient : IAsyncDisposable
             if (data[0] == (byte)'{')
             {
                 var msg = _serializer.Deserialize(data);
-                Log.Debug("Recv {Type} {Message}", _serializer.GetWireType(msg), msg);
+                Log.Debug("Recv {Type} {Json}", _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
                 yield return new ProtocolFrame(msg);
             }
             else
@@ -154,7 +154,7 @@ public sealed class ProtocolClient : IAsyncDisposable
         {
             if (data.Length == 0 || data[0] != (byte)'{') continue;
             var msg = _serializer.Deserialize(data);
-            Log.Debug("Recv {Type} {Message}", _serializer.GetWireType(msg), msg);
+            Log.Debug("Recv {Type} {Json}", _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
             yield return msg;
         }
     }
