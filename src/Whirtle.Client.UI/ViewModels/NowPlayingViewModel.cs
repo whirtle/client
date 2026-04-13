@@ -258,6 +258,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             Log.Information("Connected to {ServerId} ({ServerName}), reason={Reason}",
                 hello.ServerId, hello.Name, hello.ConnectionReason);
 
+            // Use the server-reported name now that we have it; also cache it on
+            // the matching saved-server entry so the picker shows it when offline.
+            ServerName = hello.Name ?? hello.ServerId ?? endpoint.DisplayName;
+            _settings.UpdateServerInfo(hello.ServerId, hello.Name, endpoint.Host, endpoint.Port);
+
             _syncer      = new ClockSynchronizer(_protocol);
             _controller  = new ControllerClient(_protocol);
             _player      = new PlayerClient(_protocol, SelectedDevice?.Id);

@@ -206,7 +206,7 @@ public sealed partial class MainWindow : Window
         {
             panel.Children.Add(CreatePickerSectionHeader("Saved"));
             foreach (var s in saved)
-                panel.Children.Add(CreateSavedServerRow(s, isChecked: currentName == s.Label));
+                panel.Children.Add(CreateSavedServerRow(s, isChecked: currentName == s.DisplayName));
         }
 
         // Separator
@@ -267,7 +267,7 @@ public sealed partial class MainWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var serverBtn = CreatePickerButton(saved.Label, "\uECA5", SavedServer_Click, isChecked);
+        var serverBtn = CreatePickerButton(saved.DisplayName, "\uECA5", SavedServer_Click, isChecked);
         serverBtn.Tag = saved;
         Grid.SetColumn(serverBtn, 0);
 
