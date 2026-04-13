@@ -45,6 +45,7 @@ public sealed class PlayerClient : IAsyncDisposable
     private PlaybackEngine? _playbackEngine;
     private bool            _streamActive;
     private TimeSpan        _clockOffset;
+    private bool            _clockSynced;
     private int             _rendererLatencyMs;
 
     private int    _volume        = 100;
@@ -113,7 +114,7 @@ public sealed class PlayerClient : IAsyncDisposable
                 Player: new ClientPlayerState(
                     Volume:            _volume,
                     Muted:             _muted,
-                    StaticDelayMs:     _staticDelayMs + _rendererLatencyMs,
+                    StaticDelayMs:     _staticDelayMs,
                     SupportedCommands: ["set_static_delay"])),
             cancellationToken);
 
@@ -161,6 +162,7 @@ public sealed class PlayerClient : IAsyncDisposable
     public void UpdateClockOffset(TimeSpan offset)
     {
         _clockOffset = offset;
+        _clockSynced = true;
         _playbackEngine?.UpdateClockOffset(offset);
     }
 
@@ -245,11 +247,12 @@ public sealed class PlayerClient : IAsyncDisposable
 
     private void HandleAudioChunk(AudioChunkFrame chunk)
     {
-        // Advance the target timestamp by the total known output latency so that
-        // audio is submitted to the hardware early enough to emerge at the right moment:
-        //   static_delay_ms  — user-configured downstream delay (amplifier, speakers, etc.)
-        //   renderer latency — WASAPI buffer depth; audio queued now plays this many ms later
-        long totalLatencyUs     = (_staticDelayMs + _rendererLatencyMs) * 1_000L;
+        // Adjust the target timestamp by any user-configured static downstream delay
+        // (amplifier, external speakers, etc.) so the server pre-buffers by that amount.
+        // WASAPI renderer latency is handled internally by WasapiOut/BufferedWaveProvider
+        // and must not be included here — doing so makes drift ≈ rendererLatencyMs which
+        // exceeds MaxDriftMs and causes the engine to error on every frame.
+        long totalLatencyUs     = _staticDelayMs * 1_000L;
         long effectiveTimestamp = chunk.Timestamp - totalLatencyUs;
 
         var audioFrame = _decoder!.Decode(chunk.EncodedData);

@@ -23,6 +23,11 @@ internal interface IWasapiRenderer : IDisposable
     /// the server knows the maximum chunk size the client can receive.
     /// </summary>
     int  BufferCapacityBytes { get; }
+    /// <summary>
+    /// Number of bytes currently queued in the output buffer waiting to be played.
+    /// Used by the render loop to pace writes without relying on imprecise timers.
+    /// </summary>
+    int  BufferedBytes       { get; }
     bool IsRunning          { get; }
 
     void Start();

@@ -33,14 +33,19 @@ public class PlaybackEngineTests
     public async Task State_TransitionsToSynchronized_WhenBufferFull()
     {
         var (engine, renderer, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero); // mark clock as ready
+
+        bool reachedSynchronized = false;
+        engine.StatusChanged += (state, _) => { if (state == PlaybackState.Synchronized) reachedSynchronized = true; };
+
         engine.Start();
 
         for (int i = 0; i < 4; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
 
-        await PollUntil(() => engine.State == PlaybackState.Synchronized, TimeSpan.FromSeconds(2));
+        await PollUntil(() => reachedSynchronized, TimeSpan.FromSeconds(2));
 
-        Assert.Equal(PlaybackState.Synchronized, engine.State);
+        Assert.True(reachedSynchronized);
         await engine.DisposeAsync();
     }
 
@@ -48,6 +53,7 @@ public class PlaybackEngineTests
     public async Task State_TransitionsToError_OnUnderrun()
     {
         var (engine, _, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero); // mark clock as ready
         engine.Start();
 
         // Provide just enough to reach Synchronized…
@@ -67,6 +73,7 @@ public class PlaybackEngineTests
     public async Task Renderer_IsMuted_WhenInErrorState()
     {
         var (engine, renderer, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero); // mark clock as ready
         engine.Start();
 
         for (int i = 0; i < 4; i++)
@@ -76,6 +83,116 @@ public class PlaybackEngineTests
         await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(3));
 
         Assert.True(renderer.Muted);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task State_RemainsBuffering_WhenBufferFullButClockNotReady()
+    {
+        var (engine, _, clock) = Build();
+        // Deliberately do NOT call UpdateClockOffset.
+        engine.Start();
+
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
+
+        // Give the render loop plenty of time to advance if the gate were absent.
+        await Task.Delay(200);
+
+        Assert.Equal(PlaybackState.Buffering, engine.State);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task State_TransitionsToSynchronized_OncClockOffsetSet()
+    {
+        var (engine, _, clock) = Build();
+
+        bool reachedSynchronized = false;
+        engine.StatusChanged += (state, _) => { if (state == PlaybackState.Synchronized) reachedSynchronized = true; };
+
+        engine.Start();
+
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
+
+        // Engine is stuck in Buffering without a clock offset.
+        await Task.Delay(100);
+        Assert.Equal(PlaybackState.Buffering, engine.State);
+
+        // Providing the offset unblocks the gate.
+        engine.UpdateClockOffset(TimeSpan.Zero);
+
+        await PollUntil(() => reachedSynchronized, TimeSpan.FromSeconds(2));
+        Assert.True(reachedSynchronized);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Renderer_ReceivesSamples_DuringPlayback()
+    {
+        var (engine, renderer, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero);
+        engine.Start();
+
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => renderer.Written.Count > 0, TimeSpan.FromSeconds(2));
+
+        Assert.NotEmpty(renderer.Written);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task LargeDrift_DoesNotPreventRendering()
+    {
+        // Drift of 200 ms is well above MaxDriftMs (50 ms).
+        // The engine should log a warning but still write all frames to the renderer
+        // rather than entering error state, as it did before this fix.
+        var (engine, renderer, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.FromMilliseconds(200));
+        engine.Start();
+
+        const int frameCount = 4;
+        for (int i = 0; i < frameCount; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => renderer.Written.Count >= frameCount, TimeSpan.FromSeconds(2));
+
+        Assert.Equal(frameCount, renderer.Written.Count);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Error_RecoveryReturnsEngineToSynchronized()
+    {
+        // After an underrun drives the engine to Error, refilling the buffer should
+        // bring it back through Buffering into Synchronized a second time.
+        var (engine, _, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero);
+
+        int synchronizedCount = 0;
+        engine.StatusChanged += (state, _) =>
+        {
+            if (state == PlaybackState.Synchronized)
+                synchronizedCount++;
+        };
+
+        engine.Start();
+
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(3));
+
+        // Refill to trigger recovery.
+        for (int i = 4; i < 8; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => synchronizedCount >= 2, TimeSpan.FromSeconds(3));
+
+        Assert.True(synchronizedCount >= 2);
         await engine.DisposeAsync();
     }
 
