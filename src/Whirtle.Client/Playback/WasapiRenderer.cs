@@ -21,6 +21,7 @@ internal sealed class WasapiRenderer : IWasapiRenderer
 
     public int  SampleRate { get; }
     public int  Channels   { get; }
+    public int  LatencyMs  { get; }
     public bool IsRunning  { get; private set; }
 
     /// <param name="deviceId">
@@ -36,6 +37,7 @@ internal sealed class WasapiRenderer : IWasapiRenderer
     {
         SampleRate = sampleRate;
         Channels   = channels;
+        LatencyMs  = latencyMs;
 
         var waveFormat = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, channels);
         _provider = new BufferedWaveProvider(waveFormat) { DiscardOnBufferOverflow = true };

@@ -107,7 +107,9 @@ internal class Program
             try
             {
                 welcome = await candidateProtocol.HandshakeAsync(
-                    clientId, clientName, cancellationToken: cts.Token);
+                    clientId, clientName,
+                    supportedRoles: ["metadata@v1", "controller@v1"],
+                    cancellationToken: cts.Token);
             }
             catch (HandshakeException ex)
             {

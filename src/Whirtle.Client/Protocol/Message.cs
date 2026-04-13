@@ -225,14 +225,6 @@ public sealed record StreamRequestFormatArtwork(
     int?    MediaWidth  = null,
     int?    MediaHeight = null);
 
-/// <summary>Sent by the server to push now-playing track metadata to all clients (Metadata Role).</summary>
-public sealed record NowPlayingMessage(
-    string? Title,
-    string? Artist,
-    string? Album,
-    double? DurationSeconds,
-    double? PositionSeconds) : Message;
-
 /// <summary>
 /// Sent by the server to instruct the player to change volume, mute state, or static delay.
 /// Wire type: <c>server/command</c>

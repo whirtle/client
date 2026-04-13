@@ -2,8 +2,8 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Serilog;
 using Whirtle.Client.Audio;
 using Whirtle.Client.Clock;
@@ -22,12 +22,40 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
     private ProtocolClient? _protocol;
     private ControllerClient? _controller;
+    private PlayerClient? _player;
+    private ClockSynchronizer? _syncer;
     private CancellationTokenSource? _connectionCts;
     private Task _receiveLoopTask = Task.CompletedTask;
+    private Task _syncTask        = Task.CompletedTask;
+
+    // Metadata state and seek-bar tick
+    private readonly NowPlayingState _nowPlaying = new();
+    private TimeSpan _serverClockOffset;                         // updated by sync loop
+    private readonly DispatcherTimer _positionTimer;             // advances seek bar
 
     // Server-initiated mode
     private CancellationTokenSource? _serverModeCts;
     private readonly ConnectionManager _connectionManager = new();
+
+    // ── Handshake capability declarations ─────────────────────────────────────
+
+    private static readonly string[] SupportedRoles =
+        ["metadata@v1", "controller@v1", "artwork@v1", "player@v1"];
+
+    private static readonly ArtworkV1Support ArtworkSupport = new(
+    [
+        new ArtworkV1SupportChannel(Source: "album", Format: "jpeg", MediaWidth: 800, MediaHeight: 800),
+    ]);
+
+    private static readonly PlayerV1Support PlayerSupport = PlayerClient.BuildSupport(
+        supportedFormats:
+        [
+            new PlayerV1SupportFormat("opus", Channels: 2, SampleRate: 48_000, BitDepth: 16),
+            new PlayerV1SupportFormat("flac", Channels: 2, SampleRate: 48_000, BitDepth: 16),
+            new PlayerV1SupportFormat("pcm",  Channels: 2, SampleRate: 48_000, BitDepth: 16),
+        ],
+        bufferCapacity:   500,
+        supportedCommands: ["volume", "mute"]);
 
     // Signal-strength inputs — updated by clock sync and PlaybackEngine events.
     private TimeSpan _lastRtt        = TimeSpan.MaxValue; // unknown until first sync
@@ -169,6 +197,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _volume  = _settings.Volume;
         _isMuted = _settings.IsMuted;
 
+        // Ticker that advances the seek bar using the spec formula while playing.
+        _positionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _positionTimer.Tick += (_, _) => TickPosition();
+
         LoadAudioDevices();
     }
 
@@ -214,6 +246,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
             var hello = await _protocol.HandshakeAsync(
                 $"whirtle-{Environment.MachineName}", "Whirtle",
+                supportedRoles: SupportedRoles,
+                artworkSupport: ArtworkSupport,
+                playerSupport:  PlayerSupport,
                 cancellationToken: token);
 
             Log.Debug(
@@ -223,18 +258,25 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             Log.Information("Connected to {ServerId} ({ServerName}), reason={Reason}",
                 hello.ServerId, hello.Name, hello.ConnectionReason);
 
-            // Initial clock sync — establishes RTT for signal strength.
-            var syncer = new ClockSynchronizer(_protocol);
-            var sync   = await syncer.SyncOnceAsync(token);
-            _lastRtt = sync.RoundTripTime;
-            SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount);
-
+            _syncer      = new ClockSynchronizer(_protocol);
             _controller  = new ControllerClient(_protocol);
+            _player      = new PlayerClient(_protocol, SelectedDevice?.Id);
+            await _player.SendInitialRequestsAsync(token);
             IsConnected  = true;
             ConnectionStatus = $"Connected — {endpoint.Host}:{endpoint.Port}";
 
-            // Start background message loop; tracked so DisconnectAsync can await it.
+            // Start background tasks — receive loop routes server/time to the syncer.
             _receiveLoopTask = ReceiveLoopAsync(token);
+            _syncTask = _syncer.RunAsync(
+                r =>
+                {
+                    _lastRtt = r.RoundTripTime;
+                    _serverClockOffset = r.ClockOffset;
+                    _player.UpdateClockOffset(r.ClockOffset);
+                    _dispatcher.TryEnqueue(
+                        () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
+                },
+                cancellationToken: token);
         }
         catch (OperationCanceledException)
         {
@@ -326,9 +368,18 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _connectionCts?.Cancel();
         _connectionCts = null;
 
-        // Wait for the receive loop to finish before tearing down the protocol.
+        // Wait for background tasks to finish before tearing down the protocol.
         try { await _receiveLoopTask.ConfigureAwait(false); } catch { /* already handled inside */ }
+        try { await _syncTask.ConfigureAwait(false); } catch { /* OperationCanceledException on disconnect */ }
         _receiveLoopTask = Task.CompletedTask;
+        _syncTask        = Task.CompletedTask;
+        _syncer          = null;
+
+        if (_player is not null)
+        {
+            await _player.DisposeAsync().ConfigureAwait(false);
+            _player = null;
+        }
 
         if (_protocol is not null)
         {
@@ -343,15 +394,31 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     /// <summary>Resets all playback / connection UI state to "not connected".</summary>
     private void ResetPlaybackState()
     {
+        _positionTimer.Stop();
         _connectionManager.Clear();
         IsConnected      = false;
         ConnectionStatus = "Not connected";
         ServerName       = null;
         CodecName        = null;
         SampleRate       = null;
+        PositionSeconds  = 0;
         SignalStrength   = 0;
         _lastRtt         = TimeSpan.MaxValue;
         _lastBufferCount = -1;
+        _serverClockOffset = TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// Advances <see cref="PositionSeconds"/> using the spec formula:
+    /// <c>track_progress + (server_now − timestamp) × playback_speed ÷ 1 000 000</c>,
+    /// clamped to [0, track_duration] when duration is non-zero.
+    /// Must be called on the UI thread.
+    /// </summary>
+    private void TickPosition()
+    {
+        long localNowUs  = (DateTimeOffset.UtcNow.Ticks - DateTimeOffset.UnixEpoch.Ticks) / 10;
+        long serverNowUs = localNowUs + (long)_serverClockOffset.TotalMicroseconds;
+        PositionSeconds  = _nowPlaying.CalculatePositionMs(serverNowUs) / 1000.0;
     }
 
     /// <summary>
@@ -506,6 +573,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         {
             hello = await protocol.HandshakeAsync(
                 _settings.ClientId, _settings.ClientName,
+                supportedRoles: SupportedRoles,
+                artworkSupport: ArtworkSupport,
+                playerSupport:  PlayerSupport,
                 cancellationToken: serverModeCancellation);
         }
         catch (HandshakeException ex)
@@ -546,29 +616,25 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         // Tear down any existing session before taking over.
         await TearDownSessionAsync();
 
-        // Clock sync — non-fatal if it fails.
-        try
-        {
-            var sync = await new ClockSynchronizer(protocol).SyncOnceAsync(serverModeCancellation);
-            _lastRtt = sync.RoundTripTime;
-            _dispatcher.TryEnqueue(() =>
-                SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
-        }
-        catch (OperationCanceledException)
-        {
-            await protocol.DisposeAsync();
-            return;
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Clock sync failed after inbound connection");
-        }
-
         // Hand ownership of protocol to the session fields.
         _protocol    = protocol;
+        _syncer      = new ClockSynchronizer(protocol);
         _controller  = new ControllerClient(protocol);
+        _player      = new PlayerClient(protocol, SelectedDevice?.Id);
+        await _player.SendInitialRequestsAsync(serverModeCancellation);
         _connectionCts  = new CancellationTokenSource();
+
+        // Start background tasks — receive loop routes server/time to the syncer.
         _receiveLoopTask = ReceiveLoopAsync(_connectionCts.Token);
+        _syncTask = _syncer.RunAsync(
+            r =>
+            {
+                _lastRtt = r.RoundTripTime;
+                _player.UpdateClockOffset(r.ClockOffset);
+                _dispatcher.TryEnqueue(
+                    () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
+            },
+            cancellationToken: _connectionCts.Token);
 
         var displayName = hello.Name ?? hello.ServerId ?? "Server";
         Log.Information(
@@ -645,18 +711,35 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         {
             await foreach (var frame in _protocol.ReceiveAllAsync(cancellationToken))
             {
+                // Forward every frame to the player role client (it ignores
+                // frames it doesn't own, so this is safe for all frame types).
+                if (_player is not null)
+                    await _player.ProcessFrameAsync(frame, cancellationToken).ConfigureAwait(false);
+
                 switch (frame)
                 {
+                    case ProtocolFrame { Message: ServerTimeMessage timeMsg }:
+                        _syncer?.Deliver(timeMsg);
+                        break;
+
                     case ProtocolFrame { Message: ServerStateMessage msg }:
                         if (msg.Metadata is { } meta)
                         {
+                            _nowPlaying.Update(meta);
                             _dispatcher.TryEnqueue(() =>
                             {
-                                Title           = meta.Title;
-                                Artist          = meta.Artist;
-                                Album           = meta.Album;
-                                PositionSeconds = meta.Progress is { } p ? p.TrackProgress / 1000.0 : 0;
+                                Title  = _nowPlaying.Title;
+                                Artist = _nowPlaying.Artist;
+                                Album  = _nowPlaying.Album;
+                                TickPosition();
                                 OnPropertyChanged(nameof(TrayTooltip));
+
+                                // Run the tick timer only when playback is active.
+                                bool playing = _nowPlaying.Progress?.PlaybackSpeed > 0;
+                                if (playing && !_positionTimer.IsEnabled)
+                                    _positionTimer.Start();
+                                else if (!playing && _positionTimer.IsEnabled)
+                                    _positionTimer.Stop();
                             });
                         }
                         if (msg.Controller is { } ctrl)
@@ -682,6 +765,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
                     case ArtworkFrame artwork:
                         _dispatcher.TryEnqueue(() => AlbumArtData = artwork.Data);
+                        break;
+
+                    case ProtocolFrame { Message: UnknownMessage unknown }:
+                        Log.Warning("Received unrecognised server message: {Type}", unknown.Type);
                         break;
                 }
             }
