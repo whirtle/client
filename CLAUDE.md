@@ -185,6 +185,7 @@ Use _ as leading character on instance variables.
 
 - Development happens on feature branches; merge to `main` via pull request.
 - Write clear, descriptive commit messages.
+- Do not include any references to Claude or AI tools in commit messages or PR descriptions.
 
 ## Before pushing
 
