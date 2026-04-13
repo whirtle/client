@@ -655,7 +655,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _controller  = new ControllerClient(protocol);
         _player      = new PlayerClient(protocol, SelectedDevice?.Id);
         await _player.SendInitialRequestsAsync(
-            PreferredCodecString(),
+            _settings.CurrentDeviceFormat,
             SelectedDevice?.MaxSampleRate ?? 48_000,
             SelectedDevice?.MaxChannels   ?? 2,
             SelectedDevice?.MaxBitDepth   ?? 24,
