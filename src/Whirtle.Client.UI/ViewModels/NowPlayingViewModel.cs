@@ -2,8 +2,8 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Serilog;
 using Whirtle.Client.Audio;
 using Whirtle.Client.Clock;
@@ -27,6 +27,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private CancellationTokenSource? _connectionCts;
     private Task _receiveLoopTask = Task.CompletedTask;
     private Task _syncTask        = Task.CompletedTask;
+
+    // Metadata state and seek-bar tick
+    private readonly NowPlayingState _nowPlaying = new();
+    private TimeSpan _serverClockOffset;                         // updated by sync loop
+    private readonly DispatcherTimer _positionTimer;             // advances seek bar
 
     // Server-initiated mode
     private CancellationTokenSource? _serverModeCts;
@@ -189,6 +194,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 OnPropertyChanged(nameof(ServerPickerLabel));
         };
 
+        // Ticker that advances the seek bar using the spec formula while playing.
+        _positionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _positionTimer.Tick += (_, _) => TickPosition();
+
         LoadAudioDevices();
     }
 
@@ -259,6 +268,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 r =>
                 {
                     _lastRtt = r.RoundTripTime;
+                    _serverClockOffset = r.ClockOffset;
                     _player.UpdateClockOffset(r.ClockOffset);
                     _dispatcher.TryEnqueue(
                         () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
@@ -381,15 +391,31 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     /// <summary>Resets all playback / connection UI state to "not connected".</summary>
     private void ResetPlaybackState()
     {
+        _positionTimer.Stop();
         _connectionManager.Clear();
         IsConnected      = false;
         ConnectionStatus = "Not connected";
         ServerName       = null;
         CodecName        = null;
         SampleRate       = null;
+        PositionSeconds  = 0;
         SignalStrength   = 0;
         _lastRtt         = TimeSpan.MaxValue;
         _lastBufferCount = -1;
+        _serverClockOffset = TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// Advances <see cref="PositionSeconds"/> using the spec formula:
+    /// <c>track_progress + (server_now − timestamp) × playback_speed ÷ 1 000 000</c>,
+    /// clamped to [0, track_duration] when duration is non-zero.
+    /// Must be called on the UI thread.
+    /// </summary>
+    private void TickPosition()
+    {
+        long localNowUs  = SystemClock.Instance.UtcNowMicroseconds;
+        long serverNowUs = localNowUs + (long)_serverClockOffset.TotalMicroseconds;
+        PositionSeconds  = _nowPlaying.CalculatePositionMs(serverNowUs) / 1000.0;
     }
 
     private void StopServerInitiatedMode()
@@ -631,13 +657,21 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                     case ProtocolFrame { Message: ServerStateMessage msg }:
                         if (msg.Metadata is { } meta)
                         {
+                            _nowPlaying.Update(meta);
                             _dispatcher.TryEnqueue(() =>
                             {
-                                Title           = meta.Title;
-                                Artist          = meta.Artist;
-                                Album           = meta.Album;
-                                PositionSeconds = meta.Progress is { } p ? p.TrackProgress / 1000.0 : 0;
+                                Title  = _nowPlaying.Title;
+                                Artist = _nowPlaying.Artist;
+                                Album  = _nowPlaying.Album;
+                                TickPosition();
                                 OnPropertyChanged(nameof(TrayTooltip));
+
+                                // Run the tick timer only when playback is active.
+                                bool playing = _nowPlaying.Progress?.PlaybackSpeed > 0;
+                                if (playing && !_positionTimer.IsEnabled)
+                                    _positionTimer.Start();
+                                else if (!playing && _positionTimer.IsEnabled)
+                                    _positionTimer.Stop();
                             });
                         }
                         if (msg.Controller is { } ctrl)
@@ -662,6 +696,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
                     case ArtworkFrame artwork:
                         _dispatcher.TryEnqueue(() => AlbumArtData = artwork.Data);
+                        break;
+
+                    case ProtocolFrame { Message: UnknownMessage unknown }:
+                        Log.Warning("Received unrecognised server message: {Type}", unknown.Type);
                         break;
                 }
             }
