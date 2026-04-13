@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Steve Peterson
 // SPDX-License-Identifier: MIT
 
+using Serilog;
 using Whirtle.Client.Codec;
 using Whirtle.Client.Protocol;
 
@@ -39,6 +40,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     private volatile PlaybackState _state = PlaybackState.Buffering;
     private TimeSpan                _clockOffset;
+    private volatile bool           _clockOffsetReady;
     private CancellationTokenSource _cts  = new();
     private Task                    _renderTask = Task.CompletedTask;
 
@@ -93,7 +95,11 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// Updates the measured clock offset (from <see cref="ClockSynchronizer"/>).
     /// The render loop uses this to schedule frames relative to the server clock.
     /// </summary>
-    public void UpdateClockOffset(TimeSpan offset) => _clockOffset = offset;
+    public void UpdateClockOffset(TimeSpan offset)
+    {
+        _clockOffset      = offset;
+        _clockOffsetReady = true;
+    }
 
     /// <summary>
     /// Discards all buffered frames. Call when a <c>stream/clear</c> message arrives.
@@ -136,6 +142,13 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     private async Task HandleBufferingAsync(CancellationToken ct)
     {
+        if (!_clockOffsetReady)
+        {
+            Log.Debug("Playback buffering — waiting for first clock sync");
+            await Task.Delay(5, ct).ConfigureAwait(false);
+            return;
+        }
+
         if (_buffer.Count >= MinBufferFrames)
         {
             TransitionTo(PlaybackState.Synchronized);
@@ -148,7 +161,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
     {
         if (!_buffer.TryDequeue(out long timestamp, out var frame))
         {
-            // Underrun
+            Log.Warning("Playback underrun — jitter buffer empty");
             await EnterErrorAsync(ct);
             return;
         }
@@ -157,6 +170,9 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
         if (Math.Abs(driftMs) > MaxDriftMs)
         {
+            Log.Warning(
+                "Playback drift {DriftMs:+0.0;-0.0} ms exceeds threshold ({MaxDriftMs} ms) — entering error state",
+                driftMs, MaxDriftMs);
             await EnterErrorAsync(ct);
             return;
         }

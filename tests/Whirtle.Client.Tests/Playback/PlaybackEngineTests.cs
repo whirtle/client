@@ -33,6 +33,7 @@ public class PlaybackEngineTests
     public async Task State_TransitionsToSynchronized_WhenBufferFull()
     {
         var (engine, renderer, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero); // mark clock as ready
         engine.Start();
 
         for (int i = 0; i < 4; i++)
@@ -48,6 +49,7 @@ public class PlaybackEngineTests
     public async Task State_TransitionsToError_OnUnderrun()
     {
         var (engine, _, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero); // mark clock as ready
         engine.Start();
 
         // Provide just enough to reach Synchronized…
@@ -67,6 +69,7 @@ public class PlaybackEngineTests
     public async Task Renderer_IsMuted_WhenInErrorState()
     {
         var (engine, renderer, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero); // mark clock as ready
         engine.Start();
 
         for (int i = 0; i < 4; i++)
@@ -76,6 +79,44 @@ public class PlaybackEngineTests
         await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(3));
 
         Assert.True(renderer.Muted);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task State_RemainsBuffering_WhenBufferFullButClockNotReady()
+    {
+        var (engine, _, clock) = Build();
+        // Deliberately do NOT call UpdateClockOffset.
+        engine.Start();
+
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
+
+        // Give the render loop plenty of time to advance if the gate were absent.
+        await Task.Delay(200);
+
+        Assert.Equal(PlaybackState.Buffering, engine.State);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task State_TransitionsToSynchronized_OncClockOffsetSet()
+    {
+        var (engine, _, clock) = Build();
+        engine.Start();
+
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
+
+        // Engine is stuck in Buffering without a clock offset.
+        await Task.Delay(100);
+        Assert.Equal(PlaybackState.Buffering, engine.State);
+
+        // Providing the offset unblocks the gate.
+        engine.UpdateClockOffset(TimeSpan.Zero);
+
+        await PollUntil(() => engine.State == PlaybackState.Synchronized, TimeSpan.FromSeconds(2));
+        Assert.Equal(PlaybackState.Synchronized, engine.State);
         await engine.DisposeAsync();
     }
 
