@@ -20,7 +20,7 @@
                     <TextBlock Text="Clear" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
-            <Button Click="CopySelected_Click">
+            <Button x:Name="CopySelectedButton" IsEnabled="False" Click="CopySelected_Click">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                     <FontIcon Glyph="&#xE8C8;" FontSize="14" VerticalAlignment="Center" />
                     <TextBlock Text="Copy Selected" VerticalAlignment="Center" />
@@ -47,6 +47,7 @@
             ItemsSource="{x:Bind ViewModel.Entries}"
             SelectionMode="Multiple"
             IsItemClickEnabled="False"
+            SelectionChanged="LogList_SelectionChanged"
             VirtualizingStackPanel.VirtualizationMode="Recycling">
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="logging:LogEntry">
