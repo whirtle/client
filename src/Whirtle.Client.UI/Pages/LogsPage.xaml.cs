@@ -18,13 +18,6 @@ public sealed partial class LogsPage : Page
     public LogsPage()
     {
         InitializeComponent();
-
-        // Auto-scroll when a new entry is added
-        ViewModel.Entries.CollectionChanged += (_, _) =>
-        {
-            if (ViewModel.Entries.Count > 0)
-                LogList.ScrollIntoView(ViewModel.Entries[^1]);
-        };
     }
 
     private void CopySelected_Click(object sender, RoutedEventArgs e)
@@ -46,6 +39,7 @@ public sealed partial class LogsPage : Page
         var picker = new FileSavePicker();
         WinRT.Interop.InitializeWithWindow.Initialize(
             picker, NativeWindow.GetForegroundWindow());
+        picker.SettingsIdentifier = "LogSave";
 
         picker.FileTypeChoices.Add("Text file", [".txt"]);
         picker.SuggestedFileName = $"whirtle-logs-{DateTime.Now:yyyyMMdd-HHmmss}";
