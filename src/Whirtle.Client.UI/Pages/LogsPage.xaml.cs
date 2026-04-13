@@ -34,6 +34,12 @@ public sealed partial class LogsPage : Page
             new PointerEventHandler(LogList_PointerWheelChanged),
             handledEventsToo: true);
         ViewModel.Entries.CollectionChanged += OnEntriesChanged;
+
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            if (ViewModel.Entries.Count > 0)
+                LogList.ScrollIntoView(ViewModel.Entries[^1]);
+        });
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
