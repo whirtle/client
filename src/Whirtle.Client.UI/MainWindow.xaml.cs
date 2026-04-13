@@ -38,9 +38,6 @@ public sealed partial class MainWindow : Window
     public Visibility StatusBarVisibility(AppUiState state)
         => state != AppUiState.FirstRun ? Visibility.Visible : Visibility.Collapsed;
 
-    public Visibility WaitingScrimVisibility(AppUiState state)
-        => state == AppUiState.Waiting ? Visibility.Visible : Visibility.Collapsed;
-
     public Visibility FreScrimVisibility(AppUiState state)
         => state == AppUiState.FirstRun ? Visibility.Visible : Visibility.Collapsed;
 
@@ -383,14 +380,6 @@ public sealed partial class MainWindow : Window
 
     private void FreDeclineButton_Click(object sender, RoutedEventArgs e)
         => Application.Current.Exit();
-
-    // ── Waiting scrim ───────────────────────────────────────────────────────
-
-    private async void WaitingVolumeSlider_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
-    {
-        if (sender is Slider slider)
-            await NowPlayingViewModel.SetVolumeCommand.ExecuteAsync(slider.Value / 100.0);
-    }
 
     // ── Navigation ─────────────────────────────────────────────────────────
 

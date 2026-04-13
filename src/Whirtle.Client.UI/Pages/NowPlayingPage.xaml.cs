@@ -82,4 +82,7 @@ public sealed partial class NowPlayingPage : Page
         _logsWindow ??= new LogsWindow();
         _logsWindow.Activate();
     }
+
+    private Visibility WaitingVisibility(bool isNotConnected)
+        => isNotConnected ? Visibility.Visible : Visibility.Collapsed;
 }
