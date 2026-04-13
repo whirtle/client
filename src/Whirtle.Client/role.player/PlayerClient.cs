@@ -120,16 +120,24 @@ public sealed class PlayerClient : IAsyncDisposable
     /// Sends the initial <c>client/state</c> and <c>stream/request-format</c>
     /// messages that must be issued once after the handshake completes.
     /// </summary>
-    public async Task SendInitialRequestsAsync(CancellationToken cancellationToken = default)
+    /// <param name="sampleRate">Preferred sample rate derived from the output device's max capability.</param>
+    /// <param name="channels">Preferred channel count derived from the output device's max capability.</param>
+    /// <param name="bitDepth">Preferred bit depth derived from the output device's max capability.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task SendInitialRequestsAsync(
+        int               sampleRate        = 48_000,
+        int               channels          = 2,
+        int               bitDepth          = 24,
+        CancellationToken cancellationToken  = default)
     {
         await SendStateAsync(cancellationToken).ConfigureAwait(false);
         await _protocol.SendAsync(
             new StreamRequestFormatMessage(
                 Player: new StreamRequestFormatPlayer(
                     Codec:      "opus",
-                    Channels:   2,
-                    SampleRate: 48_000,
-                    BitDepth:   24)),
+                    Channels:   channels,
+                    SampleRate: sampleRate,
+                    BitDepth:   bitDepth)),
             cancellationToken).ConfigureAwait(false);
     }
 

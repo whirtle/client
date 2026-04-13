@@ -112,13 +112,11 @@ public partial class App : Application
 
         _mainWindow.Activate();
 
-        // Defer until the window is fully activated so XamlRoot is available.
-        // Guard against the first event firing as Deactivated (e.g. another window
-        // steals focus on startup) — only proceed on an actual activation.
+        // Defer until the window is shown so XamlRoot is available for dialogs.
+        // Any Activated event (including Deactivated) means the window has been
+        // shown; focus state doesn't affect XamlRoot availability.
         void OnFirstActivated(object sender, WindowActivatedEventArgs e)
         {
-            if (e.WindowActivationState == WindowActivationState.Deactivated)
-                return;
             _mainWindow!.Activated -= OnFirstActivated;
             _ = CheckFirewallAsync();
         }
