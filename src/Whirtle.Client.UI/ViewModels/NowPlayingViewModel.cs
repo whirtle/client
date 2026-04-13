@@ -47,15 +47,22 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         new ArtworkV1SupportChannel(Source: "album", Format: "jpeg", MediaWidth: 800, MediaHeight: 800),
     ]);
 
-    private static readonly PlayerV1Support PlayerSupport = PlayerClient.BuildSupport(
-        supportedFormats:
-        [
-            new PlayerV1SupportFormat("opus", Channels: 2, SampleRate: 48_000, BitDepth: 16),
-            new PlayerV1SupportFormat("flac", Channels: 2, SampleRate: 48_000, BitDepth: 16),
-            new PlayerV1SupportFormat("pcm",  Channels: 2, SampleRate: 48_000, BitDepth: 16),
-        ],
-        bufferCapacity:   500,
-        supportedCommands: ["volume", "mute"]);
+    private static PlayerV1Support BuildPlayerSupport(AudioDeviceInfo? device)
+    {
+        int sr = device?.MaxSampleRate ?? 48_000;
+        int bd = device?.MaxBitDepth   ?? 24;
+        int ch = device?.MaxChannels   ?? 2;
+
+        return PlayerClient.BuildSupport(
+            supportedFormats:
+            [
+                new PlayerV1SupportFormat("opus", Channels: ch, SampleRate: sr, BitDepth: bd),
+                new PlayerV1SupportFormat("flac", Channels: ch, SampleRate: sr, BitDepth: bd),
+                new PlayerV1SupportFormat("pcm",  Channels: ch, SampleRate: sr, BitDepth: bd),
+            ],
+            bufferCapacity:    500,
+            supportedCommands: ["volume", "mute"]);
+    }
 
     // Signal-strength inputs — updated by clock sync and PlaybackEngine events.
     private TimeSpan _lastRtt        = TimeSpan.MaxValue; // unknown until first sync
@@ -115,6 +122,17 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     // ── Audio devices ──────────────────────────────────────────────────────
 
     [ObservableProperty] private AudioDeviceInfo? _selectedDevice;
+
+    partial void OnSelectedDeviceChanged(AudioDeviceInfo? value)
+    {
+        if (_player is null || value is null) return;
+
+        _ = _player.RequestFormatAsync(new StreamRequestFormatPlayer(
+            Codec:      "opus",
+            Channels:   value.MaxChannels,
+            SampleRate: value.MaxSampleRate,
+            BitDepth:   value.MaxBitDepth));
+    }
 
     // ── Computed / derived properties ──────────────────────────────────────
 
@@ -248,7 +266,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 $"whirtle-{Environment.MachineName}", "Whirtle",
                 supportedRoles: SupportedRoles,
                 artworkSupport: ArtworkSupport,
-                playerSupport:  PlayerSupport,
+                playerSupport:  BuildPlayerSupport(SelectedDevice),
                 cancellationToken: token);
 
             Log.Debug(
@@ -266,7 +284,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _syncer      = new ClockSynchronizer(_protocol);
             _controller  = new ControllerClient(_protocol);
             _player      = new PlayerClient(_protocol, SelectedDevice?.Id);
-            await _player.SendInitialRequestsAsync(token);
+            await _player.SendInitialRequestsAsync(
+                SelectedDevice?.MaxSampleRate ?? 48_000,
+                SelectedDevice?.MaxChannels   ?? 2,
+                SelectedDevice?.MaxBitDepth   ?? 24,
+                token);
             IsConnected  = true;
             ConnectionStatus = $"Connected — {endpoint.Host}:{endpoint.Port}";
 
@@ -580,7 +602,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 _settings.ClientId, _settings.ClientName,
                 supportedRoles: SupportedRoles,
                 artworkSupport: ArtworkSupport,
-                playerSupport:  PlayerSupport,
+                playerSupport:  BuildPlayerSupport(SelectedDevice),
                 cancellationToken: serverModeCancellation);
         }
         catch (HandshakeException ex)
@@ -626,7 +648,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _syncer      = new ClockSynchronizer(protocol);
         _controller  = new ControllerClient(protocol);
         _player      = new PlayerClient(protocol, SelectedDevice?.Id);
-        await _player.SendInitialRequestsAsync(serverModeCancellation);
+        await _player.SendInitialRequestsAsync(
+            SelectedDevice?.MaxSampleRate ?? 48_000,
+            SelectedDevice?.MaxChannels   ?? 2,
+            SelectedDevice?.MaxBitDepth   ?? 24,
+            serverModeCancellation);
         _connectionCts  = new CancellationTokenSource();
 
         // Start background tasks — receive loop routes server/time to the syncer.
