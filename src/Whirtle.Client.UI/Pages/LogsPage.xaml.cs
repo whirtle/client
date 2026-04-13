@@ -4,6 +4,7 @@
 using System.Collections.Specialized;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
@@ -28,6 +29,10 @@ public sealed partial class LogsPage : Page
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _scrollViewer = FindScrollViewer(LogList);
+        LogList.AddHandler(
+            UIElement.PointerWheelChangedEvent,
+            new PointerEventHandler(LogList_PointerWheelChanged),
+            handledEventsToo: true);
         ViewModel.Entries.CollectionChanged += OnEntriesChanged;
     }
 
@@ -50,6 +55,15 @@ public sealed partial class LogsPage : Page
             if (ViewModel.Entries.Count > 0)
                 LogList.ScrollIntoView(ViewModel.Entries[^1]);
         });
+    }
+
+    private void LogList_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+    {
+        if (_scrollViewer is null) return;
+
+        var delta = e.GetCurrentPoint(LogList).Properties.MouseWheelDelta;
+        _scrollViewer.ChangeView(null, _scrollViewer.VerticalOffset - delta, null, disableAnimation: true);
+        e.Handled = true;
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject element)
