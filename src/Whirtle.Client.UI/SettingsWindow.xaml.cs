@@ -39,6 +39,9 @@ public sealed partial class SettingsWindow : Window
 
         Closed += (_, _) =>
         {
+            _micaController?.Dispose();
+            _micaController = null;
+
             if (!saved)
                 App.Current.SettingsViewModel.RestoreSnapshot();
         };
