@@ -11,7 +11,6 @@ public sealed partial class NowPlayingPage : Page
 {
     private NowPlayingViewModel ViewModel => App.Current.NowPlayingViewModel;
 
-    private bool _volumeChanging;
     private SettingsWindow? _settingsWindow;
 
     public NowPlayingPage()
@@ -50,16 +49,10 @@ public sealed partial class NowPlayingPage : Page
         }
     }
 
-    // Volume slider — throttle commands so we don't flood the server
-    private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    private async void VolumeSlider_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
     {
-        if (_volumeChanging) return;
-        _volumeChanging = true;
-        DispatcherQueue.TryEnqueue(async () =>
-        {
-            await ViewModel.SetVolumeCommand.ExecuteAsync(e.NewValue / 100.0);
-            _volumeChanging = false;
-        });
+        if (sender is Slider slider)
+            await ViewModel.SetVolumeCommand.ExecuteAsync(slider.Value / 100.0);
     }
 
     // Seek — optimistic local update; protocol seek command is a stub for now
