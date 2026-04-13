@@ -233,11 +233,9 @@ public sealed class PlayerClient : IAsyncDisposable
         _playbackEngine    = new PlaybackEngine(renderer, _protocol);
         _playbackEngine.StatusChanged += (state, _) =>
             _playerState = state == PlaybackState.Error ? "error" : "synchronized";
-        // Only initialise the clock offset when a real sync result is available.
-        // If the sync hasn't fired yet the engine will wait in Buffering state
-        // until UpdateClockOffset is called with the first measured value.
-        if (_clockSynced)
-            _playbackEngine.UpdateClockOffset(_clockOffset);
+        _playbackEngine.UpdateClockOffset(_clockOffset);
+        _playbackEngine.SetVolume(_volume / 100f);
+        _playbackEngine.SetUserMuted(_muted);
         _playbackEngine.Start();
 
         _streamActive = true;
@@ -279,11 +277,13 @@ public sealed class PlayerClient : IAsyncDisposable
         {
             case "volume" when cmd.Volume.HasValue:
                 _volume = Math.Clamp(cmd.Volume.Value, 0, 100);
+                _playbackEngine?.SetVolume(_volume / 100f);
                 VolumeChanged?.Invoke(_volume);
                 break;
 
             case "mute" when cmd.Mute.HasValue:
                 _muted = cmd.Mute.Value;
+                _playbackEngine?.SetUserMuted(_muted);
                 MuteChanged?.Invoke(_muted);
                 break;
 

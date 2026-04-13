@@ -11,13 +11,15 @@ internal sealed class FakeWasapiRenderer : IWasapiRenderer
     // Always reports 0 so the render loop never waits on buffer level in tests.
     public int  BufferedBytes       => 0;
     public bool IsRunning           { get; private set; }
-    public bool Muted      { get; private set; }
+    public bool  Muted  { get; private set; }
+    public float Volume { get; private set; } = 1.0f;
 
     public List<short[]> Written { get; } = [];
 
     public void Start()  => IsRunning = true;
     public void Stop()   => IsRunning = false;
-    public void SetMuted(bool muted) => Muted = muted;
+    public void SetMuted(bool muted)     => Muted  = muted;
+    public void SetVolume(float volume)  => Volume = volume;
 
     public void Write(ReadOnlySpan<short> samples)
     {

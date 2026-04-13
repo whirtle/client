@@ -44,6 +44,8 @@ public sealed class PlaybackEngine : IAsyncDisposable
     private volatile bool           _clockOffsetReady;
     private CancellationTokenSource _cts  = new();
     private Task                    _renderTask = Task.CompletedTask;
+    private bool                    _userMuted  = false;
+    private bool                    _engineMuted = false;
 
     public PlaybackState State => _state;
 
@@ -106,6 +108,19 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// Discards all buffered frames. Call when a <c>stream/clear</c> message arrives.
     /// </summary>
     public void ClearBuffer() => _buffer.Clear();
+
+    /// <summary>Sets the user-controlled volume. <paramref name="volume"/> is a linear scalar in [0.0, 1.0].</summary>
+    public void SetVolume(float volume) => _renderer.SetVolume(volume);
+
+    /// <summary>
+    /// Mutes or unmutes based on the user's command.
+    /// The engine may also mute internally during error recovery; both states are tracked independently.
+    /// </summary>
+    public void SetUserMuted(bool muted)
+    {
+        _userMuted = muted;
+        ApplyMuteState();
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -211,12 +226,14 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     private async Task HandleErrorAsync(CancellationToken ct)
     {
-        _renderer.SetMuted(true);
+        _engineMuted = true;
+        ApplyMuteState();
 
         if (_buffer.Count >= MinBufferFrames)
         {
             Log.Debug("Playback recovered ({Count} frames buffered); resuming", _buffer.Count);
-            _renderer.SetMuted(false);
+            _engineMuted = false;
+            ApplyMuteState();
             _state = PlaybackState.Buffering; // will quickly advance to Synchronized
             await NotifySynchronizedAsync().ConfigureAwait(false);
             return;
@@ -230,7 +247,8 @@ public sealed class PlaybackEngine : IAsyncDisposable
     private async Task EnterErrorAsync(CancellationToken ct)
     {
         TransitionTo(PlaybackState.Error);
-        _renderer.SetMuted(true);
+        _engineMuted = true;
+        ApplyMuteState();
         _buffer.Clear();
 
         try
@@ -263,6 +281,8 @@ public sealed class PlaybackEngine : IAsyncDisposable
         }
         catch (Exception) { }
     }
+
+    private void ApplyMuteState() => _renderer.SetMuted(_engineMuted || _userMuted);
 
     /// <summary>
     /// Returns the difference in ms between when we are playing the frame
