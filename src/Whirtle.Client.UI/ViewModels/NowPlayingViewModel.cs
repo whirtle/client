@@ -355,6 +355,24 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Called when the preferred local network address changes (e.g. WiFi
+    /// roaming, WiFi → Ethernet switch). Tears down the stale session and
+    /// restarts the appropriate connection mode on the new interface.
+    /// </summary>
+    internal async Task OnNetworkChangedAsync(string newIp)
+    {
+        Log.Information("Network address changed to {NewIp} — restarting connection", newIp);
+        StopServerInitiatedMode();
+        await TearDownSessionAsync();
+        ResetPlaybackState();
+
+        if (_settings.ConnectionMode == ConnectionMode.ServerInitiated)
+            StartServerInitiatedMode();
+        else
+            ConnectionStatus = "Network changed — select a server to reconnect";
+    }
+
+    /// <summary>
     /// Called when the system is about to suspend. Tears down the active
     /// session so sockets are cleanly closed before the machine sleeps.
     /// </summary>
