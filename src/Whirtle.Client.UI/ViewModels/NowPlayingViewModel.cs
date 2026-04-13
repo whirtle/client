@@ -6,7 +6,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Serilog;
 using Whirtle.Client.Audio;
-using Whirtle.Client.Clock;
 using Whirtle.Client.Discovery;
 using Whirtle.Client.Protocol;
 using Whirtle.Client.Role;
@@ -416,7 +415,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     /// </summary>
     private void TickPosition()
     {
-        long localNowUs  = SystemClock.Instance.UtcNowMicroseconds;
+        long localNowUs  = (DateTimeOffset.UtcNow.Ticks - DateTimeOffset.UnixEpoch.Ticks) / 10;
         long serverNowUs = localNowUs + (long)_serverClockOffset.TotalMicroseconds;
         PositionSeconds  = _nowPlaying.CalculatePositionMs(serverNowUs) / 1000.0;
     }
