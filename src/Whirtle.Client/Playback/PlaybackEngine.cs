@@ -170,14 +170,15 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
         double driftMs = ComputeDriftMs(timestamp);
 
+        if (Log.IsEnabled(LogEventLevel.Debug))
+            Log.Debug(
+                "Playback render: buffer={BufferFrames} frames, drift={DriftMs:F1} ms",
+                _buffer.Count, driftMs);
+
         if (Math.Abs(driftMs) > MaxDriftMs)
-        {
             Log.Warning(
-                "Playback drift {DriftMs:+0.0;-0.0} ms exceeds threshold ({MaxDriftMs} ms) — entering error state",
+                "Playback drift {DriftMs:+0.0;-0.0} ms exceeds threshold ({MaxDriftMs} ms)",
                 driftMs, MaxDriftMs);
-            await EnterErrorAsync(ct);
-            return;
-        }
 
         // Compute a rate ratio to gently correct residual drift.
         // A 1 ms drift on a 20 ms frame → ratio = 20/21 ≈ 0.952 (speed up).
@@ -196,17 +197,16 @@ public sealed class PlaybackEngine : IAsyncDisposable
             ? ChannelDownmixer.Downmix(resampled, frame.Channels)
             : resampled;
 
+        // Pace writes by WASAPI buffer level rather than a fixed timer.
+        // Task.Delay on Windows has ~15 ms granularity; using it for 96 ms frame timing
+        // accumulates 15–25 ms of overshoot per frame, rapidly exceeding the drift
+        // threshold.  Waiting until the hardware buffer has room lets the device clock
+        // drive the rate instead.
+        int halfCapacity = _renderer.BufferCapacityBytes / 2;
+        while (_renderer.BufferedBytes > halfCapacity && !ct.IsCancellationRequested)
+            await Task.Delay(5, ct).ConfigureAwait(false);
+
         _renderer.Write(samples);
-
-        if (Log.IsEnabled(LogEventLevel.Debug))
-            Log.Debug(
-                "Playback render: buffer={BufferFrames} frames, drift={DriftMs:F1} ms, ratio={RateRatio:F3}",
-                _buffer.Count, driftMs, rateRatio);
-
-        // Yield until roughly the next frame is due. Waiting the full frame
-        // duration keeps the jitter buffer at a stable level; waiting less
-        // drains it faster than frames arrive and causes spurious underruns.
-        await Task.Delay(frame.Duration, ct).ConfigureAwait(false);
     }
 
     private async Task HandleErrorAsync(CancellationToken ct)

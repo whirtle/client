@@ -23,6 +23,7 @@ internal sealed class WasapiRenderer : IWasapiRenderer
     public int  Channels            { get; }
     public int  LatencyMs           { get; }
     public int  BufferCapacityBytes => _provider.BufferLength;
+    public int  BufferedBytes       => _provider.BufferedBytes;
     public bool IsRunning           { get; private set; }
 
     /// <param name="deviceId">

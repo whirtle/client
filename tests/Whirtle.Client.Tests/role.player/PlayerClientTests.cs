@@ -215,6 +215,30 @@ public class PlayerClientTests
         Assert.Equal(200, state.Player!.StaticDelayMs); // not 300 (200 + 100 renderer latency)
     }
 
+    // ── stream/end ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ProcessFrameAsync_StreamEnd_ChunksAreDroppedAfterStreamEnd()
+    {
+        // After stream/end, incoming audio chunks must be silently dropped.
+        var (player, _, renderers) = Build();
+        player.UpdateClockOffset(TimeSpan.Zero);
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
+
+        await player.ProcessFrameAsync(new ProtocolFrame(new StreamEndMessage()));
+
+        for (int i = 0; i < 6; i++)
+            await player.ProcessFrameAsync(new AudioChunkFrame(
+                Timestamp:   10_000_000L + i * 20_000L,
+                EncodedData: new byte[4]));
+
+        // No audio should have been written to the renderer.
+        await Task.Delay(50); // give engine time to process if chunks leaked through
+        Assert.Empty(((FakeWasapiRenderer)renderers[0]).Written);
+    }
+
     // ── stream/clear ─────────────────────────────────────────────────────────
 
     [Fact]
