@@ -1,4 +1,4 @@
-namespace Whirtle.Client.UI.ViewModels;
+namespace Whirtle.Client.State;
 
 public enum AppUiState
 {

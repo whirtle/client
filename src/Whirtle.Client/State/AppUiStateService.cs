@@ -1,6 +1,7 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
-namespace Whirtle.Client.UI.ViewModels;
+namespace Whirtle.Client.State;
 
 /// <summary>
 /// Owns the global UI state and derives it from two inputs: whether the user
@@ -8,11 +9,27 @@ namespace Whirtle.Client.UI.ViewModels;
 ///
 /// Callers update state by calling <see cref="Update"/> whenever either input
 /// changes. This keeps the service free of WinUI/ViewModel dependencies and
-/// makes it straightforward to test.
+/// makes it straightforward to test from the platform-neutral test project.
 /// </summary>
-public sealed partial class AppUiStateService : ObservableObject
+public sealed class AppUiStateService : INotifyPropertyChanged
 {
-    [ObservableProperty] private AppUiState _currentState;
+    private AppUiState _currentState;
+
+    public AppUiState CurrentState
+    {
+        get => _currentState;
+        private set
+        {
+            if (_currentState == value) return;
+            _currentState = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
     public AppUiStateService(bool termsAccepted, bool isConnected)
     {
