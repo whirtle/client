@@ -53,6 +53,26 @@ public sealed partial class SettingsViewModel : ObservableObject
         Save();
     }
 
+    // ── Logs window bounds ─────────────────────────────────────────────────
+    private int? _logsWindowX;
+    private int? _logsWindowY;
+    private int? _logsWindowWidth;
+    private int? _logsWindowHeight;
+
+    public int? LogsWindowX      => _logsWindowX;
+    public int? LogsWindowY      => _logsWindowY;
+    public int? LogsWindowWidth  => _logsWindowWidth;
+    public int? LogsWindowHeight => _logsWindowHeight;
+
+    public void SaveLogsWindowBounds(int x, int y, int width, int height)
+    {
+        _logsWindowX      = x;
+        _logsWindowY      = y;
+        _logsWindowWidth  = width;
+        _logsWindowHeight = height;
+        Save();
+    }
+
     // ── Volume / mute (global, persisted) ─────────────────────────────────
     private double _volume  = 0.8;
     private bool   _isMuted = false;
@@ -260,6 +280,10 @@ public sealed partial class SettingsViewModel : ObservableObject
             _telemetryConsent       = saved.TelemetryConsent;
             _windowX                = saved.WindowX;
             _windowY                = saved.WindowY;
+            _logsWindowX            = saved.LogsWindowX;
+            _logsWindowY            = saved.LogsWindowY;
+            _logsWindowWidth        = saved.LogsWindowWidth;
+            _logsWindowHeight       = saved.LogsWindowHeight;
             _volume                 = saved.Volume  ?? 0.8;
             _isMuted                = saved.IsMuted ?? false;
 
@@ -381,7 +405,11 @@ public sealed partial class SettingsViewModel : ObservableObject
                 TermsAccepted,
                 TelemetryConsent,
                 _volume,
-                _isMuted);
+                _isMuted,
+                _logsWindowX,
+                _logsWindowY,
+                _logsWindowWidth,
+                _logsWindowHeight);
 
             var json    = JsonSerializer.Serialize(data, JsonOptions);
             var tmpPath = SettingsPath + ".tmp";
@@ -410,10 +438,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         ConnectionMode                     ConnectionMode,
         string                             LogLevel,
         List<PersistedServer>?             SavedServers,
-        int?                               WindowX          = null,
-        int?                               WindowY          = null,
-        bool                               TermsAccepted    = false,
-        bool                               TelemetryConsent = false,
-        double?                            Volume           = null,
-        bool?                              IsMuted          = null);
+        int?                               WindowX           = null,
+        int?                               WindowY           = null,
+        bool                               TermsAccepted     = false,
+        bool                               TelemetryConsent  = false,
+        double?                            Volume            = null,
+        bool?                              IsMuted           = null,
+        int?                               LogsWindowX       = null,
+        int?                               LogsWindowY       = null,
+        int?                               LogsWindowWidth   = null,
+        int?                               LogsWindowHeight  = null);
 }
