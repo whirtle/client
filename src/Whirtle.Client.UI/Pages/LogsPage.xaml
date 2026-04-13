@@ -48,7 +48,7 @@
             SelectionMode="Multiple"
             IsItemClickEnabled="False"
             SelectionChanged="LogList_SelectionChanged"
-            VirtualizingStackPanel.VirtualizationMode="Recycling">
+>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="logging:LogEntry">
                     <Grid ColumnSpacing="8">

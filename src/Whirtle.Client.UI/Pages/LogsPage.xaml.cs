@@ -34,10 +34,19 @@ public sealed partial class LogsPage : Page
             new PointerEventHandler(LogList_PointerWheelChanged),
             handledEventsToo: true);
         ViewModel.Entries.CollectionChanged += OnEntriesChanged;
+
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            if (ViewModel.Entries.Count > 0)
+                LogList.ScrollIntoView(ViewModel.Entries[^1]);
+        });
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        LogList.RemoveHandler(
+            UIElement.PointerWheelChangedEvent,
+            (PointerEventHandler)LogList_PointerWheelChanged);
         ViewModel.Entries.CollectionChanged -= OnEntriesChanged;
     }
 
@@ -59,6 +68,7 @@ public sealed partial class LogsPage : Page
 
     private void LogList_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
     {
+        _scrollViewer ??= FindScrollViewer(LogList);
         if (_scrollViewer is null) return;
 
         var delta = e.GetCurrentPoint(LogList).Properties.MouseWheelDelta;

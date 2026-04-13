@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 using Serilog;
+using Serilog.Events;
 using Whirtle.Client.Codec;
 using Whirtle.Client.Protocol;
 
@@ -110,10 +111,10 @@ public sealed class PlaybackEngine : IAsyncDisposable
     {
         _cts.Cancel();
         try { await _renderTask.ConfigureAwait(false); }
-        catch (OperationCanceledException) { }
+        catch { }   // Render task may fault (e.g. WASAPI session invalidated); swallow all
 
-        _renderer.Stop();
-        _renderer.Dispose();
+        try { _renderer.Stop(); }    catch { }
+        try { _renderer.Dispose(); } catch { }
         _cts.Dispose();
     }
 
@@ -151,6 +152,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
         if (_buffer.Count >= MinBufferFrames)
         {
+            Log.Debug("Playback buffering complete ({Count} frames); starting playback", _buffer.Count);
             TransitionTo(PlaybackState.Synchronized);
             return;
         }
@@ -196,9 +198,15 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
         _renderer.Write(samples);
 
-        // Yield to avoid busy-spinning; real WASAPI timing comes from the hardware buffer.
-        var nextFrameDelay = TimeSpan.FromMilliseconds(Math.Max(1, frame.Duration.TotalMilliseconds / 2));
-        await Task.Delay(nextFrameDelay, ct).ConfigureAwait(false);
+        if (Log.IsEnabled(LogEventLevel.Debug))
+            Log.Debug(
+                "Playback render: buffer={BufferFrames} frames, drift={DriftMs:F1} ms, ratio={RateRatio:F3}",
+                _buffer.Count, driftMs, rateRatio);
+
+        // Yield until roughly the next frame is due. Waiting the full frame
+        // duration keeps the jitter buffer at a stable level; waiting less
+        // drains it faster than frames arrive and causes spurious underruns.
+        await Task.Delay(frame.Duration, ct).ConfigureAwait(false);
     }
 
     private async Task HandleErrorAsync(CancellationToken ct)
@@ -207,6 +215,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
         if (_buffer.Count >= MinBufferFrames)
         {
+            Log.Debug("Playback recovered ({Count} frames buffered); resuming", _buffer.Count);
             _renderer.SetMuted(false);
             _state = PlaybackState.Buffering; // will quickly advance to Synchronized
             await NotifySynchronizedAsync().ConfigureAwait(false);

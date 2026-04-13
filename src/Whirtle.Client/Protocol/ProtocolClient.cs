@@ -66,7 +66,7 @@ public sealed class ProtocolClient : IAsyncDisposable
     public async Task SendAsync(Message message, CancellationToken cancellationToken = default)
     {
         var data = _serializer.Serialize(message);
-        Log.Debug("Send {Type} {Json}", _serializer.GetWireType(message), System.Text.Encoding.UTF8.GetString(data));
+        Log.Debug("Send {Type} {Json:l}", _serializer.GetWireType(message), System.Text.Encoding.UTF8.GetString(data));
         await _transport.SendAsync(data, cancellationToken);
     }
 
