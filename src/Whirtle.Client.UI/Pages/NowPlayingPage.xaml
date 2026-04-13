@@ -141,7 +141,6 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="40" />
                     </Grid.ColumnDefinitions>
 
                     <!-- Mute toggle button -->
@@ -160,17 +159,8 @@
                         x:Name="VolumeSlider"
                         Minimum="0" Maximum="100"
                         Value="{x:Bind ViewModel.VolumePercent, Mode=OneWay}"
-                        IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
                         VerticalAlignment="Center"
                         ValueChanged="VolumeSlider_ValueChanged" />
-
-                    <!-- Numeric readout -->
-                    <TextBlock
-                        Grid.Column="2"
-                        Text="{x:Bind ViewModel.VolumePercent, Mode=OneWay}"
-                        VerticalAlignment="Center"
-                        TextAlignment="Right"
-                        Style="{ThemeResource CaptionTextBlockStyle}" />
                 </Grid>
             </Border>
 

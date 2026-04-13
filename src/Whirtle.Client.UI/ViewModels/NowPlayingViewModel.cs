@@ -166,6 +166,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 OnPropertyChanged(nameof(ServerPickerLabel));
         };
 
+        _volume  = _settings.Volume;
+        _isMuted = _settings.IsMuted;
+
         LoadAudioDevices();
 
         if (_settings.ConnectionMode == ConnectionMode.ServerInitiated)
@@ -550,6 +553,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task SetVolumeAsync(double normalised)
     {
         Volume = normalised;
+        _settings.SaveVolume(normalised, IsMuted);
         if (_controller is null || IsMuted) return;
         await _controller.SetVolumeAsync(normalised);
     }
@@ -558,6 +562,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task ToggleMuteAsync()
     {
         IsMuted = !IsMuted;
+        _settings.SaveVolume(Volume, IsMuted);
         if (_controller is null) return;
         await _controller.SetVolumeAsync(IsMuted ? 0.0 : Volume);
     }
@@ -600,6 +605,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                             {
                                 Volume  = ctrl.Volume / 100.0;
                                 IsMuted = ctrl.Muted;
+                                _settings.SaveVolume(Volume, IsMuted);
                             });
                         }
                         break;
