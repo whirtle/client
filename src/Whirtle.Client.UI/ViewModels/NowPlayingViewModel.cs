@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Serilog;
 using Whirtle.Client.Audio;
+using Whirtle.Client.Clock;
 using Whirtle.Client.Discovery;
 using Whirtle.Client.Protocol;
 using Whirtle.Client.Role;
