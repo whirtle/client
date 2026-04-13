@@ -38,6 +38,9 @@ public sealed partial class LogsPage : Page
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        LogList.RemoveHandler(
+            UIElement.PointerWheelChangedEvent,
+            (PointerEventHandler)LogList_PointerWheelChanged);
         ViewModel.Entries.CollectionChanged -= OnEntriesChanged;
     }
 
@@ -59,6 +62,7 @@ public sealed partial class LogsPage : Page
 
     private void LogList_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
     {
+        _scrollViewer ??= FindScrollViewer(LogList);
         if (_scrollViewer is null) return;
 
         var delta = e.GetCurrentPoint(LogList).Properties.MouseWheelDelta;
