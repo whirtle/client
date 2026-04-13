@@ -43,6 +43,7 @@ public sealed class PlayerClient : IAsyncDisposable
     private PlaybackEngine? _playbackEngine;
     private bool            _streamActive;
     private TimeSpan        _clockOffset;
+    private int             _rendererLatencyMs;
 
     private int  _volume        = 100;
     private bool _muted         = false;
@@ -207,8 +208,9 @@ public sealed class PlayerClient : IAsyncDisposable
 
         _decoder = AudioDecoderFactory.Create(format, player.SampleRate, player.Channels);
 
-        var renderer    = _rendererFactory(player.SampleRate, player.Channels);
-        _playbackEngine = new PlaybackEngine(renderer, _protocol);
+        var renderer       = _rendererFactory(player.SampleRate, player.Channels);
+        _rendererLatencyMs = renderer.LatencyMs;
+        _playbackEngine    = new PlaybackEngine(renderer, _protocol);
         _playbackEngine.UpdateClockOffset(_clockOffset);
         _playbackEngine.Start();
 
@@ -217,9 +219,12 @@ public sealed class PlayerClient : IAsyncDisposable
 
     private void HandleAudioChunk(AudioChunkFrame chunk)
     {
-        // Subtract static delay (microseconds) so that audio exits the hardware
-        // port at the server timestamp rather than at the port + downstream delay.
-        long effectiveTimestamp = chunk.Timestamp - (_staticDelayMs * 1_000L);
+        // Advance the target timestamp by the total known output latency so that
+        // audio is submitted to the hardware early enough to emerge at the right moment:
+        //   static_delay_ms  — user-configured downstream delay (amplifier, speakers, etc.)
+        //   renderer latency — WASAPI buffer depth; audio queued now plays this many ms later
+        long totalLatencyUs     = (_staticDelayMs + _rendererLatencyMs) * 1_000L;
+        long effectiveTimestamp = chunk.Timestamp - totalLatencyUs;
 
         var audioFrame = _decoder!.Decode(chunk.EncodedData);
         _playbackEngine!.Enqueue(effectiveTimestamp, audioFrame);

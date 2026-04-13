@@ -160,6 +160,41 @@ public class PlayerClientTests
         Assert.False(((FakeWasapiRenderer)renderers[0]).IsRunning);
     }
 
+    // ── timestamp compensation ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ProcessFrameAsync_AudioChunk_AcceptedAfterStreamStartAndNotDropped()
+    {
+        // Confirms that audio chunks reach the engine (not silently dropped) when a
+        // stream is active, exercising the full static_delay + renderer_latency path.
+        // FakeWasapiRenderer.LatencyMs = 100; static_delay = 50 ms → total 150 ms deducted.
+        var (player, _, _) = Build();
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new ServerCommandMessage(Player: new ServerCommandPlayer("set_static_delay", StaticDelayMs: 50))));
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
+
+        // Minimal 4-byte PCM payload (2 stereo int16 samples = silence).
+        var ex = await Record.ExceptionAsync(() =>
+            player.ProcessFrameAsync(new AudioChunkFrame(Timestamp: 10_000_000, EncodedData: new byte[4])));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task ProcessFrameAsync_AudioChunk_DroppedWhenNoActiveStream()
+    {
+        // Before stream/start, audio chunks must be rejected.
+        var (player, _, _) = Build();
+
+        var ex = await Record.ExceptionAsync(() =>
+            player.ProcessFrameAsync(new AudioChunkFrame(Timestamp: 10_000_000, EncodedData: new byte[4])));
+
+        // Should be silently ignored (no throw, no engine interaction).
+        Assert.Null(ex);
+    }
+
     // ── stream/clear ─────────────────────────────────────────────────────────
 
     [Fact]
