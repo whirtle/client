@@ -354,6 +354,58 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _lastBufferCount = -1;
     }
 
+    /// <summary>
+    /// Called when the preferred local network address changes (e.g. WiFi
+    /// roaming, WiFi → Ethernet switch). Tears down the stale session and
+    /// restarts the appropriate connection mode on the new interface.
+    /// </summary>
+    internal async Task OnNetworkChangedAsync(string newIp)
+    {
+        Log.Information("Network address changed to {NewIp} — restarting connection", newIp);
+        StopServerInitiatedMode();
+        await TearDownSessionAsync();
+        ResetPlaybackState();
+
+        if (_settings.ConnectionMode == ConnectionMode.ServerInitiated)
+            StartServerInitiatedMode();
+        else
+            ConnectionStatus = "Network changed — select a server to reconnect";
+    }
+
+    /// <summary>
+    /// Called when the system is about to suspend. Tears down the active
+    /// session so sockets are cleanly closed before the machine sleeps.
+    /// </summary>
+    internal async Task OnSuspendAsync()
+    {
+        Log.Information("System suspending — tearing down connection");
+        StopServerInitiatedMode();
+        await TearDownSessionAsync();
+        ResetPlaybackState();
+    }
+
+    /// <summary>
+    /// Called after the system resumes from sleep. Waits briefly for the
+    /// network stack to come back up, then restarts the appropriate connection
+    /// mode.
+    /// </summary>
+    internal async Task OnResumeAsync()
+    {
+        Log.Information("System resumed from sleep — waiting for network, then reconnecting");
+
+        // Give Windows time to re-establish network interfaces.
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        if (_settings.ConnectionMode == ConnectionMode.ServerInitiated)
+        {
+            StartServerInitiatedMode();
+        }
+        else
+        {
+            ConnectionStatus = "Connection lost — select a server to reconnect";
+        }
+    }
+
     private void StopServerInitiatedMode()
     {
         _serverModeCts?.Cancel();

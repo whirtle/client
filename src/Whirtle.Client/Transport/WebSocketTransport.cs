@@ -8,24 +8,40 @@ namespace Whirtle.Client.Transport;
 
 public sealed class WebSocketTransport : ITransport, IAsyncDisposable
 {
+    public static readonly TimeSpan DefaultConnectTimeout = TimeSpan.FromSeconds(10);
+
     private readonly IClientWebSocket _webSocket;
     private readonly int _receiveBufferSize;
+    private readonly TimeSpan _connectTimeout;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
     public bool IsConnected => _webSocket.State == WebSocketState.Open;
 
-    public WebSocketTransport(int receiveBufferSize = 4096)
-        : this(new SystemClientWebSocket(), receiveBufferSize) { }
+    public WebSocketTransport(int receiveBufferSize = 4096, TimeSpan? connectTimeout = null)
+        : this(new SystemClientWebSocket(), receiveBufferSize, connectTimeout) { }
 
-    internal WebSocketTransport(IClientWebSocket webSocket, int receiveBufferSize = 4096)
+    internal WebSocketTransport(IClientWebSocket webSocket, int receiveBufferSize = 4096, TimeSpan? connectTimeout = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(receiveBufferSize, 1);
         _webSocket = webSocket;
         _receiveBufferSize = receiveBufferSize;
+        _connectTimeout = connectTimeout ?? DefaultConnectTimeout;
     }
 
-    public Task ConnectAsync(Uri uri, CancellationToken cancellationToken = default)
-        => _webSocket.ConnectAsync(uri, cancellationToken);
+    public async Task ConnectAsync(Uri uri, CancellationToken cancellationToken = default)
+    {
+        using var timeoutCts = new CancellationTokenSource(_connectTimeout);
+        using var linkedCts  = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        try
+        {
+            await _webSocket.ConnectAsync(uri, linkedCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"WebSocket connection to {uri} timed out after {_connectTimeout.TotalSeconds:0}s.");
+        }
+    }
 
     public async Task SendAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
     {

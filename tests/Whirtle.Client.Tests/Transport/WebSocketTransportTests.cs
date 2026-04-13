@@ -151,6 +151,33 @@ public class WebSocketTransportTests
         Assert.False(transport.IsConnected);
     }
 
+    // ── ConnectAsync timeout ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ConnectAsync_ThrowsTimeoutException_WhenServerDoesNotRespond()
+    {
+        var fake = new FakeClientWebSocket();
+        fake.BlockConnect();
+        var transport = new WebSocketTransport(fake, connectTimeout: TimeSpan.FromMilliseconds(50));
+
+        await Assert.ThrowsAsync<TimeoutException>(
+            () => transport.ConnectAsync(new Uri("ws://localhost")));
+    }
+
+    [Fact]
+    public async Task ConnectAsync_PropagatesOperationCanceled_WhenCallerCancels()
+    {
+        var fake = new FakeClientWebSocket();
+        fake.BlockConnect();
+        var transport = new WebSocketTransport(fake, connectTimeout: TimeSpan.FromSeconds(30));
+
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(TimeSpan.FromMilliseconds(50));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => transport.ConnectAsync(new Uri("ws://localhost"), cts.Token));
+    }
+
     // ── Connection-loss / error propagation ──────────────────────────────────
 
     [Fact]

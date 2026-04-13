@@ -162,7 +162,7 @@ public sealed class MdnsAdvertiser : IDisposable
         }
     }
 
-    private static string GetLocalIpAddress()
+    internal static string GetLocalIpAddress()
     {
         // Score candidates so that a real LAN address is preferred over
         // virtual adapters (WSL, Hyper-V, Docker) which occupy 172.16–31.x.x.
