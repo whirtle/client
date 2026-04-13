@@ -19,10 +19,11 @@ internal sealed class WasapiRenderer : IWasapiRenderer
     private readonly byte[]               _scratch;
     private volatile bool                 _muted;
 
-    public int  SampleRate { get; }
-    public int  Channels   { get; }
-    public int  LatencyMs  { get; }
-    public bool IsRunning  { get; private set; }
+    public int  SampleRate          { get; }
+    public int  Channels            { get; }
+    public int  LatencyMs           { get; }
+    public int  BufferCapacityBytes => _provider.BufferLength;
+    public bool IsRunning           { get; private set; }
 
     /// <param name="deviceId">
     /// WASAPI device ID from <c>WindowsAudioDeviceEnumerator</c>.

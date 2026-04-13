@@ -8,16 +8,22 @@ namespace Whirtle.Client.Playback;
 /// <summary>Abstraction over a WASAPI audio output device, for testability.</summary>
 internal interface IWasapiRenderer : IDisposable
 {
-    int  SampleRate { get; }
-    int  Channels   { get; }
+    int  SampleRate         { get; }
+    int  Channels           { get; }
     /// <summary>
     /// Hardware/driver output latency in milliseconds.
     /// Audio submitted to <see cref="Write"/> will reach the DAC this many
     /// milliseconds later. Used to advance the playback timestamp so frames
     /// are queued at the right moment.
     /// </summary>
-    int  LatencyMs  { get; }
-    bool IsRunning  { get; }
+    int  LatencyMs          { get; }
+    /// <summary>
+    /// Total byte capacity of the audio output buffer.
+    /// Report this value as <c>buffer_capacity</c> in <c>client/hello</c> so
+    /// the server knows the maximum chunk size the client can receive.
+    /// </summary>
+    int  BufferCapacityBytes { get; }
+    bool IsRunning          { get; }
 
     void Start();
     void Stop();

@@ -53,6 +53,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         int bd = device?.MaxBitDepth   ?? 24;
         int ch = device?.MaxChannels   ?? 2;
 
+        // Buffer capacity in bytes: 1 second of float32 PCM at the device's sample rate
+        // and channel count, matching the BufferedWaveProvider default in WasapiRenderer.
+        int bufferCapacityBytes = sr * ch * sizeof(float);
+
         return PlayerClient.BuildSupport(
             supportedFormats:
             [
@@ -60,7 +64,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 new PlayerV1SupportFormat("flac", Channels: ch, SampleRate: sr, BitDepth: bd),
                 new PlayerV1SupportFormat("pcm",  Channels: ch, SampleRate: sr, BitDepth: bd),
             ],
-            bufferCapacity:    500,
+            bufferCapacity:    bufferCapacityBytes,
             supportedCommands: ["volume", "mute"]);
     }
 
