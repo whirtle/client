@@ -25,6 +25,7 @@ public partial class App : Application
     private AppUiStateService?   _uiStateService;
     private DispatcherQueue?     _dispatcher;
     private NetworkMonitor?      _networkMonitor;
+    private bool                 _firewallCheckStarted;
 
     internal static new App Current => (App)Application.Current;
 
@@ -80,17 +81,15 @@ public partial class App : Application
                 _uiStateService.Update(_settingsViewModel!.TermsAccepted, _nowPlayingViewModel.IsConnected);
         };
 
-        // Start networking now if we're past the first-run gate; otherwise wait
-        // for the FRE to complete before advertising or accepting connections.
-        if (_uiStateService.CurrentState != AppUiState.FirstRun)
-            MaybeStartServerInitiatedMode();
-
+        // Networking and firewall setup are handled together by CheckFirewallAsync,
+        // which is triggered once the window is ready.  For the FRE path it is
+        // triggered again by the AppUiState.Waiting transition below.
         _uiStateService.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(AppUiStateService.CurrentState)
                 && _uiStateService.CurrentState == AppUiState.Waiting)
             {
-                MaybeStartServerInitiatedMode();
+                _ = CheckFirewallAsync();
             }
         };
 
@@ -114,8 +113,12 @@ public partial class App : Application
         _mainWindow.Activate();
 
         // Defer until the window is fully activated so XamlRoot is available.
+        // Guard against the first event firing as Deactivated (e.g. another window
+        // steals focus on startup) — only proceed on an actual activation.
         void OnFirstActivated(object sender, WindowActivatedEventArgs e)
         {
+            if (e.WindowActivationState == WindowActivationState.Deactivated)
+                return;
             _mainWindow!.Activated -= OnFirstActivated;
             _ = CheckFirewallAsync();
         }
@@ -130,27 +133,70 @@ public partial class App : Application
 
     private async Task CheckFirewallAsync()
     {
-        if (_settingsViewModel!.ConnectionMode != ConnectionMode.ServerInitiated)
+        // During FRE the window isn't usable yet.  Reset the guard so the
+        // AppUiState.Waiting handler can re-enter after FRE completes.
+        if (_uiStateService!.CurrentState == AppUiState.FirstRun)
             return;
 
-        var port = MdnsAdvertiser.DefaultPort;
-        if (FirewallHelper.IsRulePresent())
-            return;
+        // Prevent concurrent or duplicate invocations.
+        if (_firewallCheckStarted) return;
+        _firewallCheckStarted = true;
 
-        var dialog = new ContentDialog
+        // Always start networking at the end, regardless of firewall outcome,
+        // so that a skipped or failed dialog doesn't leave the app non-functional.
+        try
         {
-            Title             = "Firewall rule required",
-            Content           = $"Whirtle needs a Windows Firewall rule to allow incoming connections on port {port}. Add it now?",
-            PrimaryButtonText = "Add rule",
-            CloseButtonText   = "Not now",
-            DefaultButton     = ContentDialogButton.Primary,
-            XamlRoot          = _mainWindow!.Content.XamlRoot,
-        };
+            if (_settingsViewModel!.ConnectionMode == ConnectionMode.ServerInitiated)
+            {
+                var port = MdnsAdvertiser.DefaultPort;
+                if (!await Task.Run(FirewallHelper.IsRulePresent))
+                {
+                    // Step 1 — explain before triggering the UAC prompt.
+                    // Bring the window to the foreground and omit DefaultButton so
+                    // a stray Enter key cannot silently dismiss the dialog.
+                    _mainWindow!.Activate();
+                    var explainDialog = new ContentDialog
+                    {
+                        Title             = "Firewall permission needed",
+                        Content           = $"Whirtle needs a Windows Firewall rule so Sendspin servers can reach it on port {port}.\n\n" +
+                                             "Clicking \"Continue\" will open a Windows administrator prompt — please approve it to add the rule.",
+                        PrimaryButtonText = "Continue",
+                        CloseButtonText   = "Not now",
+                        XamlRoot          = _mainWindow!.Content.XamlRoot,
+                    };
 
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                    if (await explainDialog.ShowAsync() == ContentDialogResult.Primary)
+                    {
+                        // Step 2 — trigger the UAC prompt, then loop with a retry
+                        // option in case the user accidentally dismissed it.
+                        FirewallHelper.AddRule(port);
+                        Log.Information("Requested firewall rule for port {Port}", port);
+
+                        while (true)
+                        {
+                            var waitDialog = new ContentDialog
+                            {
+                                Title             = "Waiting for administrator prompt",
+                                Content           = "Please approve the administrator prompt that appeared.\n\n" +
+                                                     "If the prompt was dismissed or did not appear, click \"Try Again\".",
+                                PrimaryButtonText = "Try Again",
+                                CloseButtonText   = "Done",
+                                XamlRoot          = _mainWindow!.Content.XamlRoot,
+                            };
+
+                            if (await waitDialog.ShowAsync() != ContentDialogResult.Primary)
+                                break;
+
+                            FirewallHelper.AddRule(port);
+                            Log.Information("Retrying firewall rule for port {Port}", port);
+                        }
+                    }
+                }
+            }
+        }
+        finally
         {
-            FirewallHelper.AddRule(port);
-            Log.Information("Requested firewall rule for port {Port}", port);
+            MaybeStartServerInitiatedMode();
         }
     }
 

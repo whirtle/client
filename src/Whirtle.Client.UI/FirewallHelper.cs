@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 using System.Diagnostics;
+using System.Text;
 
 namespace Whirtle.Client.UI;
 
@@ -42,18 +43,28 @@ internal static class FirewallHelper
     }
 
     /// <summary>
-    /// Spawns an elevated netsh process to add an inbound TCP allow rule
-    /// scoped to this executable. Fire-and-forget; swallows UAC cancellation.
+    /// Spawns an elevated PowerShell process that removes any existing rule with the
+    /// same name before adding a fresh inbound TCP allow rule scoped to this executable.
+    /// Using delete-then-add makes the call idempotent. Fire-and-forget; swallows UAC
+    /// cancellation.
     /// </summary>
     internal static void AddRule(int port)
     {
-        var exePath   = Environment.ProcessPath;
-        var programArg = exePath is not null ? $" program=\"{exePath}\"" : "";
+        var exePath    = Environment.ProcessPath;
+        var programArg = exePath is not null ? $" -Program \"{exePath}\"" : "";
+
+        // Build a two-statement script: remove any pre-existing rule (idempotency),
+        // then add a fresh one. The script is Base64-encoded to avoid shell-quoting issues.
+        var script = $"Remove-NetFirewallRule -Name '{RuleName}' -ErrorAction SilentlyContinue; " +
+                     $"New-NetFirewallRule -Name '{RuleName}' -DisplayName '{RuleName}' " +
+                     $"-Direction Inbound -Action Allow -Protocol TCP -LocalPort {port}{programArg}";
+
+        var encodedCommand = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
 
         var psi = new ProcessStartInfo
         {
-            FileName        = "netsh",
-            Arguments       = $"advfirewall firewall add rule name=\"{RuleName}\" dir=in action=allow protocol=TCP localport={port}{programArg}",
+            FileName        = "powershell.exe",
+            Arguments       = $"-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand {encodedCommand}",
             Verb            = "runas",
             UseShellExecute = true,
         };
