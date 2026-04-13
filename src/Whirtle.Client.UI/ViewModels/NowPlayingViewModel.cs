@@ -243,7 +243,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task ConnectAsync(ServiceEndpoint endpoint)
     {
         StopServerInitiatedMode();
-        await TearDownSessionAsync();
+        try { await TearDownSessionAsync(); }
+        catch (Exception ex) { Log.Warning(ex, "Error tearing down previous session"); }
         ResetPlaybackState();
 
         // Show the target in the status bar immediately, before any awaits.
@@ -387,7 +388,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task DisconnectAsync()
     {
         StopServerInitiatedMode();
-        await TearDownSessionAsync();
+        try { await TearDownSessionAsync(); }
+        catch (Exception ex) { Log.Warning(ex, "Error tearing down session on disconnect"); }
         ResetPlaybackState();
     }
 
@@ -410,7 +412,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
         if (_player is not null)
         {
-            await _player.DisposeAsync().ConfigureAwait(false);
+            try { await _player.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception ex) { Log.Warning(ex, "Error disposing player"); }
             _player = null;
         }
 
