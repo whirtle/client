@@ -166,8 +166,8 @@ public class PlayerClientTests
     public async Task ProcessFrameAsync_AudioChunk_AcceptedAfterStreamStartAndNotDropped()
     {
         // Confirms that audio chunks reach the engine (not silently dropped) when a
-        // stream is active, exercising the full static_delay + renderer_latency path.
-        // FakeWasapiRenderer.LatencyMs = 100; static_delay = 50 ms → total 150 ms deducted.
+        // stream is active.  Only static_delay_ms (50 ms) is deducted from the
+        // timestamp; renderer latency is handled internally by WASAPI and not applied here.
         var (player, _, _) = Build();
 
         await player.ProcessFrameAsync(new ProtocolFrame(
@@ -193,6 +193,50 @@ public class PlayerClientTests
 
         // Should be silently ignored (no throw, no engine interaction).
         Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task SendStateAsync_AfterStreamStart_ReportsOnlyStaticDelayMs_NotRendererLatency()
+    {
+        // FakeWasapiRenderer.LatencyMs = 100.  After stream/start the renderer latency
+        // is known, but it must NOT be added to StaticDelayMs — that field is for
+        // external/downstream delay only (amplifiers, speakers, etc.).
+        var (player, transport, _) = Build();
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new ServerCommandMessage(Player: new ServerCommandPlayer("set_static_delay", StaticDelayMs: 200))));
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
+
+        int sentBefore = transport.Sent.Count;
+        await player.SendStateAsync();
+
+        var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[sentBefore]);
+        Assert.Equal(200, state.Player!.StaticDelayMs); // not 300 (200 + 100 renderer latency)
+    }
+
+    // ── stream/end ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ProcessFrameAsync_StreamEnd_ChunksAreDroppedAfterStreamEnd()
+    {
+        // After stream/end, incoming audio chunks must be silently dropped.
+        var (player, _, renderers) = Build();
+        player.UpdateClockOffset(TimeSpan.Zero);
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
+
+        await player.ProcessFrameAsync(new ProtocolFrame(new StreamEndMessage()));
+
+        for (int i = 0; i < 6; i++)
+            await player.ProcessFrameAsync(new AudioChunkFrame(
+                Timestamp:   10_000_000L + i * 20_000L,
+                EncodedData: new byte[4]));
+
+        // No audio should have been written to the renderer.
+        await Task.Delay(50); // give engine time to process if chunks leaked through
+        Assert.Empty(((FakeWasapiRenderer)renderers[0]).Written);
     }
 
     // ── stream/clear ─────────────────────────────────────────────────────────

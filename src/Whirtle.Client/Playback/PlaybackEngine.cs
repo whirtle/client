@@ -41,6 +41,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     private volatile PlaybackState _state = PlaybackState.Buffering;
     private TimeSpan                _clockOffset;
+    private volatile bool           _clockOffsetReady;
     private CancellationTokenSource _cts  = new();
     private Task                    _renderTask = Task.CompletedTask;
 
@@ -95,7 +96,11 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// Updates the measured clock offset (from <see cref="ClockSynchronizer"/>).
     /// The render loop uses this to schedule frames relative to the server clock.
     /// </summary>
-    public void UpdateClockOffset(TimeSpan offset) => _clockOffset = offset;
+    public void UpdateClockOffset(TimeSpan offset)
+    {
+        _clockOffset      = offset;
+        _clockOffsetReady = true;
+    }
 
     /// <summary>
     /// Discards all buffered frames. Call when a <c>stream/clear</c> message arrives.
@@ -138,6 +143,13 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     private async Task HandleBufferingAsync(CancellationToken ct)
     {
+        if (!_clockOffsetReady)
+        {
+            Log.Debug("Playback buffering — waiting for first clock sync");
+            await Task.Delay(5, ct).ConfigureAwait(false);
+            return;
+        }
+
         if (_buffer.Count >= MinBufferFrames)
         {
             Log.Debug("Playback buffering complete ({Count} frames); starting playback", _buffer.Count);
@@ -151,19 +163,22 @@ public sealed class PlaybackEngine : IAsyncDisposable
     {
         if (!_buffer.TryDequeue(out long timestamp, out var frame))
         {
-            Log.Debug("Playback underrun (buffer empty)");
+            Log.Warning("Playback underrun — jitter buffer empty");
             await EnterErrorAsync(ct);
             return;
         }
 
         double driftMs = ComputeDriftMs(timestamp);
 
+        if (Log.IsEnabled(LogEventLevel.Debug))
+            Log.Debug(
+                "Playback render: buffer={BufferFrames} frames, drift={DriftMs:F1} ms",
+                _buffer.Count, driftMs);
+
         if (Math.Abs(driftMs) > MaxDriftMs)
-        {
-            Log.Debug("Playback drift out of range: {DriftMs:F1} ms (max {MaxDriftMs} ms)", driftMs, MaxDriftMs);
-            await EnterErrorAsync(ct);
-            return;
-        }
+            Log.Warning(
+                "Playback drift {DriftMs:+0.0;-0.0} ms exceeds threshold ({MaxDriftMs} ms)",
+                driftMs, MaxDriftMs);
 
         // Compute a rate ratio to gently correct residual drift.
         // A 1 ms drift on a 20 ms frame → ratio = 20/21 ≈ 0.952 (speed up).
@@ -182,17 +197,16 @@ public sealed class PlaybackEngine : IAsyncDisposable
             ? ChannelDownmixer.Downmix(resampled, frame.Channels)
             : resampled;
 
+        // Pace writes by WASAPI buffer level rather than a fixed timer.
+        // Task.Delay on Windows has ~15 ms granularity; using it for 96 ms frame timing
+        // accumulates 15–25 ms of overshoot per frame, rapidly exceeding the drift
+        // threshold.  Waiting until the hardware buffer has room lets the device clock
+        // drive the rate instead.
+        int halfCapacity = _renderer.BufferCapacityBytes / 2;
+        while (_renderer.BufferedBytes > halfCapacity && !ct.IsCancellationRequested)
+            await Task.Delay(5, ct).ConfigureAwait(false);
+
         _renderer.Write(samples);
-
-        if (Log.IsEnabled(LogEventLevel.Debug))
-            Log.Debug(
-                "Playback render: buffer={BufferFrames} frames, drift={DriftMs:F1} ms, ratio={RateRatio:F3}",
-                _buffer.Count, driftMs, rateRatio);
-
-        // Yield until roughly the next frame is due. Waiting the full frame
-        // duration keeps the jitter buffer at a stable level; waiting less
-        // drains it faster than frames arrive and causes spurious underruns.
-        await Task.Delay(frame.Duration, ct).ConfigureAwait(false);
     }
 
     private async Task HandleErrorAsync(CancellationToken ct)
