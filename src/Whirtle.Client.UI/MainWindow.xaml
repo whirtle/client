@@ -213,7 +213,7 @@ Title="Whirtle">
                                 PURPOSE. See the GNU General Public License for more details.
                             </Paragraph>
                             <Paragraph Margin="0,8,0,0">
-                                <Run>The full license is available at </Run><Hyperlink NavigateUri="https://github.com/whirtle/client/blob/main/LICENSE">github.com/whirtle/client/blob/main/LICENSE</Hyperlink><Run>.</Run>
+                                <Run>The full license is available at</Run><Run xml:space="preserve"> </Run><Hyperlink NavigateUri="https://github.com/whirtle/client/blob/main/LICENSE">https://github.com/whirtle/client/blob/main/LICENSE</Hyperlink><Run>.</Run>
                             </Paragraph>
                         </RichTextBlock>
                     </ScrollViewer>
