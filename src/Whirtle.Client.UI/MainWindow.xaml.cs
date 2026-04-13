@@ -6,6 +6,7 @@ using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Windowing;
 using Windows.Graphics;
@@ -385,17 +386,10 @@ public sealed partial class MainWindow : Window
 
     // ── Waiting scrim ───────────────────────────────────────────────────────
 
-    private bool _waitingVolumeChanging;
-
-    private void WaitingVolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    private async void WaitingVolumeSlider_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
     {
-        if (_waitingVolumeChanging) return;
-        _waitingVolumeChanging = true;
-        DispatcherQueue.TryEnqueue(async () =>
-        {
-            await NowPlayingViewModel.SetVolumeCommand.ExecuteAsync(e.NewValue / 100.0);
-            _waitingVolumeChanging = false;
-        });
+        if (sender is Slider slider)
+            await NowPlayingViewModel.SetVolumeCommand.ExecuteAsync(slider.Value / 100.0);
     }
 
     // ── Navigation ─────────────────────────────────────────────────────────
