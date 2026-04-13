@@ -27,7 +27,24 @@ internal sealed class WindowsAudioDeviceEnumerator : IAudioDeviceEnumerator
                     ? device.ID == defaultInputId
                     : device.ID == defaultOutputId;
 
-                result.Add(new AudioDeviceInfo(device.ID, device.FriendlyName, kind, isDefault));
+                int maxSampleRate = 48_000;
+                int maxBitDepth   = 24;
+                int maxChannels   = 2;
+
+                try
+                {
+                    var fmt       = device.AudioClient.MixFormat;
+                    maxSampleRate = fmt.SampleRate;
+                    maxChannels   = fmt.Channels;
+                    maxBitDepth   = fmt.BitsPerSample;
+                }
+                catch (Exception)
+                {
+                    // Use defaults when the mix format cannot be queried.
+                }
+
+                result.Add(new AudioDeviceInfo(device.ID, device.FriendlyName, kind, isDefault,
+                    maxSampleRate, maxBitDepth, maxChannels));
             }
         }
 
