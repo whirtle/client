@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 using Serilog;
+using Serilog.Events;
 using Whirtle.Client.Codec;
 using Whirtle.Client.Playback;
 using Whirtle.Client.Protocol;
@@ -251,6 +252,18 @@ public sealed class PlayerClient : IAsyncDisposable
 
         var audioFrame = _decoder!.Decode(chunk.EncodedData);
         _playbackEngine!.Enqueue(effectiveTimestamp, audioFrame);
+
+        if (Log.IsEnabled(LogEventLevel.Debug))
+        {
+            int bufferedFrames = _playbackEngine.BufferedFrameCount;
+            int bufferedBytes  = bufferedFrames * audioFrame.Samples.Length * sizeof(short);
+            Log.Debug(
+                "Audio chunk: {EncodedBytes} bytes encoded, {BufferedBytes} bytes buffered ({BufferedFrames} frames), {DurationSeconds:F3}s/frame",
+                chunk.EncodedData.Length,
+                bufferedBytes,
+                bufferedFrames,
+                audioFrame.Duration.TotalSeconds);
+        }
     }
 
     private async Task HandleCommandAsync(ServerCommandPlayer cmd, CancellationToken ct)
