@@ -46,9 +46,10 @@ public sealed class PlayerClient : IAsyncDisposable
     private TimeSpan        _clockOffset;
     private int             _rendererLatencyMs;
 
-    private int  _volume        = 100;
-    private bool _muted         = false;
-    private int  _staticDelayMs = 0;
+    private int    _volume        = 100;
+    private bool   _muted         = false;
+    private int    _staticDelayMs = 0;
+    private string _playerState   = "synchronized";
 
     /// <summary>Current volume level (0–100).</summary>
     public int  Volume        => _volume;
@@ -106,11 +107,13 @@ public sealed class PlayerClient : IAsyncDisposable
     /// </summary>
     public Task SendStateAsync(CancellationToken cancellationToken = default)
         => _protocol.SendAsync(
-            new ClientStateMessage(Player: new ClientPlayerState(
-                Volume:            _volume,
-                Muted:             _muted,
-                StaticDelayMs:     _staticDelayMs,
-                SupportedCommands: ["set_static_delay"])),
+            new ClientStateMessage(
+                State:  _playerState,
+                Player: new ClientPlayerState(
+                    Volume:            _volume,
+                    Muted:             _muted,
+                    StaticDelayMs:     _staticDelayMs + _rendererLatencyMs,
+                    SupportedCommands: ["set_static_delay"])),
             cancellationToken);
 
     /// <summary>
@@ -178,6 +181,10 @@ public sealed class PlayerClient : IAsyncDisposable
                 _playbackEngine?.ClearBuffer();
                 break;
 
+            case ProtocolFrame { Message: StreamEndMessage }:
+                _streamActive = false;
+                break;
+
             case ProtocolFrame { Message: ServerCommandMessage { Player: { } cmd } }:
                 await HandleCommandAsync(cmd, cancellationToken).ConfigureAwait(false);
                 break;
@@ -224,10 +231,16 @@ public sealed class PlayerClient : IAsyncDisposable
         var renderer       = _rendererFactory(player.SampleRate, player.Channels);
         _rendererLatencyMs = renderer.LatencyMs;
         _playbackEngine    = new PlaybackEngine(renderer, _protocol);
+        _playbackEngine.StatusChanged += (state, _) =>
+            _playerState = state == PlaybackState.Error ? "error" : "synchronized";
         _playbackEngine.UpdateClockOffset(_clockOffset);
         _playbackEngine.Start();
 
         _streamActive = true;
+
+        // Re-send state so the server knows the actual output latency
+        // (static_delay_ms includes renderer latency, which is now known).
+        await SendStateAsync(ct).ConfigureAwait(false);
     }
 
     private void HandleAudioChunk(AudioChunkFrame chunk)

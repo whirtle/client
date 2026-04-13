@@ -39,7 +39,7 @@ public static class AppLogger
                 outputTemplate: OutputTemplate);
 
         if (extraSink is not null)
-            config = config.WriteTo.Sink(extraSink, restrictedToMinimumLevel: LogEventLevel.Information);
+            config = config.WriteTo.Sink(extraSink, restrictedToMinimumLevel: LogEventLevel.Debug);
 
         Log.Logger = config.CreateLogger();
     }

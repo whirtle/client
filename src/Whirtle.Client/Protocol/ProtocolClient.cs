@@ -129,7 +129,7 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long  timestamp = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var   imageData = payload[8..];
-                    Log.Debug("Recv artwork channel={Channel} timestamp={Timestamp} bytes={Bytes}",
+                    Log.Verbose("Recv artwork channel={Channel} timestamp={Timestamp} bytes={Bytes}",
                         typeId - 8, timestamp, imageData.Length);
                     yield return new ArtworkFrame(
                         timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
@@ -138,7 +138,7 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long timestamp   = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var  encodedData = payload[8..];
-                    Log.Debug("Recv audio-chunk timestamp={Timestamp} bytes={Bytes}", timestamp, encodedData.Length);
+                    Log.Verbose("Recv audio-chunk timestamp={Timestamp} bytes={Bytes}", timestamp, encodedData.Length);
                     yield return new AudioChunkFrame(timestamp, encodedData);
                 }
             }
