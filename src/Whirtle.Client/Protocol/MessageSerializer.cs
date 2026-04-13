@@ -51,6 +51,10 @@ internal sealed class MessageSerializer
 
     // ── Public API ─────────────────────────────────────────────────────────
 
+    /// <summary>Returns the wire type string for <paramref name="message"/>, or the CLR type name if unknown.</summary>
+    public string GetWireType(Message message) =>
+        NameMap.TryGetValue(message.GetType(), out var name) ? name : message.GetType().Name;
+
     /// <summary>Serialises <paramref name="message"/> to UTF-8 JSON bytes.</summary>
     public byte[] Serialize(Message message)
     {
