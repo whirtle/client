@@ -50,7 +50,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             new PlayerV1SupportFormat("pcm",  Channels: 2, SampleRate: 48_000, BitDepth: 16),
         ],
         bufferCapacity:   500,
-        supportedCommands: ["volume", "mute", "set_static_delay"]);
+        supportedCommands: ["volume", "mute"]);
 
     // Signal-strength inputs — updated by clock sync and PlaybackEngine events.
     private TimeSpan _lastRtt        = TimeSpan.MaxValue; // unknown until first sync
