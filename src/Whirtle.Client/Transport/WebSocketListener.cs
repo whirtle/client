@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
+using Serilog;
 using Whirtle.Client.Discovery;
 
 namespace Whirtle.Client.Transport;
@@ -59,6 +60,7 @@ public sealed class WebSocketListener : IAsyncDisposable
         }
 
         tcp.NoDelay = true;
+        Log.Debug("Inbound TCP connection from {RemoteEndPoint}", tcp.Client.RemoteEndPoint);
         var stream = tcp.GetStream();
 
         Dictionary<string, string> headers;
