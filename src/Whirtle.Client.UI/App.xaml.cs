@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Serilog;
 using Whirtle.Client.Audio;
 using Whirtle.Client.Discovery;
+using Whirtle.Client.State;
 using Whirtle.Client.UI.Logging;
 using Whirtle.Client.UI.ViewModels;
 
@@ -15,17 +16,19 @@ namespace Whirtle.Client.UI;
 
 public partial class App : Application
 {
-    private MainWindow?         _mainWindow;
+    private MainWindow?          _mainWindow;
     private NowPlayingViewModel? _nowPlayingViewModel;
-    private SettingsViewModel?  _settingsViewModel;
-    private LogsViewModel?      _logsViewModel;
-    private InMemorySink?       _logSink;
+    private SettingsViewModel?   _settingsViewModel;
+    private LogsViewModel?       _logsViewModel;
+    private InMemorySink?        _logSink;
+    private AppUiStateService?   _uiStateService;
 
     internal static new App Current => (App)Application.Current;
 
     public NowPlayingViewModel NowPlayingViewModel => _nowPlayingViewModel!;
     public SettingsViewModel   SettingsViewModel   => _settingsViewModel!;
     public LogsViewModel       LogsViewModel       => _logsViewModel!;
+    public AppUiStateService   UiStateService      => _uiStateService!;
 
     public App()
     {
@@ -44,12 +47,49 @@ public partial class App : Application
 
         Log.Information("Whirtle starting up");
 
+        // ── Command line ─────────────────────────────────────────────────────
+        if (Environment.GetCommandLineArgs().Contains("--clean-start"))
+        {
+            Log.Information("--clean-start: removing persisted settings and restarting clean");
+            SettingsViewModel.DeleteSettingsFile();
+        }
+
         // ── ViewModels ───────────────────────────────────────────────────────
         _settingsViewModel   = new SettingsViewModel();
         _nowPlayingViewModel = new NowPlayingViewModel(
             AudioDeviceEnumerator.Create(),
             dispatcher,
             _settingsViewModel);
+
+        _uiStateService = new AppUiStateService(
+            _settingsViewModel.TermsAccepted,
+            _nowPlayingViewModel.IsConnected);
+
+        _settingsViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SettingsViewModel.TermsAccepted))
+                _uiStateService.Update(_settingsViewModel.TermsAccepted, _nowPlayingViewModel!.IsConnected);
+        };
+
+        _nowPlayingViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(NowPlayingViewModel.IsConnected))
+                _uiStateService.Update(_settingsViewModel!.TermsAccepted, _nowPlayingViewModel.IsConnected);
+        };
+
+        // Start networking now if we're past the first-run gate; otherwise wait
+        // for the FRE to complete before advertising or accepting connections.
+        if (_uiStateService.CurrentState != AppUiState.FirstRun)
+            MaybeStartServerInitiatedMode();
+
+        _uiStateService.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AppUiStateService.CurrentState)
+                && _uiStateService.CurrentState == AppUiState.Waiting)
+            {
+                MaybeStartServerInitiatedMode();
+            }
+        };
 
         _mainWindow = new MainWindow();
         _mainWindow.Closed += (_, _) =>
@@ -67,6 +107,12 @@ public partial class App : Application
             _ = CheckFirewallAsync();
         }
         _mainWindow.Activated += OnFirstActivated;
+    }
+
+    private void MaybeStartServerInitiatedMode()
+    {
+        if (_settingsViewModel!.ConnectionMode == ConnectionMode.ServerInitiated)
+            _nowPlayingViewModel!.StartServerInitiatedMode();
     }
 
     private async Task CheckFirewallAsync()

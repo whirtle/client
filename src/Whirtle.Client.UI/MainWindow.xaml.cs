@@ -11,6 +11,7 @@ using Microsoft.UI.Windowing;
 using Windows.Graphics;
 using WinRT;
 using Whirtle.Client.Discovery;
+using Whirtle.Client.State;
 using Whirtle.Client.UI.Pages;
 using Whirtle.Client.UI.ViewModels;
 
@@ -29,6 +30,19 @@ public sealed partial class MainWindow : Window
     private Flyout? _serverPickerFlyout;
 
     public NowPlayingViewModel NowPlayingViewModel => App.Current.NowPlayingViewModel;
+    public AppUiStateService   UiStateService      => App.Current.UiStateService;
+
+    // ── Scrim visibility functions (used by x:Bind in XAML) ──────────────────
+
+    public Visibility StatusBarVisibility(AppUiState state)
+        => state != AppUiState.FirstRun ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility WaitingScrimVisibility(AppUiState state)
+        => state == AppUiState.Waiting ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility FreScrimVisibility(AppUiState state)
+        => state == AppUiState.FirstRun ? Visibility.Visible : Visibility.Collapsed;
+
 
     public MainWindow()
     {
@@ -344,6 +358,36 @@ public sealed partial class MainWindow : Window
 
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             NowPlayingViewModel.RemoveSavedServer(saved);
+    }
+
+    // ── First-run scrim ────────────────────────────────────────────────────
+
+    private void TermsCheckBox_Changed(object sender, RoutedEventArgs e)
+        => FreAcceptButton.IsEnabled = TermsCheckBox.IsChecked == true;
+
+    private void FreAcceptButton_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = App.Current.SettingsViewModel;
+        settings.TelemetryConsent = TelemetryCheckBox.IsChecked == true;
+        settings.TermsAccepted    = true; // triggers CommitNow() and AppUiState transition
+    }
+
+    private void FreDeclineButton_Click(object sender, RoutedEventArgs e)
+        => Application.Current.Exit();
+
+    // ── Waiting scrim ───────────────────────────────────────────────────────
+
+    private bool _waitingVolumeChanging;
+
+    private void WaitingVolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_waitingVolumeChanging) return;
+        _waitingVolumeChanging = true;
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            await NowPlayingViewModel.SetVolumeCommand.ExecuteAsync(e.NewValue / 100.0);
+            _waitingVolumeChanging = false;
+        });
     }
 
     // ── Navigation ─────────────────────────────────────────────────────────
