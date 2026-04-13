@@ -43,9 +43,6 @@ public sealed partial class MainWindow : Window
     public Visibility FreScrimVisibility(AppUiState state)
         => state == AppUiState.FirstRun ? Visibility.Visible : Visibility.Collapsed;
 
-    // Window references owned by MainWindow for the scrims.
-    private SettingsWindow? _settingsWindow;
-    private LogsWindow?     _logsWindow;
 
     public MainWindow()
     {
@@ -417,24 +414,6 @@ public sealed partial class MainWindow : Window
             await NowPlayingViewModel.SetVolumeCommand.ExecuteAsync(e.NewValue / 100.0);
             _waitingVolumeChanging = false;
         });
-    }
-
-    private void WaitingSettingsButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_settingsWindow is not null)
-        {
-            _settingsWindow.Activate();
-            return;
-        }
-        _settingsWindow = new SettingsWindow();
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
-        _settingsWindow.Activate();
-    }
-
-    private void WaitingLogsButton_Click(object sender, RoutedEventArgs e)
-    {
-        _logsWindow ??= new LogsWindow();
-        _logsWindow.Activate();
     }
 
     // ── Navigation ─────────────────────────────────────────────────────────

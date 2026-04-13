@@ -94,11 +94,15 @@ Title="Whirtle">
 
         <!-- ═══ WAITING SCRIM ══════════════════════════════════════════════════
              Overlays the player when no session is active. Volume and mute are
-             always enabled here; all other controls are unavailable.           -->
+             always enabled here. The Grid has no Background so pointer events
+             outside the card pass through to NowPlayingPage beneath (e.g. the
+             Settings and Logs buttons remain accessible).                      -->
         <Grid
             Grid.Row="1"
-            Background="#CC000000"
             Visibility="{x:Bind WaitingScrimVisibility(UiStateService.CurrentState), Mode=OneWay}">
+
+            <!-- Dim layer — not hit-testable so clicks outside the card fall through -->
+            <Rectangle Fill="#CC000000" IsHitTestVisible="False" />
 
             <Border
                 HorizontalAlignment="Center"
@@ -157,22 +161,6 @@ Title="Whirtle">
                             TextAlignment="Right"
                             Style="{ThemeResource CaptionTextBlockStyle}" />
                     </Grid>
-
-                    <!-- Settings and Logs -->
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button Padding="12,8" Click="WaitingSettingsButton_Click">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon Glyph="&#xE713;" FontSize="16" VerticalAlignment="Center" />
-                                <TextBlock Text="Settings" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <Button Padding="12,8" Click="WaitingLogsButton_Click">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon Glyph="&#xE7C3;" FontSize="16" VerticalAlignment="Center" />
-                                <TextBlock Text="Logs" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
 
                 </StackPanel>
             </Border>
