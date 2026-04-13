@@ -361,6 +361,17 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _serverModeCts = null;
     }
 
+    /// <summary>
+    /// Cancels all background work (server-accept loop and active connection).
+    /// Called synchronously on exit so background threads don't dispatch into
+    /// a destroyed XAML runtime.
+    /// </summary>
+    internal void CancelBackgroundWork()
+    {
+        _serverModeCts?.Cancel();
+        _connectionCts?.Cancel();
+    }
+
     internal void StartServerInitiatedMode()
     {
         Log.Debug("Server-initiated mode starting");
