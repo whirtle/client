@@ -9,6 +9,9 @@
 Title="Whirtle">
 
     <Grid>
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="LogsAccelerator_Invoked" />
+        </Grid.KeyboardAccelerators>
         <Grid.RowDefinitions>
             <RowDefinition Height="32" />
             <RowDefinition Height="*" />
@@ -54,6 +57,7 @@ Title="Whirtle">
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Server picker button -->
@@ -88,6 +92,19 @@ Title="Whirtle">
                     Grid.Column="2"
                     VerticalAlignment="Center"
                     Level="{x:Bind NowPlayingViewModel.SignalStrength, Mode=OneWay}" />
+
+                <!-- Settings gear button -->
+                <Button
+                    Grid.Column="3"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="4,2"
+                    CornerRadius="4"
+                    ToolTipService.ToolTip="Settings"
+                    Click="SettingsButton_Click">
+                    <FontIcon Glyph="&#xE713;" FontSize="13" />
+                </Button>
 
             </Grid>
         </Border>
