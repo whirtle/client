@@ -143,6 +143,57 @@ public class ClockSynchronizerTests
     }
 
     [Fact]
+    public void AcceptResult_ReturnsMinRttSample_NotMostRecent()
+    {
+        // AcceptResult maintains a rolling window and returns the entry with the
+        // lowest RTT (NTP min-RTT heuristic) rather than the most recent entry.
+        var (syncer, _, _) = Build();
+
+        static ClockSyncResult Sample(long rttUs, long offsetUs) =>
+            new(TimeSpan.FromMicroseconds(offsetUs), TimeSpan.FromMicroseconds(rttUs));
+
+        // First sample: only entry, returned as-is.
+        var r1 = syncer.AcceptResult(Sample(rttUs: 200, offsetUs: 400));
+        Assert.Equal(TimeSpan.FromMicroseconds(200), r1.RoundTripTime);
+
+        // Second sample has lower RTT — becomes the new winner.
+        var r2 = syncer.AcceptResult(Sample(rttUs: 10, offsetUs: 90));
+        Assert.Equal(TimeSpan.FromMicroseconds(10),  r2.RoundTripTime);
+        Assert.Equal(TimeSpan.FromMicroseconds(90),  r2.ClockOffset);
+
+        // Third sample has high RTT again — window still contains the 10 μs sample.
+        var r3 = syncer.AcceptResult(Sample(rttUs: 200, offsetUs: 400));
+        Assert.Equal(TimeSpan.FromMicroseconds(10),  r3.RoundTripTime);
+        Assert.Equal(TimeSpan.FromMicroseconds(90),  r3.ClockOffset);
+    }
+
+    [Fact]
+    public void AcceptResult_EvictsOldestWhenWindowFull()
+    {
+        // After the window fills (capacity = 8) the oldest sample is evicted.
+        // Once the best (low-RTT) sample ages out, the next-best takes over.
+        var (syncer, _, _) = Build();
+
+        static ClockSyncResult Sample(long rttUs, long offsetUs) =>
+            new(TimeSpan.FromMicroseconds(offsetUs), TimeSpan.FromMicroseconds(rttUs));
+
+        // Fill window with one low-RTT sample followed by 7 high-RTT samples.
+        var best = syncer.AcceptResult(Sample(rttUs: 5, offsetUs: 50));
+        Assert.Equal(TimeSpan.FromMicroseconds(5), best.RoundTripTime);
+
+        for (int i = 0; i < 6; i++)
+            syncer.AcceptResult(Sample(rttUs: 200, offsetUs: 400));
+
+        // 7 samples in: best is still the 5 μs one.
+        var stillBest = syncer.AcceptResult(Sample(rttUs: 200, offsetUs: 400));
+        Assert.Equal(TimeSpan.FromMicroseconds(5), stillBest.RoundTripTime);
+
+        // 8th high-RTT sample evicts the 5 μs sample (window = 8 entries).
+        var evicted = syncer.AcceptResult(Sample(rttUs: 200, offsetUs: 400));
+        Assert.Equal(TimeSpan.FromMicroseconds(200), evicted.RoundTripTime);
+    }
+
+    [Fact]
     public async Task RunAsync_RetriesAfterTimeout_UntilCancelled()
     {
         // With a 1 ms sync timeout and no server delivering replies,

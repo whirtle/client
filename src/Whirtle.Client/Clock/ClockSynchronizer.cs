@@ -30,12 +30,18 @@ public sealed class ClockSynchronizer
     /// <summary>Default interval between sync rounds.</summary>
     public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(5);
 
+    // Number of past measurements retained for min-RTT selection.
+    private const int WindowSize = 8;
+
     private readonly ProtocolClient _client;
     private readonly ISystemClock   _clock;
     private readonly TimeSpan       _syncTimeout;
 
     // Ensures at most one sync round is in-flight at a time.
     private readonly SemaphoreSlim _syncLock = new(1, 1);
+
+    // Rolling window of recent measurements. Accessed only from RunAsync's single loop.
+    private readonly Queue<ClockSyncResult> _window = new(WindowSize);
 
     // Non-null while a sync is waiting for the server reply.
     private sealed record PendingSync(long T0, TaskCompletionSource<ClockSyncResult> Tcs);
@@ -125,7 +131,7 @@ public sealed class ClockSynchronizer
             try
             {
                 var result = await SyncOnceAsync(cancellationToken).ConfigureAwait(false);
-                onSync(result);
+                onSync(AcceptResult(result));
             }
             catch (OperationCanceledException)
             {
@@ -137,6 +143,24 @@ public sealed class ClockSynchronizer
 
             await Task.Delay(period, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Adds <paramref name="raw"/> to the rolling window and returns the sample with
+    /// the lowest round-trip time in the current window (NTP min-RTT heuristic).
+    /// Samples with the shortest RTT are most likely to have symmetric network delay
+    /// and therefore the most accurate clock offset estimate.
+    /// </summary>
+    /// <remarks>
+    /// Accessed only from <see cref="RunAsync"/>'s single async loop — no locking needed.
+    /// Exposed as <c>internal</c> for unit testing.
+    /// </remarks>
+    internal ClockSyncResult AcceptResult(ClockSyncResult raw)
+    {
+        if (_window.Count >= WindowSize)
+            _window.Dequeue();
+        _window.Enqueue(raw);
+        return _window.MinBy(r => r.RoundTripTime)!;
     }
 
     private static ClockSyncResult Compute(long t0, long t1, long t2)
