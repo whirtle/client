@@ -85,7 +85,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     // ── Playback state ─────────────────────────────────────────────────────
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PlayPauseGlyph))]
+    [NotifyPropertyChangedFor(nameof(PlayPauseGlyph), nameof(PlayPauseTooltip))]
     private bool _isPlaying;
 
     // ── Volume ─────────────────────────────────────────────────────────────
@@ -172,6 +172,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
     public int     VolumePercent      => (int)(_volume * 100);
     public string  PlayPauseGlyph     => _isPlaying ? "\uE769" : "\uE768"; // Pause : Play
+    public string  PlayPauseTooltip   => _isPlaying ? "Pause"  : "Play";
     public string  VolumeGlyph        => _isMuted   ? "\uE74F" : "\uE767"; // Muted : Speaker
     public string  MuteButtonTooltip  => _isMuted   ? "Unmute" : "Mute";
     public bool    IsNotConnected     => !_isConnected;
@@ -711,7 +712,14 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task SkipAsync()
+    private async Task PreviousAsync()
+    {
+        if (_controller is null) return;
+        await _controller.PreviousAsync();
+    }
+
+    [RelayCommand]
+    private async Task NextAsync()
     {
         if (_controller is null) return;
         await _controller.NextAsync();
@@ -770,14 +778,16 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                             _nowPlaying.Update(meta);
                             _dispatcher.TryEnqueue(() =>
                             {
-                                Title  = _nowPlaying.Title;
-                                Artist = _nowPlaying.Artist;
-                                Album  = _nowPlaying.Album;
+                                Title           = _nowPlaying.Title;
+                                Artist          = _nowPlaying.Artist;
+                                Album           = _nowPlaying.Album;
+                                DurationSeconds = (_nowPlaying.Progress?.TrackDuration ?? 0) / 1000.0;
                                 TickPosition();
                                 OnPropertyChanged(nameof(TrayTooltip));
 
                                 // Run the tick timer only when playback is active.
                                 bool playing = _nowPlaying.Progress?.PlaybackSpeed > 0;
+                                IsPlaying = playing;
                                 if (playing && !_positionTimer.IsEnabled)
                                     _positionTimer.Start();
                                 else if (!playing && _positionTimer.IsEnabled)

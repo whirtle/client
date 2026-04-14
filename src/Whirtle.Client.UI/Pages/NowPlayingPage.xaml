@@ -20,12 +20,22 @@
         </Style>
     </Page.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Loaded="Page_Loaded">
         <StackPanel
             Padding="24"
             Spacing="16"
             MaxWidth="860"
             HorizontalAlignment="Center">
+
+            <!-- Invisible focus absorber: receives initial keyboard focus so no
+                 interactive control appears highlighted when the page first loads. -->
+            <Button
+                x:Name="FocusSink"
+                Width="0" Height="0"
+                Opacity="0"
+                Padding="0"
+                BorderThickness="0"
+                IsTabStop="True" />
 
             <!-- Artwork + Transport wrapped in a Grid so the waiting overlay
                  can dim just these two cards without covering Volume or the
@@ -78,66 +88,90 @@
                     <Border Style="{StaticResource CardStyle}">
                         <StackPanel Spacing="12" HorizontalAlignment="Center">
 
-                            <!-- Time stamps flanking the seek bar -->
-                            <Grid>
-                                <TextBlock
-                                    HorizontalAlignment="Left"
-                                    Style="{ThemeResource CaptionTextBlockStyle}"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Text="{x:Bind ViewModel.PositionSeconds,
-                                                  Converter={StaticResource SecondsToTime},
-                                                  Mode=OneWay}" />
-                                <TextBlock
-                                    HorizontalAlignment="Right"
-                                    Style="{ThemeResource CaptionTextBlockStyle}"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Text="{x:Bind ViewModel.DurationSeconds,
-                                                  Converter={StaticResource SecondsToTime},
-                                                  Mode=OneWay}" />
-                            </Grid>
-
-                            <!--
-                                Seek bar — value is updated from the server; dragging sends a seek
-                                command once the pointer is released.  The underlying protocol does
-                                not yet define a seek message, so SeekCommand is a stub.
-                            -->
-                            <Slider
-                                x:Name="SeekBar"
-                                Minimum="0"
-                                Maximum="{x:Bind ViewModel.DurationSeconds, Mode=OneWay}"
-                                Value="{x:Bind ViewModel.PositionSeconds, Mode=OneWay}"
-                                IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
-                                MinWidth="360"
-                                PointerCaptureLost="SeekBar_PointerCaptureLost" />
-
                             <!-- Playback buttons -->
                             <StackPanel
                                 Orientation="Horizontal"
                                 Spacing="8"
                                 HorizontalAlignment="Center">
 
-                                <!-- Skip forward -->
+                                <!-- Previous -->
                                 <Button
-                                    Width="44" Height="44"
-                                    CornerRadius="22"
-                                    ToolTipService.ToolTip="Skip"
+                                    Width="26" Height="26"
+                                    CornerRadius="13"
+                                    ToolTipService.ToolTip="Previous track"
                                     IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
-                                    Command="{x:Bind ViewModel.SkipCommand}">
-                                    <FontIcon Glyph="&#xE893;" FontSize="16" />
+                                    Command="{x:Bind ViewModel.PreviousCommand}">
+                                    <FontIcon Glyph="&#xE892;" FontSize="10" />
                                 </Button>
 
                                 <!-- Play / Pause (accent-coloured circle) -->
                                 <Button
-                                    Width="56" Height="56"
-                                    CornerRadius="28"
+                                    Width="34" Height="34"
+                                    CornerRadius="17"
                                     Style="{ThemeResource AccentButtonStyle}"
+                                    ToolTipService.ToolTip="{x:Bind ViewModel.PlayPauseTooltip, Mode=OneWay}"
                                     IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
                                     Command="{x:Bind ViewModel.PlayPauseCommand}">
                                     <FontIcon
                                         Glyph="{x:Bind ViewModel.PlayPauseGlyph, Mode=OneWay}"
-                                        FontSize="22" />
+                                        FontSize="13" />
+                                </Button>
+
+                                <!-- Next -->
+                                <Button
+                                    Width="26" Height="26"
+                                    CornerRadius="13"
+                                    ToolTipService.ToolTip="Next track"
+                                    IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
+                                    Command="{x:Bind ViewModel.NextCommand}">
+                                    <FontIcon Glyph="&#xE893;" FontSize="10" />
                                 </Button>
                             </StackPanel>
+
+                            <!-- Position row: [current time] [seek bar] [duration] -->
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock
+                                    Grid.Column="0"
+                                    VerticalAlignment="Center"
+                                    Style="{ThemeResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    ToolTipService.ToolTip="Current position"
+                                    Text="{x:Bind ViewModel.PositionSeconds,
+                                                  Converter={StaticResource SecondsToTime},
+                                                  Mode=OneWay}" />
+
+                                <!--
+                                    Seek bar — display only.  Maximum and Value are set in
+                                    code-behind to avoid the WinUI 3 issue where x:Bind
+                                    Mode=OneWay on Slider.Value is suppressed by the Slider's
+                                    own internal value management.  IsHitTestVisible="False"
+                                    and IsTabStop="False" make it non-interactive.
+                                -->
+                                <Slider
+                                    Grid.Column="1"
+                                    x:Name="SeekBar"
+                                    Minimum="0"
+                                    VerticalAlignment="Center"
+                                    IsHitTestVisible="False"
+                                    IsTabStop="False" />
+
+                                <TextBlock
+                                    Grid.Column="2"
+                                    VerticalAlignment="Center"
+                                    Style="{ThemeResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    ToolTipService.ToolTip="Track duration"
+                                    Text="{x:Bind ViewModel.DurationSeconds,
+                                                  Converter={StaticResource SecondsToTime},
+                                                  Mode=OneWay}" />
+                            </Grid>
+
                         </StackPanel>
                     </Border>
 
