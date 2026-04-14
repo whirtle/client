@@ -32,7 +32,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
 {
     // Tuning constants
     private const int    MinBufferFrames = 4;   // frames required before playback starts/recovers
-    private const double MaxDriftMs      = 50;  // drift threshold before entering Error state
+    private const double MaxDriftMs      = 200; // drift threshold before entering Error state; must exceed renderer latency (default 100 ms)
 
     private readonly JitterBuffer       _buffer;
     private readonly IWasapiRenderer    _renderer;
