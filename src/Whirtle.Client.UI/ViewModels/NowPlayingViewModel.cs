@@ -289,7 +289,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
             _syncer      = new ClockSynchronizer(_protocol);
             _controller  = new ControllerClient(_protocol);
-            _player      = new PlayerClient(_protocol, SelectedDevice?.Id);
+            _player      = new PlayerClient(_protocol, SelectedDevice?.Id, VolumePercent, IsMuted);
             await _player.SendInitialRequestsAsync(
                 _settings.CurrentDeviceFormat,
                 SelectedDevice?.MaxSampleRate ?? 48_000,
@@ -656,7 +656,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _protocol    = protocol;
         _syncer      = new ClockSynchronizer(protocol);
         _controller  = new ControllerClient(protocol);
-        _player      = new PlayerClient(protocol, SelectedDevice?.Id);
+        _player      = new PlayerClient(protocol, SelectedDevice?.Id, VolumePercent, IsMuted);
         await _player.SendInitialRequestsAsync(
             _settings.CurrentDeviceFormat,
             SelectedDevice?.MaxSampleRate ?? 48_000,
