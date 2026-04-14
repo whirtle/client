@@ -37,6 +37,7 @@ public sealed class ClockSynchronizer
     private readonly ProtocolClient _client;
     private readonly ISystemClock   _clock;
     private readonly TimeSpan       _syncTimeout;
+    private readonly TimeSpan       _rapidSyncInterval;
 
     // Ensures at most one sync round is in-flight at a time.
     private readonly SemaphoreSlim _syncLock = new(1, 1);
@@ -51,11 +52,16 @@ public sealed class ClockSynchronizer
     public ClockSynchronizer(ProtocolClient client)
         : this(client, SystemClock.Instance) { }
 
-    internal ClockSynchronizer(ProtocolClient client, ISystemClock clock, TimeSpan? syncTimeout = null)
+    internal ClockSynchronizer(
+        ProtocolClient  client,
+        ISystemClock    clock,
+        TimeSpan?       syncTimeout       = null,
+        TimeSpan?       rapidSyncInterval = null)
     {
-        _client      = client;
-        _clock       = clock;
-        _syncTimeout = syncTimeout ?? DefaultSyncTimeout;
+        _client            = client;
+        _clock             = clock;
+        _syncTimeout       = syncTimeout       ?? DefaultSyncTimeout;
+        _rapidSyncInterval = rapidSyncInterval ?? RapidSyncInterval;
     }
 
     /// <summary>
@@ -108,12 +114,21 @@ public sealed class ClockSynchronizer
     }
 
     /// <summary>
-    /// Continuously syncs the clock at <paramref name="interval"/> intervals,
-    /// invoking <paramref name="onSync"/> after each successful measurement.
-    /// Throws <see cref="OperationCanceledException"/> when
+    /// Continuously syncs the clock, invoking <paramref name="onSync"/> after each
+    /// successful measurement. Throws <see cref="OperationCanceledException"/> when
     /// <paramref name="cancellationToken"/> is cancelled.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Runs in two phases:
+    /// <list type="number">
+    ///   <item><b>Rapid phase</b> — performs <see cref="RapidSyncCount"/> rounds at
+    ///   <see cref="RapidSyncInterval"/> intervals to converge the offset estimate
+    ///   quickly after connecting.</item>
+    ///   <item><b>Steady-state phase</b> — continues at <paramref name="interval"/>
+    ///   (default <see cref="DefaultInterval"/>) indefinitely.</item>
+    /// </list>
+    /// </para>
     /// The caller must route every incoming <see cref="ServerTimeMessage"/> to
     /// <see cref="Deliver"/> while this method is active; otherwise each round
     /// will time out and be retried.
@@ -125,9 +140,32 @@ public sealed class ClockSynchronizer
     {
         var period = interval ?? DefaultInterval;
 
+        // Phase 1: rapid convergence — seed the rolling window quickly.
+        for (int i = 0; i < RapidSyncCount; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var result = await SyncOnceAsync(cancellationToken).ConfigureAwait(false);
+                onSync(AcceptResult(result));
+            }
+            catch (OperationCanceledException) { cancellationToken.ThrowIfCancellationRequested(); }
+            catch { /* transient failure — continue to next rapid round */ }
+
+            if (i < RapidSyncCount - 1)
+            {
+                try { await Task.Delay(_rapidSyncInterval, cancellationToken).ConfigureAwait(false); }
+                catch (OperationCanceledException) { cancellationToken.ThrowIfCancellationRequested(); }
+            }
+        }
+
+        // Phase 2: steady-state.
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            try { await Task.Delay(period, cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) { cancellationToken.ThrowIfCancellationRequested(); }
 
             try
             {
@@ -137,14 +175,18 @@ public sealed class ClockSynchronizer
             catch (OperationCanceledException)
             {
                 // If the outer token fired, propagate; otherwise it was the
-                // per-round deadline — swallow and retry after the interval.
+                // per-round deadline — swallow and retry after the next interval.
                 cancellationToken.ThrowIfCancellationRequested();
             }
             catch { /* transient failure (e.g. send error) — retry after interval */ }
-
-            await Task.Delay(period, cancellationToken).ConfigureAwait(false);
         }
     }
+
+    // Number of rapid syncs performed immediately after connecting.
+    private const int RapidSyncCount = 3;
+
+    // Interval between rapid syncs.
+    private static readonly TimeSpan RapidSyncInterval = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
     /// Adds <paramref name="raw"/> to the rolling window and returns the sample with

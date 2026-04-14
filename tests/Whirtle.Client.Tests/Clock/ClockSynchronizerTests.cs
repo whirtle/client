@@ -7,12 +7,13 @@ namespace Whirtle.Client.Tests.Clock;
 public class ClockSynchronizerTests
 {
     private static (ClockSynchronizer syncer, FakeClock clock, FakeTransport transport) Build(
-        TimeSpan? syncTimeout = null)
+        TimeSpan? syncTimeout       = null,
+        TimeSpan? rapidSyncInterval = null)
     {
         var transport = new FakeTransport();
         var client    = new ProtocolClient(transport);
         var clock     = new FakeClock();
-        return (new ClockSynchronizer(client, clock, syncTimeout), clock, transport);
+        return (new ClockSynchronizer(client, clock, syncTimeout, rapidSyncInterval), clock, transport);
     }
 
     // ── SyncOnceAsync ─────────────────────────────────────────────────────────
@@ -140,6 +141,38 @@ public class ClockSynchronizerTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => runTask);
 
         Assert.Equal(2, results.Count);
+    }
+
+    [Fact]
+    public async Task RunAsync_PerformsRapidSyncs_BeforeSteadyState()
+    {
+        // RunAsync must complete 3 rapid syncs before entering the steady-state loop.
+        // We use a very long steady-state interval so that if the rapid phase is skipped
+        // or delayed the test would time out waiting for the 3rd callback.
+        var (syncer, clock, _) = Build(rapidSyncInterval: TimeSpan.FromMilliseconds(5));
+        var results = new List<ClockSyncResult>();
+        using var cts = new CancellationTokenSource();
+
+        clock.Set(0);
+        var runTask = syncer.RunAsync(
+            results.Add,
+            interval: TimeSpan.FromHours(1), // steady-state never fires within the test
+            cancellationToken: cts.Token);
+
+        // Deliver 3 replies to satisfy the rapid phase.
+        for (int i = 0; i < 3; i++)
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            while (!syncer.Deliver(new ServerTimeMessage(0, 100)))
+                await Task.Delay(1, deadline.Token);
+            await Task.Delay(10); // give RunAsync time to advance between rounds
+        }
+
+        // All 3 rapid-phase callbacks must have fired well before the 1-hour steady-state delay.
+        Assert.Equal(3, results.Count);
+
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => runTask);
     }
 
     [Fact]
