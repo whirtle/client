@@ -20,7 +20,8 @@ namespace Whirtle.Client.UI;
 
 public sealed partial class MainWindow : Window
 {
-    private bool _hideOnClose = false;
+    private bool _hideOnClose    = false;
+    private bool _isShuttingDown = false;
 
     // Kept alive for the lifetime of the window (MicaController requires it).
     private MicaController?              _micaController;
@@ -96,7 +97,7 @@ public sealed partial class MainWindow : Window
 
     // ── Window close / tray ────────────────────────────────────────────────
 
-    private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
+    private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
         SaveWindowPosition();
 
@@ -105,15 +106,22 @@ public sealed partial class MainWindow : Window
             args.Cancel = true;
             HideToTray();
         }
-        else
+        else if (!_isShuttingDown)
         {
+            // Defer the close so we can await async cleanup before Exit().
+            args.Cancel    = true;
+            _isShuttingDown = true;
+
             // Dispose Mica before the XAML compositor tears down; otherwise the
             // MicaController tries to release its DirectComposition target after
             // the backing objects are gone, causing an access violation (0xc0000005).
             _micaController?.Dispose();
             _micaController = null;
 
-            App.Current.NowPlayingViewModel.CancelBackgroundWork();
+            // Await full teardown so the WASAPI renderer is stopped and disposed
+            // before the process exits.  Without this, the audio thread can still
+            // be running when WinUI tears down, causing an access violation.
+            await App.Current.NowPlayingViewModel.ShutdownAsync();
 
             Application.Current.Exit();
         }
@@ -158,8 +166,11 @@ public sealed partial class MainWindow : Window
 
     private void TrayQuit_Click(object sender, RoutedEventArgs e)
     {
+        // Clear _hideOnClose so AppWindow_Closing proceeds with shutdown rather
+        // than minimising to tray, then trigger the normal close path so that
+        // async cleanup (WASAPI disposal, etc.) runs before the process exits.
         _hideOnClose = false;
-        Application.Current.Exit();
+        this.Close();
     }
 
     // ── Server picker flyout (built in code) ──────────────────────────────

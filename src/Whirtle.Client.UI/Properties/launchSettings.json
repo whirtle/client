@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "Clean start": {
+      "commandName": "Project",
+      "commandLineArgs": "--clean-start"
+    },
+    "Debug UI": {
+      "commandName": "Project"
+    }
+  }
+}
