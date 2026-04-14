@@ -173,6 +173,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
         {
             Log.Debug("Playback buffering complete ({Count} frames); starting playback", _buffer.Count);
             TransitionTo(PlaybackState.Synchronized);
+            PlaybackStateChanged?.Invoke("synchronized");
             return;
         }
         await Task.Delay(5, ct).ConfigureAwait(false);

@@ -229,6 +229,61 @@ public class PlaybackEngineTests
     }
 
     [Fact]
+    public async Task PlaybackStateChanged_FiresSynchronized_OnlyWhenActuallySynchronized()
+    {
+        // "synchronized" must be raised when transitioning Buffering→Synchronized,
+        // not when leaving Error (which visits Buffering as an intermediate step).
+        // We verify there are no two consecutive "synchronized" events — the old code
+        // sent "synchronized" from HandleErrorAsync before the engine reached Synchronized,
+        // which would produce the sequence: ..., "synchronized", "synchronized".
+        var (engine, _, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero);
+
+        var states = new List<string>();
+        var tcs    = new TaskCompletionSource<bool>();
+        engine.PlaybackStateChanged += s =>
+        {
+            lock (states)
+            {
+                states.Add(s);
+                // Stop collecting once we have our error + second synchronized.
+                if (states.Count(x => x == "synchronized") >= 2)
+                    tcs.TrySetResult(true);
+            }
+        };
+        engine.Start();
+
+        // Initial fill → Buffering → Synchronized.
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(3));
+
+        // Refill → Buffering → Synchronized again.
+        for (int i = 4; i < 8; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await tcs.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await engine.DisposeAsync();
+
+        lock (states)
+        {
+            // The critical invariant: no two consecutive "synchronized" events.
+            // Such a pair would indicate a spurious notification fired while the
+            // engine was still in Buffering state during error recovery.
+            for (int i = 1; i < states.Count; i++)
+                Assert.False(
+                    states[i] == "synchronized" && states[i - 1] == "synchronized",
+                    $"Spurious consecutive 'synchronized' at index {i}: [{string.Join(", ", states)}]");
+
+            // Must have seen at least: synchronized, error, synchronized.
+            Assert.True(states.Count >= 3, $"Too few state events: [{string.Join(", ", states)}]");
+            Assert.Equal("synchronized", states[0]);
+            Assert.Contains("error",        states);
+        }
+    }
+
+    [Fact]
     public async Task DisposeAsync_StopsEngine()
     {
         var (engine, renderer, _) = Build();
