@@ -40,6 +40,7 @@ public sealed class PlayerClient : IAsyncDisposable
 {
     private readonly ProtocolClient                  _protocol;
     private readonly Func<int, int, IWasapiRenderer> _rendererFactory;
+    private readonly Clock.ISystemClock              _clock;
 
     private IAudioDecoder? _decoder;
     private PlaybackEngine? _playbackEngine;
@@ -83,13 +84,17 @@ public sealed class PlayerClient : IAsyncDisposable
     /// <paramref name="deviceId"/> (or the system default when <see langword="null"/>).
     /// </summary>
     public PlayerClient(ProtocolClient protocol, string? deviceId = null)
-        : this(protocol, (sampleRate, channels) => new WasapiRenderer(deviceId, sampleRate, channels)) { }
+        : this(protocol, (sampleRate, channels) => new WasapiRenderer(deviceId, sampleRate, channels), clock: null) { }
 
-    /// <summary>Internal constructor for testing — accepts a renderer factory seam.</summary>
-    internal PlayerClient(ProtocolClient protocol, Func<int, int, IWasapiRenderer> rendererFactory)
+    /// <summary>Internal constructor for testing — accepts a renderer factory and optional clock seam.</summary>
+    internal PlayerClient(
+        ProtocolClient              protocol,
+        Func<int, int, IWasapiRenderer> rendererFactory,
+        Clock.ISystemClock?         clock = null)
     {
         _protocol        = protocol;
         _rendererFactory = rendererFactory;
+        _clock           = clock ?? Clock.SystemClock.Instance;
     }
 
     // ── Static helpers ────────────────────────────────────────────────────────
@@ -256,6 +261,22 @@ public sealed class PlayerClient : IAsyncDisposable
         // to the hardware that many microseconds early so it emerges on time.
         long totalLatencyUs     = (_staticDelayMs + _rendererLatencyMs) * 1_000L;
         long effectiveTimestamp = chunk.Timestamp - totalLatencyUs;
+
+        // Drop chunks that have already missed their play deadline.
+        // The spec requires late arrivals to be discarded to maintain sync.
+        // Guard is skipped until the first clock sync so startup frames are never dropped prematurely.
+        if (_clockSynced)
+        {
+            long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
+            if (effectiveTimestamp < serverNowUs)
+            {
+                Log.Warning(
+                    "Dropping late audio chunk: effectiveTimestamp={Ts} serverNow={Now} delta={DeltaMs:F1} ms",
+                    effectiveTimestamp, serverNowUs,
+                    (serverNowUs - effectiveTimestamp) / 1_000.0);
+                return;
+            }
+        }
 
         var audioFrame = _decoder!.Decode(chunk.EncodedData);
         _playbackEngine!.Enqueue(effectiveTimestamp, audioFrame);

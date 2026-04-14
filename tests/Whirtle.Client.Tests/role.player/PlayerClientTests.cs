@@ -1,6 +1,7 @@
 using Whirtle.Client.Playback;
 using Whirtle.Client.Protocol;
 using Whirtle.Client.Role;
+using Whirtle.Client.Tests.Clock;
 using Whirtle.Client.Tests.Playback;
 using Whirtle.Client.Tests.Protocol;
 
@@ -10,7 +11,8 @@ public class PlayerClientTests
 {
     private static readonly MessageSerializer Serializer = new();
 
-    private static (PlayerClient player, FakeTransport transport, List<IWasapiRenderer> renderers) Build()
+    private static (PlayerClient player, FakeTransport transport, List<IWasapiRenderer> renderers) Build(
+        FakeClock? clock = null)
     {
         var transport = new FakeTransport();
         var protocol  = new ProtocolClient(transport);
@@ -21,7 +23,7 @@ public class PlayerClientTests
             var r = new FakeWasapiRenderer();
             renderers.Add(r);
             return r;
-        });
+        }, clock);
 
         return (player, transport, renderers);
     }
@@ -247,6 +249,48 @@ public class PlayerClientTests
 
         var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[sentBefore]);
         Assert.Equal(200, state.Player!.StaticDelayMs); // not 300 (200 + 100 renderer latency)
+    }
+
+    [Fact]
+    public async Task ProcessFrameAsync_AudioChunk_PastTimestamp_IsDroppedWhenClockSynced()
+    {
+        // FakeWasapiRenderer.LatencyMs = 100, static_delay = 0, so totalLatencyUs = 100_000.
+        // FakeClock starts at 0. After UpdateClockOffset(Zero), serverNow = 0.
+        // A chunk with Timestamp = 50_000 has effectiveTimestamp = 50_000 - 100_000 = -50_000,
+        // which is in the past relative to serverNow (0), so it must be dropped.
+        var clock = new FakeClock();
+        var (player, _, _) = Build(clock);
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
+
+        player.UpdateClockOffset(TimeSpan.Zero);
+
+        await player.ProcessFrameAsync(new AudioChunkFrame(
+            Timestamp:   50_000L, // effectiveTimestamp = -50_000 μs — in the past
+            EncodedData: new byte[4]));
+
+        Assert.Equal(0, player.BufferedFrameCount);
+    }
+
+    [Fact]
+    public async Task ProcessFrameAsync_AudioChunk_PastTimestamp_AcceptedWhenClockNotYetSynced()
+    {
+        // Without a clock sync the late-drop guard is inactive so startup frames are
+        // never prematurely discarded regardless of their timestamp.
+        var clock = new FakeClock();
+        var (player, _, _) = Build(clock);
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
+
+        // Deliberately skip UpdateClockOffset so _clockSynced stays false.
+
+        await player.ProcessFrameAsync(new AudioChunkFrame(
+            Timestamp:   50_000L, // would be late if clock were synced
+            EncodedData: new byte[4]));
+
+        Assert.Equal(1, player.BufferedFrameCount);
     }
 
     // ── stream/end ────────────────────────────────────────────────────────────
