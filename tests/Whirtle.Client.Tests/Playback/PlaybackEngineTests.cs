@@ -1,8 +1,6 @@
 using Whirtle.Client.Codec;
 using Whirtle.Client.Playback;
-using Whirtle.Client.Protocol;
 using Whirtle.Client.Tests.Clock;
-using Whirtle.Client.Tests.Protocol;
 
 namespace Whirtle.Client.Tests.Playback;
 
@@ -14,11 +12,9 @@ public class PlaybackEngineTests
     private static (PlaybackEngine engine, FakeWasapiRenderer renderer, FakeClock clock)
         Build()
     {
-        var renderer  = new FakeWasapiRenderer();
-        var transport = new FakeTransport();
-        var protocol  = new ProtocolClient(transport);
-        var clock     = new FakeClock();
-        var engine    = new PlaybackEngine(renderer, protocol, clock);
+        var renderer = new FakeWasapiRenderer();
+        var clock    = new FakeClock();
+        var engine   = new PlaybackEngine(renderer, clock);
         return (engine, renderer, clock);
     }
 
@@ -159,6 +155,26 @@ public class PlaybackEngineTests
         await PollUntil(() => renderer.Written.Count >= frameCount, TimeSpan.FromSeconds(2));
 
         Assert.Equal(frameCount, renderer.Written.Count);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task EnterError_RaisesPlaybackStateChangedWithErrorString()
+    {
+        var (engine, _, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero);
+
+        string? receivedState = null;
+        engine.PlaybackStateChanged += s => receivedState = s;
+        engine.Start();
+
+        // Provide just enough frames to reach Synchronized, then let it underrun.
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => receivedState == "error", TimeSpan.FromSeconds(3));
+
+        Assert.Equal("error", receivedState);
         await engine.DisposeAsync();
     }
 

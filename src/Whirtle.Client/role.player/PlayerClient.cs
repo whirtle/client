@@ -238,9 +238,13 @@ public sealed class PlayerClient : IAsyncDisposable
 
         var renderer       = _rendererFactory(player.SampleRate, player.Channels);
         _rendererLatencyMs = renderer.LatencyMs;
-        _playbackEngine    = new PlaybackEngine(renderer, _protocol);
-        _playbackEngine.StatusChanged += (state, _) =>
-            _playerState = state == PlaybackState.Error ? "error" : "synchronized";
+        _playbackEngine    = new PlaybackEngine(renderer);
+        _playbackEngine.PlaybackStateChanged += async state =>
+        {
+            _playerState = state;
+            try { await SendStateAsync(CancellationToken.None).ConfigureAwait(false); }
+            catch { }
+        };
         _playbackEngine.UpdateClockOffset(_clockOffset);
         _playbackEngine.SetVolume(_volume / 100f);
         _playbackEngine.SetUserMuted(_muted);
