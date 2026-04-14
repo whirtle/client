@@ -171,6 +171,18 @@ public sealed class PlayerClient : IAsyncDisposable
         => _protocol.SendAsync(new StreamRequestFormatMessage(request), cancellationToken);
 
     /// <summary>
+    /// Suspends local audio output immediately — clears the jitter buffer and
+    /// the WASAPI hardware buffer. Call when the user presses Pause.
+    /// </summary>
+    public void Pause() => _playbackEngine?.Pause();
+
+    /// <summary>
+    /// Lifts the pause gate so audio resumes once enough frames have buffered.
+    /// Call when the user presses Play.
+    /// </summary>
+    public void Resume() => _playbackEngine?.Resume();
+
+    /// <summary>
     /// Updates the clock offset used to translate server audio timestamps to
     /// local time. Call this whenever the <see cref="Clock.ClockSynchronizer"/>
     /// produces a new measurement.

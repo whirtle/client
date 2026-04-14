@@ -18,6 +18,7 @@ internal sealed class FakeWasapiRenderer : IWasapiRenderer
 
     public void Start()  => IsRunning = true;
     public void Stop()   => IsRunning = false;
+    public void ClearBuffer() => Written.Clear();
     public void SetMuted(bool muted)     => Muted  = muted;
     public void SetVolume(float volume)  => Volume = volume;
 

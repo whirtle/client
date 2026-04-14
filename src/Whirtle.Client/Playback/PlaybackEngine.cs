@@ -41,6 +41,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
     private volatile PlaybackState _state = PlaybackState.Buffering;
     private TimeSpan                _clockOffset;
     private volatile bool           _clockOffsetReady;
+    private volatile bool           _paused;
     private CancellationTokenSource _cts  = new();
     private Task                    _renderTask = Task.CompletedTask;
     private bool                    _userMuted  = false;
@@ -113,6 +114,29 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// </summary>
     public void ClearBuffer() => _buffer.Clear();
 
+    /// <summary>
+    /// Suspends audio output immediately. Clears both the jitter buffer and the
+    /// WASAPI hardware buffer so audio stops playing without waiting for queued
+    /// samples to drain. Call when the user presses Pause.
+    /// </summary>
+    public void Pause()
+    {
+        _paused = true;
+        _buffer.Clear();
+        _renderer.ClearBuffer();
+        TransitionTo(PlaybackState.Buffering);
+    }
+
+    /// <summary>
+    /// Lifts the pause gate so the engine can transition back to
+    /// <see cref="PlaybackState.Synchronized"/> once enough frames accumulate.
+    /// Call when the user presses Play.
+    /// </summary>
+    public void Resume()
+    {
+        _paused = false;
+    }
+
     /// <summary>Sets the user-controlled volume. <paramref name="volume"/> is a linear scalar in [0.0, 1.0].</summary>
     public void SetVolume(float volume) => _renderer.SetVolume(volume);
 
@@ -162,9 +186,10 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     private async Task HandleBufferingAsync(CancellationToken ct)
     {
-        if (!_clockOffsetReady)
+        if (_paused || !_clockOffsetReady)
         {
-            Log.Debug("Playback buffering — waiting for first clock sync");
+            if (!_clockOffsetReady)
+                Log.Debug("Playback buffering — waiting for first clock sync");
             await Task.Delay(5, ct).ConfigureAwait(false);
             return;
         }
