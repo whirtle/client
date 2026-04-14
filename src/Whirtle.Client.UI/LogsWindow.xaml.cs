@@ -39,6 +39,17 @@ public sealed partial class LogsWindow : Window
         };
     }
 
+    public void Show()
+    {
+        Activate();
+        // Re-apply the saved position: Activate() calls ShowWindow(SW_SHOWNORMAL)
+        // internally, which can reposition the window to a stale "normal" placement
+        // rather than where it was when hidden.
+        var settings = App.Current.SettingsViewModel;
+        if (settings.LogsWindowX is { } x && settings.LogsWindowY is { } y)
+            AppWindow.Move(new PointInt32(x, y));
+    }
+
     private void RestoreWindowBounds()
     {
         var settings = App.Current.SettingsViewModel;

@@ -402,7 +402,7 @@ public sealed partial class MainWindow : Window
     private void LogsAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         _logsWindow ??= new LogsWindow();
-        _logsWindow.Activate();
+        _logsWindow.Show();
         args.Handled = true;
     }
 
