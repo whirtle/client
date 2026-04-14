@@ -11,7 +11,7 @@ namespace Whirtle.Client.UI.ViewModels;
 
 public sealed partial class LogsViewModel : ObservableObject
 {
-    private const int MaxEntries = 500;
+    private const int MaxEntries = 10_000;
 
     private readonly DispatcherQueue _dispatcher;
 

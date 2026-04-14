@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Serilog;
 using Whirtle.Client.Audio;
 using Whirtle.Client.Codec;
 
@@ -113,6 +114,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private ConnectionMode _connectionMode = ConnectionMode.ServerInitiated;
 
     [ObservableProperty] private string _logLevel = "Information";
+
+    partial void OnLogLevelChanged(string value)
+        => Log.Information("Log level changed to {LogLevel}", value);
 
     [ObservableProperty] private bool _termsAccepted;
     [ObservableProperty] private bool _telemetryConsent;
