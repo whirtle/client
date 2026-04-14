@@ -83,35 +83,26 @@ public sealed class PlayerClient : IAsyncDisposable
     /// Creates a player client that drives the system WASAPI device identified by
     /// <paramref name="deviceId"/> (or the system default when <see langword="null"/>).
     /// </summary>
-<<<<<<< claude/laughing-curran
-    public PlayerClient(ProtocolClient protocol, string? deviceId = null)
-        : this(protocol, (sampleRate, channels) => new WasapiRenderer(deviceId, sampleRate, channels), clock: null) { }
-
-    /// <summary>Internal constructor for testing — accepts a renderer factory and optional clock seam.</summary>
-    internal PlayerClient(
-        ProtocolClient              protocol,
-        Func<int, int, IWasapiRenderer> rendererFactory,
-        Clock.ISystemClock?         clock = null)
-    {
-        _protocol        = protocol;
-        _rendererFactory = rendererFactory;
-        _clock           = clock ?? Clock.SystemClock.Instance;
-=======
     /// <param name="protocol">The protocol client to use for communication.</param>
     /// <param name="deviceId">The WASAPI device ID, or <see langword="null"/> for the system default.</param>
     /// <param name="volume">Initial volume level (0–100). Defaults to 100.</param>
     /// <param name="muted">Initial mute state. Defaults to <see langword="false"/>.</param>
     public PlayerClient(ProtocolClient protocol, string? deviceId = null, int volume = 100, bool muted = false)
-        : this(protocol, (sampleRate, channels) => new WasapiRenderer(deviceId, sampleRate, channels), volume, muted) { }
+        : this(protocol, (sampleRate, channels) => new WasapiRenderer(deviceId, sampleRate, channels), clock: null, volume, muted) { }
 
-    /// <summary>Internal constructor for testing — accepts a renderer factory seam.</summary>
-    internal PlayerClient(ProtocolClient protocol, Func<int, int, IWasapiRenderer> rendererFactory, int volume = 100, bool muted = false)
+    /// <summary>Internal constructor for testing — accepts a renderer factory and optional clock seam.</summary>
+    internal PlayerClient(
+        ProtocolClient                  protocol,
+        Func<int, int, IWasapiRenderer> rendererFactory,
+        Clock.ISystemClock?             clock  = null,
+        int                             volume = 100,
+        bool                            muted  = false)
     {
         _protocol        = protocol;
         _rendererFactory = rendererFactory;
+        _clock           = clock ?? Clock.SystemClock.Instance;
         _volume          = volume;
         _muted           = muted;
->>>>>>> main
     }
 
     // ── Static helpers ────────────────────────────────────────────────────────
