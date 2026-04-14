@@ -80,7 +80,7 @@ public sealed partial class NowPlayingPage : Page
     private void LogsButton_Click(object sender, RoutedEventArgs e)
     {
         _logsWindow ??= new LogsWindow();
-        _logsWindow.Activate();
+        _logsWindow.Show();
     }
 
     private Visibility WaitingVisibility(bool isNotConnected)
