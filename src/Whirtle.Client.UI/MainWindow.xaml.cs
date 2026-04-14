@@ -381,6 +381,31 @@ public sealed partial class MainWindow : Window
     private void FreDeclineButton_Click(object sender, RoutedEventArgs e)
         => Application.Current.Exit();
 
+    // ── Settings / Logs windows ────────────────────────────────────────────
+
+    private SettingsWindow? _settingsWindow;
+    private LogsWindow?     _logsWindow;
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+
+        _settingsWindow = new SettingsWindow();
+        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Activate();
+    }
+
+    private void LogsAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        _logsWindow ??= new LogsWindow();
+        _logsWindow.Activate();
+        args.Handled = true;
+    }
+
     // ── Navigation ─────────────────────────────────────────────────────────
 
     // Simple ICommand wrapper used only to set TaskbarIcon.DoubleClickCommand.
