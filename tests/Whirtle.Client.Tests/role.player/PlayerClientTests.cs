@@ -90,6 +90,33 @@ public class PlayerClientTests
     }
 
     [Fact]
+    public async Task ProcessFrameAsync_SetStaticDelayCommand_FlushesJitterBuffer()
+    {
+        // Frames already in the buffer carry timestamps adjusted with the old delay.
+        // When static_delay changes the buffer must be cleared so the engine does not
+        // play frames with incorrect timestamps.
+        var clock = new FakeClock();
+        var (player, _, _) = Build(clock);
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
+
+        // Enqueue frames far enough in the future that they survive the late-drop guard.
+        const long futureUs = 300_000_000L;
+        for (int i = 0; i < 3; i++)
+            await player.ProcessFrameAsync(new AudioChunkFrame(
+                Timestamp:   futureUs + i * 20_000L,
+                EncodedData: new byte[4]));
+
+        Assert.Equal(3, player.BufferedFrameCount);
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new ServerCommandMessage(Player: new ServerCommandPlayer("set_static_delay", StaticDelayMs: 200))));
+
+        Assert.Equal(0, player.BufferedFrameCount);
+    }
+
+    [Fact]
     public async Task ProcessFrameAsync_SetStaticDelayCommand_Clamps0To5000()
     {
         var (player, _, _) = Build();
