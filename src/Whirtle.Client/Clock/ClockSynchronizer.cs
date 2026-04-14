@@ -221,6 +221,11 @@ public sealed class ClockSynchronizer
         if (_window.Count >= WindowSize)
             _window.Dequeue();
         _window.Enqueue(raw);
+
+        var sortedWindow = _window.Select(r => r.RoundTripTime).OrderBy(x => x).ToList();
+        var medianRtt = sortedWindow[sortedWindow.Count / 2];
+        Log.Debug("Clock sync: median RTT {MedianRtt} μs", (long)medianRtt.TotalMicroseconds);
+
         return _window.MinBy(r => r.RoundTripTime)!;
     }
 

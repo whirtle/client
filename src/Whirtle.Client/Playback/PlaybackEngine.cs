@@ -208,7 +208,13 @@ public sealed class PlaybackEngine : IAsyncDisposable
     {
         if (!_buffer.TryDequeue(out long timestamp, out var frame))
         {
-            Log.Warning("Playback underrun — jitter buffer empty");
+            if (_renderer.BufferedBytes > 0)
+            {
+                await Task.Delay(5, ct).ConfigureAwait(false);
+                return;
+            }
+            long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
+            Log.Warning("Playback underrun — jitter buffer empty (estServerNow={ServerNowUs} μs)", serverNowUs);
             await EnterErrorAsync(ct);
             return;
         }
@@ -216,11 +222,17 @@ public sealed class PlaybackEngine : IAsyncDisposable
         double driftMs = ComputeDriftMs(timestamp);
 
         if (Log.IsEnabled(LogEventLevel.Debug))
+        {
+            long localNowUs  = _clock.UtcNowMicroseconds;
+            long serverNowUs = localNowUs + (long)_clockOffset.TotalMicroseconds;
             Log.Debug(
-                "Playback render: buffer={BufferFrames} frames, drift={DriftMs:F1} ms",
-                _buffer.Count, driftMs);
+                "Playback render: buffer={BufferFrames} frames, drift={DriftMs:F1} ms " +
+                "(localNow={LocalNowUs} μs, offset={OffsetUs} μs, estServerNow={ServerNowUs} μs, frameTs={FrameTs} μs)",
+                _buffer.Count, driftMs,
+                localNowUs, (long)_clockOffset.TotalMicroseconds, serverNowUs, timestamp);
+        }
 
-        if (Math.Abs(driftMs) > MaxDriftMs)
+        if (driftMs > MaxDriftMs)
         {
             Log.Warning(
                 "Playback drift {DriftMs:+0.0;-0.0} ms exceeds threshold ({MaxDriftMs} ms); entering error state",
