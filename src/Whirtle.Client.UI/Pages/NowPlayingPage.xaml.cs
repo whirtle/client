@@ -15,49 +15,62 @@ public sealed partial class NowPlayingPage : Page
     {
         InitializeComponent();
 
-        // Update album art whenever the raw bytes change
+        // Update album art and seek bar whenever relevant properties change.
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
     }
 
     private async void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is not nameof(ViewModel.AlbumArtData))
-            return;
+        switch (e.PropertyName)
+        {
+            case nameof(ViewModel.AlbumArtData):
+                if (ViewModel.AlbumArtData is { Length: > 0 } bytes)
+                {
+                    var bitmap = new BitmapImage();
+                    // Keep the stream alive until SetSourceAsync completes; disposing
+                    // it early (as a using-in-sync-method would) corrupts the load.
+                    using var stream = new System.IO.MemoryStream(bytes);
+                    using var ras    = stream.AsRandomAccessStream();
+                    try
+                    {
+                        await bitmap.SetSourceAsync(ras);
+                        AlbumArtImage.Source = bitmap;
+                    }
+                    catch
+                    {
+                        AlbumArtImage.Source = null;
+                    }
+                }
+                else
+                {
+                    AlbumArtImage.Source = null;
+                }
+                break;
 
-        if (ViewModel.AlbumArtData is { Length: > 0 } bytes)
-        {
-            var bitmap = new BitmapImage();
-            // Keep the stream alive until SetSourceAsync completes; disposing
-            // it early (as a using-in-sync-method would) corrupts the load.
-            using var stream = new System.IO.MemoryStream(bytes);
-            using var ras    = stream.AsRandomAccessStream();
-            try
-            {
-                await bitmap.SetSourceAsync(ras);
-                AlbumArtImage.Source = bitmap;
-            }
-            catch
-            {
-                AlbumArtImage.Source = null;
-            }
+            case nameof(ViewModel.DurationSeconds):
+                // Always update Maximum so the slider range is correct before Value.
+                SeekBar.Maximum = ViewModel.DurationSeconds;
+                break;
+
+            case nameof(ViewModel.PositionSeconds):
+                SeekBar.Value = ViewModel.PositionSeconds;
+                break;
         }
-        else
-        {
-            AlbumArtImage.Source = null;
-        }
+    }
+
+    // Clear auto-focus after the initial layout pass so no control appears
+    // highlighted when the page first loads.
+    private void Page_Loaded(object sender, RoutedEventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(
+            Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+            () => FocusSink.Focus(FocusState.Programmatic));
     }
 
     private async void VolumeSlider_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
     {
         if (sender is Slider slider)
             await ViewModel.SetVolumeCommand.ExecuteAsync(slider.Value / 100.0);
-    }
-
-    // Seek — optimistic local update; protocol seek command is a stub for now
-    private async void SeekBar_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
-    {
-        if (sender is Slider slider)
-            await ViewModel.SeekCommand.ExecuteAsync(slider.Value);
     }
 
     private Visibility WaitingVisibility(bool isNotConnected)
