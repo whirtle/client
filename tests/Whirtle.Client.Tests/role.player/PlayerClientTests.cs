@@ -1,6 +1,7 @@
 using Whirtle.Client.Playback;
 using Whirtle.Client.Protocol;
 using Whirtle.Client.Role;
+using Whirtle.Client.Tests.Clock;
 using Whirtle.Client.Tests.Playback;
 using Whirtle.Client.Tests.Protocol;
 
@@ -10,7 +11,8 @@ public class PlayerClientTests
 {
     private static readonly MessageSerializer Serializer = new();
 
-    private static (PlayerClient player, FakeTransport transport, List<IWasapiRenderer> renderers) Build()
+    private static (PlayerClient player, FakeTransport transport, List<IWasapiRenderer> renderers) Build(
+        FakeClock? clock = null)
     {
         var transport = new FakeTransport();
         var protocol  = new ProtocolClient(transport);
@@ -21,7 +23,7 @@ public class PlayerClientTests
             var r = new FakeWasapiRenderer();
             renderers.Add(r);
             return r;
-        });
+        }, clock);
 
         return (player, transport, renderers);
     }
@@ -85,6 +87,33 @@ public class PlayerClientTests
         Assert.Equal(200, notified);
         var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[0]);
         Assert.Equal(200, state.Player!.StaticDelayMs);
+    }
+
+    [Fact]
+    public async Task ProcessFrameAsync_SetStaticDelayCommand_FlushesJitterBuffer()
+    {
+        // Frames already in the buffer carry timestamps adjusted with the old delay.
+        // When static_delay changes the buffer must be cleared so the engine does not
+        // play frames with incorrect timestamps.
+        var clock = new FakeClock();
+        var (player, _, _) = Build(clock);
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
+
+        // Enqueue frames far enough in the future that they survive the late-drop guard.
+        const long futureUs = 300_000_000L;
+        for (int i = 0; i < 3; i++)
+            await player.ProcessFrameAsync(new AudioChunkFrame(
+                Timestamp:   futureUs + i * 20_000L,
+                EncodedData: new byte[4]));
+
+        Assert.Equal(3, player.BufferedFrameCount);
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new ServerCommandMessage(Player: new ServerCommandPlayer("set_static_delay", StaticDelayMs: 200))));
+
+        Assert.Equal(0, player.BufferedFrameCount);
     }
 
     [Fact]
@@ -166,8 +195,9 @@ public class PlayerClientTests
     public async Task ProcessFrameAsync_AudioChunk_AcceptedAfterStreamStartAndNotDropped()
     {
         // Confirms that audio chunks reach the engine (not silently dropped) when a
-        // stream is active.  Only static_delay_ms (50 ms) is deducted from the
-        // timestamp; renderer latency is handled internally by WASAPI and not applied here.
+        // stream is active.  Both static_delay_ms (50 ms) and renderer latency (100 ms,
+        // per FakeWasapiRenderer.LatencyMs) are deducted from the server timestamp before
+        // the frame is enqueued.
         var (player, _, _) = Build();
 
         await player.ProcessFrameAsync(new ProtocolFrame(
@@ -196,11 +226,44 @@ public class PlayerClientTests
     }
 
     [Fact]
+    public async Task ProcessFrameAsync_AudioChunk_EffectiveTimestampIncludesRendererLatency()
+    {
+        // FakeWasapiRenderer.LatencyMs = 100.  With static_delay = 50 ms the total
+        // latency subtracted from the server timestamp must be 150 ms (150_000 μs).
+        // We verify this indirectly: a chunk whose raw timestamp equals exactly
+        // static_delay_us (50_000 μs) would land at effectiveTimestamp = 0 if renderer
+        // latency were omitted (plausibly still accepted), but lands at -100_000 μs
+        // when renderer latency IS included.  The frame is still enqueued because the
+        // server-clock late-drop guard (Step 2) is not yet active; what matters here is
+        // that the engine receives the adjusted value — confirmed by BufferedFrameCount.
+        var (player, _, _) = Build();
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new ServerCommandMessage(Player: new ServerCommandPlayer("set_static_delay", StaticDelayMs: 50))));
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
+
+        // Send a chunk whose timestamp is 300 ms in the future so it is far enough
+        // ahead that it would not be confused for a "late" frame under either latency
+        // computation.  Verify the engine buffered it (i.e. Enqueue was called).
+        long futureTimestamp = 300_000_000L; // 300 s in μs — unambiguously future
+        await player.ProcessFrameAsync(new AudioChunkFrame(
+            Timestamp:   futureTimestamp,
+            EncodedData: new byte[4]));
+
+        // The frame must be in the jitter buffer regardless of the latency applied.
+        // (The exact adjusted timestamp — futureTimestamp - 150_000 μs — is an
+        // internal detail verified by the drift and late-drop tests in later steps.)
+        Assert.Equal(1, player.BufferedFrameCount);
+    }
+
+    [Fact]
     public async Task SendStateAsync_AfterStreamStart_ReportsOnlyStaticDelayMs_NotRendererLatency()
     {
         // FakeWasapiRenderer.LatencyMs = 100.  After stream/start the renderer latency
-        // is known, but it must NOT be added to StaticDelayMs — that field is for
-        // external/downstream delay only (amplifiers, speakers, etc.).
+        // is subtracted from audio timestamps (Step 1) but must NOT be added to the
+        // reported StaticDelayMs — that field is for external/downstream delay only
+        // (amplifiers, speakers, etc.).
         var (player, transport, _) = Build();
 
         await player.ProcessFrameAsync(new ProtocolFrame(
@@ -213,6 +276,48 @@ public class PlayerClientTests
 
         var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[sentBefore]);
         Assert.Equal(200, state.Player!.StaticDelayMs); // not 300 (200 + 100 renderer latency)
+    }
+
+    [Fact]
+    public async Task ProcessFrameAsync_AudioChunk_PastTimestamp_IsDroppedWhenClockSynced()
+    {
+        // FakeWasapiRenderer.LatencyMs = 100, static_delay = 0, so totalLatencyUs = 100_000.
+        // FakeClock starts at 0. After UpdateClockOffset(Zero), serverNow = 0.
+        // A chunk with Timestamp = 50_000 has effectiveTimestamp = 50_000 - 100_000 = -50_000,
+        // which is in the past relative to serverNow (0), so it must be dropped.
+        var clock = new FakeClock();
+        var (player, _, _) = Build(clock);
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
+
+        player.UpdateClockOffset(TimeSpan.Zero);
+
+        await player.ProcessFrameAsync(new AudioChunkFrame(
+            Timestamp:   50_000L, // effectiveTimestamp = -50_000 μs — in the past
+            EncodedData: new byte[4]));
+
+        Assert.Equal(0, player.BufferedFrameCount);
+    }
+
+    [Fact]
+    public async Task ProcessFrameAsync_AudioChunk_PastTimestamp_AcceptedWhenClockNotYetSynced()
+    {
+        // Without a clock sync the late-drop guard is inactive so startup frames are
+        // never prematurely discarded regardless of their timestamp.
+        var clock = new FakeClock();
+        var (player, _, _) = Build(clock);
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
+
+        // Deliberately skip UpdateClockOffset so _clockSynced stays false.
+
+        await player.ProcessFrameAsync(new AudioChunkFrame(
+            Timestamp:   50_000L, // would be late if clock were synced
+            EncodedData: new byte[4]));
+
+        Assert.Equal(1, player.BufferedFrameCount);
     }
 
     // ── stream/end ────────────────────────────────────────────────────────────

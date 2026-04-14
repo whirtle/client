@@ -1,8 +1,6 @@
 using Whirtle.Client.Codec;
 using Whirtle.Client.Playback;
-using Whirtle.Client.Protocol;
 using Whirtle.Client.Tests.Clock;
-using Whirtle.Client.Tests.Protocol;
 
 namespace Whirtle.Client.Tests.Playback;
 
@@ -14,11 +12,9 @@ public class PlaybackEngineTests
     private static (PlaybackEngine engine, FakeWasapiRenderer renderer, FakeClock clock)
         Build()
     {
-        var renderer  = new FakeWasapiRenderer();
-        var transport = new FakeTransport();
-        var protocol  = new ProtocolClient(transport);
-        var clock     = new FakeClock();
-        var engine    = new PlaybackEngine(renderer, protocol, clock);
+        var renderer = new FakeWasapiRenderer();
+        var clock    = new FakeClock();
+        var engine   = new PlaybackEngine(renderer, clock);
         return (engine, renderer, clock);
     }
 
@@ -145,13 +141,11 @@ public class PlaybackEngineTests
     }
 
     [Fact]
-    public async Task LargeDrift_DoesNotPreventRendering()
+    public async Task Drift_BelowThreshold_RendersNormally()
     {
-        // Drift of 200 ms is well above MaxDriftMs (50 ms).
-        // The engine should log a warning but still write all frames to the renderer
-        // rather than entering error state, as it did before this fix.
+        // 100 ms drift is below MaxDriftMs (200 ms): engine should render all frames.
         var (engine, renderer, clock) = Build();
-        engine.UpdateClockOffset(TimeSpan.FromMilliseconds(200));
+        engine.UpdateClockOffset(TimeSpan.FromMilliseconds(100));
         engine.Start();
 
         const int frameCount = 4;
@@ -161,6 +155,44 @@ public class PlaybackEngineTests
         await PollUntil(() => renderer.Written.Count >= frameCount, TimeSpan.FromSeconds(2));
 
         Assert.Equal(frameCount, renderer.Written.Count);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task EnterError_RaisesPlaybackStateChangedWithErrorString()
+    {
+        var (engine, _, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero);
+
+        string? receivedState = null;
+        engine.PlaybackStateChanged += s => receivedState = s;
+        engine.Start();
+
+        // Provide just enough frames to reach Synchronized, then let it underrun.
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => receivedState == "error", TimeSpan.FromSeconds(3));
+
+        Assert.Equal("error", receivedState);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task LargeDrift_ExceedingThreshold_EntersErrorState()
+    {
+        // 250 ms drift exceeds MaxDriftMs (200 ms): engine should enter Error on the
+        // first dequeued frame rather than attempting rate correction.
+        var (engine, _, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.FromMilliseconds(250));
+        engine.Start();
+
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(2));
+
+        Assert.Equal(PlaybackState.Error, engine.State);
         await engine.DisposeAsync();
     }
 
@@ -194,6 +226,61 @@ public class PlaybackEngineTests
 
         Assert.True(synchronizedCount >= 2);
         await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task PlaybackStateChanged_FiresSynchronized_OnlyWhenActuallySynchronized()
+    {
+        // "synchronized" must be raised when transitioning Buffering→Synchronized,
+        // not when leaving Error (which visits Buffering as an intermediate step).
+        // We verify there are no two consecutive "synchronized" events — the old code
+        // sent "synchronized" from HandleErrorAsync before the engine reached Synchronized,
+        // which would produce the sequence: ..., "synchronized", "synchronized".
+        var (engine, _, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero);
+
+        var states = new List<string>();
+        var tcs    = new TaskCompletionSource<bool>();
+        engine.PlaybackStateChanged += s =>
+        {
+            lock (states)
+            {
+                states.Add(s);
+                // Stop collecting once we have our error + second synchronized.
+                if (states.Count(x => x == "synchronized") >= 2)
+                    tcs.TrySetResult(true);
+            }
+        };
+        engine.Start();
+
+        // Initial fill → Buffering → Synchronized.
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(3));
+
+        // Refill → Buffering → Synchronized again.
+        for (int i = 4; i < 8; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await tcs.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await engine.DisposeAsync();
+
+        lock (states)
+        {
+            // The critical invariant: no two consecutive "synchronized" events.
+            // Such a pair would indicate a spurious notification fired while the
+            // engine was still in Buffering state during error recovery.
+            for (int i = 1; i < states.Count; i++)
+                Assert.False(
+                    states[i] == "synchronized" && states[i - 1] == "synchronized",
+                    $"Spurious consecutive 'synchronized' at index {i}: [{string.Join(", ", states)}]");
+
+            // Must have seen at least: synchronized, error, synchronized.
+            Assert.True(states.Count >= 3, $"Too few state events: [{string.Join(", ", states)}]");
+            Assert.Equal("synchronized", states[0]);
+            Assert.Contains("error",        states);
+        }
     }
 
     [Fact]

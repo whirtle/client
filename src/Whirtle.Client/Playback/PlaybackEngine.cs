@@ -4,7 +4,6 @@
 using Serilog;
 using Serilog.Events;
 using Whirtle.Client.Codec;
-using Whirtle.Client.Protocol;
 
 namespace Whirtle.Client.Playback;
 
@@ -25,18 +24,18 @@ namespace Whirtle.Client.Playback;
 ///  Buffering     → Synchronized  : buffer reaches MinBufferFrames
 ///  Synchronized  → Error         : underrun or drift > MaxDriftMs
 ///  Error         → Buffering     : buffer recovers to MinBufferFrames;
-///                                   state: 'error' / 'synchronized' messages
-///                                   are sent via the ProtocolClient
+///                                   <see cref="PlaybackStateChanged"/> fires with
+///                                   <c>"error"</c> or <c>"synchronized"</c> so the
+///                                   caller can send a complete <c>client/state</c> message
 /// </summary>
 public sealed class PlaybackEngine : IAsyncDisposable
 {
     // Tuning constants
     private const int    MinBufferFrames = 4;   // frames required before playback starts/recovers
-    private const double MaxDriftMs      = 50;  // drift threshold before entering Error state
+    private const double MaxDriftMs      = 200; // drift threshold before entering Error state; must exceed renderer latency (default 100 ms)
 
     private readonly JitterBuffer       _buffer;
     private readonly IWasapiRenderer    _renderer;
-    private readonly ProtocolClient     _protocol;
     private readonly Clock.ISystemClock _clock;
 
     private volatile PlaybackState _state = PlaybackState.Buffering;
@@ -59,13 +58,18 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// </summary>
     public event Action<PlaybackState, int>? StatusChanged;
 
+    /// <summary>
+    /// Raised when the engine enters or leaves a synchronised state.
+    /// Carries the Sendspin state string: <c>"error"</c> or <c>"synchronized"</c>.
+    /// Subscribers should send a complete <c>client/state</c> message to the server.
+    /// </summary>
+    public event Action<string>? PlaybackStateChanged;
+
     internal PlaybackEngine(
         IWasapiRenderer     renderer,
-        ProtocolClient      protocol,
         Clock.ISystemClock? clock = null)
     {
         _renderer = renderer;
-        _protocol = protocol;
         _clock    = clock ?? Clock.SystemClock.Instance;
         _buffer   = new JitterBuffer();
     }
@@ -169,6 +173,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
         {
             Log.Debug("Playback buffering complete ({Count} frames); starting playback", _buffer.Count);
             TransitionTo(PlaybackState.Synchronized);
+            PlaybackStateChanged?.Invoke("synchronized");
             return;
         }
         await Task.Delay(5, ct).ConfigureAwait(false);
@@ -191,9 +196,13 @@ public sealed class PlaybackEngine : IAsyncDisposable
                 _buffer.Count, driftMs);
 
         if (Math.Abs(driftMs) > MaxDriftMs)
+        {
             Log.Warning(
-                "Playback drift {DriftMs:+0.0;-0.0} ms exceeds threshold ({MaxDriftMs} ms)",
+                "Playback drift {DriftMs:+0.0;-0.0} ms exceeds threshold ({MaxDriftMs} ms); entering error state",
                 driftMs, MaxDriftMs);
+            await EnterErrorAsync(ct);
+            return;
+        }
 
         // Compute a rate ratio to gently correct residual drift.
         // A 1 ms drift on a 20 ms frame → ratio = 20/21 ≈ 0.952 (speed up).
@@ -234,8 +243,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
             Log.Debug("Playback recovered ({Count} frames buffered); resuming", _buffer.Count);
             _engineMuted = false;
             ApplyMuteState();
-            _state = PlaybackState.Buffering; // will quickly advance to Synchronized
-            await NotifySynchronizedAsync().ConfigureAwait(false);
+            TransitionTo(PlaybackState.Buffering);
             return;
         }
 
@@ -244,42 +252,20 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private async Task EnterErrorAsync(CancellationToken ct)
+    private Task EnterErrorAsync(CancellationToken ct)
     {
         TransitionTo(PlaybackState.Error);
         _engineMuted = true;
         ApplyMuteState();
         _buffer.Clear();
-
-        try
-        {
-            await _protocol.SendAsync(
-                new ClientStateMessage("error"),
-                ct).ConfigureAwait(false);
-        }
-        catch (Exception)
-        {
-            // Best-effort — don't let a send failure crash the render loop.
-        }
+        PlaybackStateChanged?.Invoke("error");
+        return Task.CompletedTask;
     }
 
     private void TransitionTo(PlaybackState next)
     {
         _state = next;
         StatusChanged?.Invoke(next, _buffer.Count);
-    }
-
-    private async Task NotifySynchronizedAsync()
-    {
-        try
-        {
-            // Use a short-lived CTS so a stalled send doesn't block forever.
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            await _protocol.SendAsync(
-                new ClientStateMessage("synchronized"), cts.Token)
-                .ConfigureAwait(false);
-        }
-        catch (Exception) { }
     }
 
     private void ApplyMuteState() => _renderer.SetMuted(_engineMuted || _userMuted);

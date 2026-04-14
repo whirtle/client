@@ -40,6 +40,7 @@ public sealed class PlayerClient : IAsyncDisposable
 {
     private readonly ProtocolClient                  _protocol;
     private readonly Func<int, int, IWasapiRenderer> _rendererFactory;
+    private readonly Clock.ISystemClock              _clock;
 
     private IAudioDecoder? _decoder;
     private PlaybackEngine? _playbackEngine;
@@ -52,6 +53,9 @@ public sealed class PlayerClient : IAsyncDisposable
     private bool   _muted;
     private int    _staticDelayMs = 0;
     private string _playerState   = "synchronized";
+
+    /// <summary>Number of frames currently held in the jitter buffer. Zero when no stream is active.</summary>
+    public int BufferedFrameCount => _playbackEngine?.BufferedFrameCount ?? 0;
 
     /// <summary>Current volume level (0–100).</summary>
     public int  Volume        => _volume;
@@ -79,6 +83,20 @@ public sealed class PlayerClient : IAsyncDisposable
     /// Creates a player client that drives the system WASAPI device identified by
     /// <paramref name="deviceId"/> (or the system default when <see langword="null"/>).
     /// </summary>
+<<<<<<< claude/laughing-curran
+    public PlayerClient(ProtocolClient protocol, string? deviceId = null)
+        : this(protocol, (sampleRate, channels) => new WasapiRenderer(deviceId, sampleRate, channels), clock: null) { }
+
+    /// <summary>Internal constructor for testing — accepts a renderer factory and optional clock seam.</summary>
+    internal PlayerClient(
+        ProtocolClient              protocol,
+        Func<int, int, IWasapiRenderer> rendererFactory,
+        Clock.ISystemClock?         clock = null)
+    {
+        _protocol        = protocol;
+        _rendererFactory = rendererFactory;
+        _clock           = clock ?? Clock.SystemClock.Instance;
+=======
     /// <param name="protocol">The protocol client to use for communication.</param>
     /// <param name="deviceId">The WASAPI device ID, or <see langword="null"/> for the system default.</param>
     /// <param name="volume">Initial volume level (0–100). Defaults to 100.</param>
@@ -93,6 +111,7 @@ public sealed class PlayerClient : IAsyncDisposable
         _rendererFactory = rendererFactory;
         _volume          = volume;
         _muted           = muted;
+>>>>>>> main
     }
 
     // ── Static helpers ────────────────────────────────────────────────────────
@@ -236,9 +255,13 @@ public sealed class PlayerClient : IAsyncDisposable
 
         var renderer       = _rendererFactory(player.SampleRate, player.Channels);
         _rendererLatencyMs = renderer.LatencyMs;
-        _playbackEngine    = new PlaybackEngine(renderer, _protocol);
-        _playbackEngine.StatusChanged += (state, _) =>
-            _playerState = state == PlaybackState.Error ? "error" : "synchronized";
+        _playbackEngine    = new PlaybackEngine(renderer);
+        _playbackEngine.PlaybackStateChanged += async state =>
+        {
+            _playerState = state;
+            try { await SendStateAsync(CancellationToken.None).ConfigureAwait(false); }
+            catch { }
+        };
         _playbackEngine.UpdateClockOffset(_clockOffset);
         _playbackEngine.SetVolume(_volume / 100f);
         _playbackEngine.SetUserMuted(_muted);
@@ -253,13 +276,28 @@ public sealed class PlayerClient : IAsyncDisposable
 
     private void HandleAudioChunk(AudioChunkFrame chunk)
     {
-        // Adjust the target timestamp by any user-configured static downstream delay
-        // (amplifier, external speakers, etc.) so the server pre-buffers by that amount.
-        // WASAPI renderer latency is handled internally by WasapiOut/BufferedWaveProvider
-        // and must not be included here — doing so makes drift ≈ rendererLatencyMs which
-        // exceeds MaxDriftMs and causes the engine to error on every frame.
-        long totalLatencyUs     = _staticDelayMs * 1_000L;
+        // Subtract both the user-configured static downstream delay (amplifiers, external
+        // speakers) and the WASAPI renderer's pipeline latency from the server timestamp.
+        // The server timestamp marks when audio should be audible; we need to submit it
+        // to the hardware that many microseconds early so it emerges on time.
+        long totalLatencyUs     = (_staticDelayMs + _rendererLatencyMs) * 1_000L;
         long effectiveTimestamp = chunk.Timestamp - totalLatencyUs;
+
+        // Drop chunks that have already missed their play deadline.
+        // The spec requires late arrivals to be discarded to maintain sync.
+        // Guard is skipped until the first clock sync so startup frames are never dropped prematurely.
+        if (_clockSynced)
+        {
+            long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
+            if (effectiveTimestamp < serverNowUs)
+            {
+                Log.Warning(
+                    "Dropping late audio chunk: effectiveTimestamp={Ts} serverNow={Now} delta={DeltaMs:F1} ms",
+                    effectiveTimestamp, serverNowUs,
+                    (serverNowUs - effectiveTimestamp) / 1_000.0);
+                return;
+            }
+        }
 
         var audioFrame = _decoder!.Decode(chunk.EncodedData);
         _playbackEngine!.Enqueue(effectiveTimestamp, audioFrame);
@@ -295,6 +333,10 @@ public sealed class PlayerClient : IAsyncDisposable
 
             case "set_static_delay" when cmd.StaticDelayMs.HasValue:
                 _staticDelayMs = Math.Clamp(cmd.StaticDelayMs.Value, 0, 5_000);
+                // Frames already in the buffer carry the old adjusted timestamp and
+                // would produce a burst of incorrect drift readings. Flush them so the
+                // engine re-buffers with timestamps adjusted by the new delay value.
+                _playbackEngine?.ClearBuffer();
                 StaticDelayChanged?.Invoke(_staticDelayMs);
                 break;
         }
