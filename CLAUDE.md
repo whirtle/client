@@ -189,6 +189,12 @@ Take particular care to handle `IDisposable` properly: implement `Dispose()` on 
 - Write clear, descriptive commit messages.
 - Do not include any references to Claude or AI tools in commit messages or PR descriptions.
 
+## Shutdown / disposal pattern
+
+`Application.Current.Exit()` in WinUI 3 tears down the XAML compositor immediately. Any background thread (WASAPI audio, network receive loop, clock sync) still running at that point can access freed memory and cause an access violation (0xc0000005).
+
+**Rule:** before calling `Application.Current.Exit()`, always await full teardown of all background tasks and disposables (including `PlaybackEngine`/WASAPI). In `AppWindow_Closing`, use `args.Cancel = true` + an `_isShuttingDown` guard so the async cleanup can run before exit. Never call `Application.Current.Exit()` directly from a menu/tray handler — instead call `this.Close()` to route through the `AppWindow_Closing` cleanup path.
+
 ## Before pushing
 
 Run all unit tests.

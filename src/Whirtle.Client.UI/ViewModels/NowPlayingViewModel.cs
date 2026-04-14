@@ -517,14 +517,15 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Cancels all background work (server-accept loop and active connection).
-    /// Called synchronously on exit so background threads don't dispatch into
-    /// a destroyed XAML runtime.
+    /// Shuts down all background work and disposes audio/network resources.
+    /// Must be awaited before <see cref="Application.Current.Exit"/> so that
+    /// the WASAPI renderer is stopped before the process tears down.
     /// </summary>
-    internal void CancelBackgroundWork()
+    internal async Task ShutdownAsync()
     {
-        _serverModeCts?.Cancel();
-        _connectionCts?.Cancel();
+        StopServerInitiatedMode();
+        try { await TearDownSessionAsync(); }
+        catch (Exception ex) { Log.Warning(ex, "Error during shutdown"); }
     }
 
     internal void StartServerInitiatedMode()
