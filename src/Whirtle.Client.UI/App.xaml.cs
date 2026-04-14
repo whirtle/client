@@ -26,6 +26,7 @@ public partial class App : Application
     private DispatcherQueue?     _dispatcher;
     private NetworkMonitor?      _networkMonitor;
     private bool                 _firewallCheckStarted;
+    private bool                 _serverModeStarted;
 
     internal static new App Current => (App)Application.Current;
 
@@ -93,6 +94,11 @@ public partial class App : Application
             }
         };
 
+        // Start server-initiated mode immediately for users who are past the FRE
+        // so they don't have to wait for the firewall check (which spawns netsh).
+        if (_uiStateService.CurrentState != AppUiState.FirstRun)
+            MaybeStartServerInitiatedMode();
+
         // ── Power events ─────────────────────────────────────────────────────
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
@@ -125,8 +131,12 @@ public partial class App : Application
 
     private void MaybeStartServerInitiatedMode()
     {
+        if (_serverModeStarted) return;
         if (_settingsViewModel!.ConnectionMode == ConnectionMode.ServerInitiated)
+        {
+            _serverModeStarted = true;
             _nowPlayingViewModel!.StartServerInitiatedMode();
+        }
     }
 
     private async Task CheckFirewallAsync()
