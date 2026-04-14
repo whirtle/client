@@ -36,6 +36,9 @@ internal interface IWasapiRenderer : IDisposable
     /// <summary>Writes interleaved 16-bit PCM samples to the hardware output buffer.</summary>
     void Write(ReadOnlySpan<short> samples);
 
+    /// <summary>Discards all samples currently queued in the output buffer.</summary>
+    void ClearBuffer();
+
     /// <summary>Mutes or unmutes the output without stopping the stream.</summary>
     void SetMuted(bool muted);
 

@@ -71,6 +71,8 @@ internal sealed class WasapiRenderer : IWasapiRenderer
         IsRunning = false;
     }
 
+    public void ClearBuffer() => _provider.ClearBuffer();
+
     public void SetMuted(bool muted) => _muted = muted;
 
     public void SetVolume(float volume) => _volume = Math.Clamp(volume, 0f, 1f);

@@ -699,6 +699,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task PlayAsync()
     {
         if (_controller is null) return;
+        _player?.Resume();
         await _controller.PlayAsync();
         IsPlaying = true;
     }
@@ -707,6 +708,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task PauseAsync()
     {
         if (_controller is null) return;
+        _player?.Pause();
         await _controller.PauseAsync();
         IsPlaying = false;
     }
