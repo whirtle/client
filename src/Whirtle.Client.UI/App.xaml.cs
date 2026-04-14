@@ -61,6 +61,7 @@ public partial class App : Application
 
         // ── ViewModels ───────────────────────────────────────────────────────
         _settingsViewModel   = new SettingsViewModel();
+        Log.Information("Log level: {LogLevel}", _settingsViewModel.LogLevel);
         _nowPlayingViewModel = new NowPlayingViewModel(
             AudioDeviceEnumerator.Create(),
             _dispatcher,
