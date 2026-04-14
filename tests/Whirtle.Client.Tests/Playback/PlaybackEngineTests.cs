@@ -163,6 +163,24 @@ public class PlaybackEngineTests
     }
 
     [Fact]
+    public async Task LargeDrift_ExceedingThreshold_EntersErrorState()
+    {
+        // 250 ms drift exceeds MaxDriftMs (200 ms): engine should enter Error on the
+        // first dequeued frame rather than attempting rate correction.
+        var (engine, _, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.FromMilliseconds(250));
+        engine.Start();
+
+        for (int i = 0; i < 4; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(2));
+
+        Assert.Equal(PlaybackState.Error, engine.State);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
     public async Task Error_RecoveryReturnsEngineToSynchronized()
     {
         // After an underrun drives the engine to Error, refilling the buffer should

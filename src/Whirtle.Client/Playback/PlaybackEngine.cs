@@ -191,9 +191,13 @@ public sealed class PlaybackEngine : IAsyncDisposable
                 _buffer.Count, driftMs);
 
         if (Math.Abs(driftMs) > MaxDriftMs)
+        {
             Log.Warning(
-                "Playback drift {DriftMs:+0.0;-0.0} ms exceeds threshold ({MaxDriftMs} ms)",
+                "Playback drift {DriftMs:+0.0;-0.0} ms exceeds threshold ({MaxDriftMs} ms); entering error state",
                 driftMs, MaxDriftMs);
+            await EnterErrorAsync(ct);
+            return;
+        }
 
         // Compute a rate ratio to gently correct residual drift.
         // A 1 ms drift on a 20 ms frame → ratio = 20/21 ≈ 0.952 (speed up).
