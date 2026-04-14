@@ -53,6 +53,9 @@ public sealed class PlayerClient : IAsyncDisposable
     private int    _staticDelayMs = 0;
     private string _playerState   = "synchronized";
 
+    /// <summary>Number of frames currently held in the jitter buffer. Zero when no stream is active.</summary>
+    public int BufferedFrameCount => _playbackEngine?.BufferedFrameCount ?? 0;
+
     /// <summary>Current volume level (0–100).</summary>
     public int  Volume        => _volume;
 
@@ -247,12 +250,11 @@ public sealed class PlayerClient : IAsyncDisposable
 
     private void HandleAudioChunk(AudioChunkFrame chunk)
     {
-        // Adjust the target timestamp by any user-configured static downstream delay
-        // (amplifier, external speakers, etc.) so the server pre-buffers by that amount.
-        // WASAPI renderer latency is handled internally by WasapiOut/BufferedWaveProvider
-        // and must not be included here — doing so makes drift ≈ rendererLatencyMs which
-        // exceeds MaxDriftMs and causes the engine to error on every frame.
-        long totalLatencyUs     = _staticDelayMs * 1_000L;
+        // Subtract both the user-configured static downstream delay (amplifiers, external
+        // speakers) and the WASAPI renderer's pipeline latency from the server timestamp.
+        // The server timestamp marks when audio should be audible; we need to submit it
+        // to the hardware that many microseconds early so it emerges on time.
+        long totalLatencyUs     = (_staticDelayMs + _rendererLatencyMs) * 1_000L;
         long effectiveTimestamp = chunk.Timestamp - totalLatencyUs;
 
         var audioFrame = _decoder!.Decode(chunk.EncodedData);
