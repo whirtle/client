@@ -8,7 +8,7 @@
     xmlns:controls="using:Whirtle.Client.UI.Controls"
 Title="Whirtle">
 
-    <Grid KeyboardAcceleratorPlacementMode="Hidden">
+    <Grid KeyboardAcceleratorPlacementMode="Hidden" VerticalAlignment="Top">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="LogsAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>

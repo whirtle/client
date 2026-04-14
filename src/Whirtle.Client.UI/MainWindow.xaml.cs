@@ -94,9 +94,10 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void FitWindowToContent()
     {
-        var root = (FrameworkElement)Content;
-        int w = (int)Math.Ceiling(root.ActualWidth);
-        int h = (int)Math.Ceiling(root.ActualHeight);
+        var root  = (FrameworkElement)Content;
+        var scale = root.XamlRoot?.RasterizationScale ?? 1.0;
+        int w = (int)Math.Ceiling(root.ActualWidth  * scale);
+        int h = (int)Math.Ceiling(root.ActualHeight * scale);
         if (w <= 0 || h <= 0) return;
         if (w == _lastClientSize.Width && h == _lastClientSize.Height) return;
         _lastClientSize = new SizeInt32(w, h);
