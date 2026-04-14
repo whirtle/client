@@ -168,6 +168,49 @@ public class ClockSynchronizerTests
     }
 
     [Fact]
+    public void AcceptResult_DiscardsHighRttOutlier()
+    {
+        // A sample whose RTT exceeds 2× the window median is discarded: it is not
+        // added to the window and the existing best is returned unchanged.
+        var (syncer, _, _) = Build();
+
+        static ClockSyncResult Sample(long rttUs, long offsetUs) =>
+            new(TimeSpan.FromMicroseconds(offsetUs), TimeSpan.FromMicroseconds(rttUs));
+
+        // Seed window with two low-RTT samples (median = 100 μs).
+        syncer.AcceptResult(Sample(rttUs: 100, offsetUs: 50));
+        syncer.AcceptResult(Sample(rttUs: 100, offsetUs: 50));
+
+        // An outlier at 2001 μs (> 2×100) must be rejected.
+        var result = syncer.AcceptResult(Sample(rttUs: 2001, offsetUs: 999));
+
+        // Window is unchanged — still has 2 entries at 100 μs RTT.
+        Assert.Equal(TimeSpan.FromMicroseconds(100), result.RoundTripTime);
+        Assert.Equal(TimeSpan.FromMicroseconds(50),  result.ClockOffset);
+    }
+
+    [Fact]
+    public void AcceptResult_AcceptsModerateRttWithinGate()
+    {
+        // A sample at exactly 2× median is within the gate (not strictly greater) and
+        // should be accepted into the window.
+        var (syncer, _, _) = Build();
+
+        static ClockSyncResult Sample(long rttUs, long offsetUs) =>
+            new(TimeSpan.FromMicroseconds(offsetUs), TimeSpan.FromMicroseconds(rttUs));
+
+        syncer.AcceptResult(Sample(rttUs: 100, offsetUs: 50));
+        syncer.AcceptResult(Sample(rttUs: 100, offsetUs: 50));
+
+        // Exactly 2× median (200 μs) — accepted.
+        var result = syncer.AcceptResult(Sample(rttUs: 200, offsetUs: 80));
+
+        // The new sample has higher RTT so it doesn't become the min-RTT winner, but
+        // it is in the window (no discarding occurred).
+        Assert.Equal(TimeSpan.FromMicroseconds(100), result.RoundTripTime);
+    }
+
+    [Fact]
     public void AcceptResult_EvictsOldestWhenWindowFull()
     {
         // After the window fills (capacity = 8) the oldest sample is evicted.

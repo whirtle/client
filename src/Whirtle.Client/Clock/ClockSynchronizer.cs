@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Steve Peterson
 // SPDX-License-Identifier: MIT
 
+using Serilog;
 using Whirtle.Client.Protocol;
 
 namespace Whirtle.Client.Clock;
@@ -157,6 +158,24 @@ public sealed class ClockSynchronizer
     /// </remarks>
     internal ClockSyncResult AcceptResult(ClockSyncResult raw)
     {
+        // Outlier gate: discard samples with RTT > 2× the median RTT of the existing
+        // window. High-RTT samples are likely suffering from asymmetric queuing delay,
+        // which biases the offset estimate. We need at least 2 window entries to compute
+        // a meaningful median; the first two samples always enter unconditionally.
+        if (_window.Count >= 2)
+        {
+            var sorted = _window.Select(r => r.RoundTripTime).OrderBy(x => x).ToList();
+            var median = sorted[sorted.Count / 2];
+            if (raw.RoundTripTime > median + median) // > 2× median
+            {
+                Log.Debug(
+                    "Clock sync: discarding high-RTT sample ({Rtt} μs > 2×median {Median} μs)",
+                    (long)raw.RoundTripTime.TotalMicroseconds,
+                    (long)median.TotalMicroseconds);
+                return _window.MinBy(r => r.RoundTripTime)!;
+            }
+        }
+
         if (_window.Count >= WindowSize)
             _window.Dequeue();
         _window.Enqueue(raw);
