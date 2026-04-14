@@ -298,11 +298,13 @@ public sealed class PlayerClient : IAsyncDisposable
             int bufferedFrames = _playbackEngine.BufferedFrameCount;
             int bufferedBytes  = bufferedFrames * audioFrame.Samples.Length * sizeof(short);
             Log.Debug(
-                "Recv Audio chunk: {EncodedBytes} bytes encoded, {BufferedBytes} bytes buffered ({BufferedFrames} frames), {DurationSeconds:F3}s/frame",
+                "Recv Audio chunk: {EncodedBytes} bytes encoded, {BufferedBytes} bytes buffered ({BufferedFrames} frames), {DurationSeconds:F3}s/frame, serverTs={ServerTs} μs effectiveTs={EffectiveTs} μs",
                 chunk.EncodedData.Length,
                 bufferedBytes,
                 bufferedFrames,
-                audioFrame.Duration.TotalSeconds);
+                audioFrame.Duration.TotalSeconds,
+                chunk.Timestamp,
+                effectiveTimestamp);
         }
     }
 
