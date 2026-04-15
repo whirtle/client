@@ -243,6 +243,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     [RelayCommand]
     private async Task ConnectAsync(ServiceEndpoint endpoint)
     {
+        _settings.ConnectionMode = ConnectionMode.ClientInitiated;
         StopServerInitiatedMode();
         try { await TearDownSessionAsync(); }
         catch (Exception ex) { Log.Warning(ex, "Error tearing down previous session"); }
