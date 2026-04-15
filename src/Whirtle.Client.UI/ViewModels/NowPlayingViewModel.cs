@@ -221,6 +221,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _volume  = _settings.Volume;
         _isMuted = _settings.IsMuted;
 
+        _connectionManager.LastPlayedServerId = _settings.LastPlayedServerId;
+
         // Ticker that advances the seek bar using the spec formula while playing.
         _positionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _positionTimer.Tick += (_, _) => TickPosition();
@@ -638,10 +640,19 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             "Server-initiated: inbound handshake complete: serverId={ServerId}, serverName={ServerName}, reason={Reason}",
             hello.ServerId, hello.Name, hello.ConnectionReason);
 
+        // Log the full negotiation context before the decision so that the
+        // outcome is traceable in the logs even when the decision seems surprising.
+        Log.Debug(
+            "Multi-server negotiation: incoming={IncomingId} reason={IncomingReason}, " +
+            "currentServer={CurrentId}, lastPlayedServer={LastPlayedId}",
+            hello.ServerId, hello.ConnectionReason,
+            IsConnected ? ServerName : "(none)",
+            _connectionManager.LastPlayedServerId ?? "(none)");
+
         if (!_connectionManager.ShouldAccept(hello.ServerId, hello.ConnectionReason))
         {
             Log.Information(
-                "Rejected lower-priority server {ServerId} (reason={Reason})",
+                "Multi-server negotiation: rejected {ServerId} (reason={Reason}) — keeping current connection",
                 hello.ServerId, hello.ConnectionReason);
             try { await protocol.DisconnectAsync("another_server", serverModeCancellation); }
             catch { /* best-effort */ }
@@ -649,7 +660,18 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             return;
         }
 
+        var hadExistingConnection = IsConnected;
         _connectionManager.Accept(hello.ServerId, hello.ConnectionReason);
+        if (hello.ConnectionReason == "playback")
+        {
+            _settings.LastPlayedServerId = hello.ServerId;
+            Log.Debug("Multi-server negotiation: updated last-played server to {ServerId}", hello.ServerId);
+        }
+
+        if (hadExistingConnection)
+            Log.Information(
+                "Multi-server negotiation: accepted {ServerId} (reason={Reason}), displacing current connection",
+                hello.ServerId, hello.ConnectionReason);
 
         // Tear down any existing session before taking over.
         await TearDownSessionAsync();

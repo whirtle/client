@@ -74,6 +74,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         Save();
     }
 
+    // ── Last-played server (multi-server tiebreak) ────────────────────────
+    private string? _lastPlayedServerId;
+
+    public string? LastPlayedServerId
+    {
+        get => _lastPlayedServerId;
+        set { _lastPlayedServerId = value; Save(); }
+    }
+
     // ── Volume / mute (global, persisted) ─────────────────────────────────
     private double _volume  = 0.8;
     private bool   _isMuted = false;
@@ -290,6 +299,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             _logsWindowHeight       = saved.LogsWindowHeight;
             _volume                 = saved.Volume  ?? 0.8;
             _isMuted                = saved.IsMuted ?? false;
+            _lastPlayedServerId     = saved.LastPlayedServerId;
 
             if (saved.SavedServers is { } servers)
             {
@@ -413,7 +423,8 @@ public sealed partial class SettingsViewModel : ObservableObject
                 _logsWindowX,
                 _logsWindowY,
                 _logsWindowWidth,
-                _logsWindowHeight);
+                _logsWindowHeight,
+                _lastPlayedServerId);
 
             var json    = JsonSerializer.Serialize(data, JsonOptions);
             var tmpPath = SettingsPath + ".tmp";
@@ -451,5 +462,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         int?                               LogsWindowX       = null,
         int?                               LogsWindowY       = null,
         int?                               LogsWindowWidth   = null,
-        int?                               LogsWindowHeight  = null);
+        int?                               LogsWindowHeight  = null,
+        string?                            LastPlayedServerId = null);
 }
