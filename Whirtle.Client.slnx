@@ -1,13 +1,28 @@
 <Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="ARM" />
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
   <Folder Name="/Solution items/">
     <File Path=".gitignore" />
     <File Path="CLAUDE.md" />
     <File Path="LICENSE" />
   </Folder>
   <Project Path="src/Whirtle.Client.UI/Whirtle.Client.UI.csproj">
-    <Platform Solution="Debug|*" Project="x64" />
+    <Platform Solution="*|ARM64" Project="arm64" />
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="*|x86" Project="x86" />
+    <Platform Solution="Debug|Any CPU" Project="x64" />
+    <Platform Solution="Debug|ARM" Project="x64" />
   </Project>
   <Project Path="src/Whirtle.Client/Whirtle.Client.csproj" />
-  <Project Path="tests/Whirtle.Client.Tests/Whirtle.Client.Tests.csproj" />
   <Project Path="tests/Whirtle.Client.IntegrationTests/Whirtle.Client.IntegrationTests.csproj" />
+  <Project Path="tests/Whirtle.Client.Tests/Whirtle.Client.Tests.csproj" />
+  <Project Path="UIClientPackaging/UIClientPackaging.wapproj" Type="c7167f0d-bc9f-4e6e-afe1-012c56b48db5" Id="729de123-dc56-41df-bfe4-6e85691f579a">
+    <Platform Solution="Debug|Any CPU" Project="x64" />
+    <Deploy />
+  </Project>
 </Solution>
