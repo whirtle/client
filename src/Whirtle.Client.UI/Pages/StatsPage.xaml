@@ -29,31 +29,31 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Mean offset -->
+            <!-- Filtered offset -->
             <TextBlock
                 Grid.Row="0" Grid.Column="0"
-                Text="Mean offset"
+                Text="Filtered offset"
                 Style="{ThemeResource BodyTextBlockStyle}"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 VerticalAlignment="Center" />
             <TextBlock
                 Grid.Row="0" Grid.Column="1"
-                x:Name="MeanOffsetText"
+                x:Name="FilteredOffsetText"
                 Style="{ThemeResource BodyTextBlockStyle}"
                 FontFamily="Consolas"
                 VerticalAlignment="Center"
                 HorizontalAlignment="Right" />
 
-            <!-- Samples used -->
+            <!-- Sync updates -->
             <TextBlock
                 Grid.Row="1" Grid.Column="0"
-                Text="Samples used"
+                Text="Sync updates"
                 Style="{ThemeResource BodyTextBlockStyle}"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 VerticalAlignment="Center" />
             <TextBlock
                 Grid.Row="1" Grid.Column="1"
-                x:Name="SampleCountText"
+                x:Name="UpdateCountText"
                 Style="{ThemeResource BodyTextBlockStyle}"
                 FontFamily="Consolas"
                 VerticalAlignment="Center"
@@ -74,16 +74,16 @@
                 VerticalAlignment="Center"
                 HorizontalAlignment="Right" />
 
-            <!-- Outliers discarded -->
+            <!-- Forget events -->
             <TextBlock
                 Grid.Row="3" Grid.Column="0"
-                Text="Outliers discarded"
+                Text="Forget events"
                 Style="{ThemeResource BodyTextBlockStyle}"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 VerticalAlignment="Center" />
             <TextBlock
                 Grid.Row="3" Grid.Column="1"
-                x:Name="OutlierCountText"
+                x:Name="ForgetCountText"
                 Style="{ThemeResource BodyTextBlockStyle}"
                 FontFamily="Consolas"
                 VerticalAlignment="Center"

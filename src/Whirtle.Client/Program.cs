@@ -140,13 +140,13 @@ internal class Program
 
             // ── Clock sync ───────────────────────────────────────────────────
             var syncer = new ClockSynchronizer(candidateProtocol);
-            ClockSyncResult sync;
             try
             {
-                sync = await syncer.SyncOnceAsync(cts.Token);
+                var sync = await syncer.SyncOnceAsync(cts.Token);
                 Console.WriteLine(
-                    $"[Clock] Offset {sync.ClockOffset.TotalMilliseconds:+0.0;-0.0} ms  " +
-                    $"RTT {sync.RoundTripTime.TotalMilliseconds:0.0} ms");
+                    $"[Clock] Raw offset {sync.ClockOffset.TotalMilliseconds:+0.0;-0.0} ms  " +
+                    $"RTT {sync.RoundTripTime.TotalMilliseconds:0.0} ms  " +
+                    $"max_err {sync.MaxError.TotalMilliseconds:0.0} ms");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

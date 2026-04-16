@@ -37,20 +37,22 @@ public sealed partial class StatsPage : Page
     {
         switch (e.PropertyName)
         {
-            case nameof(ClockStatsViewModel.MeanOffsetMs):
-                MeanOffsetText.Text = FormatOffset(ClockStats.MeanOffsetMs);
+            case nameof(ClockStatsViewModel.FilteredOffsetMs):
+            case nameof(ClockStatsViewModel.OffsetStdDevUs):
+                FilteredOffsetText.Text = FormatOffset(ClockStats.FilteredOffsetMs, ClockStats.OffsetStdDevUs);
                 break;
-            case nameof(ClockStatsViewModel.SampleCount):
-                SampleCountText.Text = ClockStats.SampleCount.ToString();
+            case nameof(ClockStatsViewModel.UpdateCount):
+                UpdateCountText.Text = ClockStats.UpdateCount.ToString();
                 break;
             case nameof(ClockStatsViewModel.SecondsSinceLastSync):
                 LastSyncText.Text = FormatElapsed(ClockStats.SecondsSinceLastSync);
                 break;
-            case nameof(ClockStatsViewModel.OutlierCount):
-                OutlierCountText.Text = ClockStats.OutlierCount.ToString();
+            case nameof(ClockStatsViewModel.ForgetCount):
+                ForgetCountText.Text = ClockStats.ForgetCount.ToString();
                 break;
-            case nameof(ClockStatsViewModel.DriftMicrosecondsPerSecond):
-                DriftText.Text = FormatDrift(ClockStats.DriftMicrosecondsPerSecond);
+            case nameof(ClockStatsViewModel.DriftUsPerS):
+            case nameof(ClockStatsViewModel.DriftIsSignificant):
+                DriftText.Text = FormatDrift(ClockStats.DriftUsPerS, ClockStats.DriftIsSignificant);
                 break;
         }
     }
@@ -79,13 +81,13 @@ public sealed partial class StatsPage : Page
 
     private void RefreshAll()
     {
-        MeanOffsetText.Text     = FormatOffset(ClockStats.MeanOffsetMs);
-        SampleCountText.Text    = ClockStats.SampleCount.ToString();
-        LastSyncText.Text       = FormatElapsed(ClockStats.SecondsSinceLastSync);
-        OutlierCountText.Text   = ClockStats.OutlierCount.ToString();
-        DriftText.Text          = FormatDrift(ClockStats.DriftMicrosecondsPerSecond);
-        QueuedFramesText.Text   = PlaybackStats.StatBufferedFrames.ToString();
-        QueuedAudioText.Text    = FormatDuration(PlaybackStats.StatBufferedDuration);
+        FilteredOffsetText.Text  = FormatOffset(ClockStats.FilteredOffsetMs, ClockStats.OffsetStdDevUs);
+        UpdateCountText.Text     = ClockStats.UpdateCount.ToString();
+        LastSyncText.Text        = FormatElapsed(ClockStats.SecondsSinceLastSync);
+        ForgetCountText.Text     = ClockStats.ForgetCount.ToString();
+        DriftText.Text           = FormatDrift(ClockStats.DriftUsPerS, ClockStats.DriftIsSignificant);
+        QueuedFramesText.Text    = PlaybackStats.StatBufferedFrames.ToString();
+        QueuedAudioText.Text     = FormatDuration(PlaybackStats.StatBufferedDuration);
         ChunksReceivedText.Text  = PlaybackStats.StatTotalChunks.ToString("N0");
         CodecDetailText.Text     = PlaybackStats.StatCodecDetails;
         BufferUnderrunsText.Text = PlaybackStats.StatBufferUnderruns.ToString("N0");
@@ -94,8 +96,8 @@ public sealed partial class StatsPage : Page
     private static string FormatDuration(TimeSpan duration)
         => $"{duration.TotalMilliseconds:0} ms";
 
-    private static string FormatOffset(double ms)
-        => $"{ms:+0.00;-0.00;0.00} ms";
+    private static string FormatOffset(double ms, double stdDevUs)
+        => $"{ms:+0.00;-0.00;0.00} ms ±{stdDevUs:0.00} µs";
 
     private static string FormatElapsed(double seconds)
     {
@@ -103,11 +105,11 @@ public sealed partial class StatsPage : Page
         return $"{seconds:0.0} s ago";
     }
 
-    private static string FormatDrift(double driftUsPerSec)
+    private static string FormatDrift(double driftUsPerSec, bool isSignificant)
     {
-        if (driftUsPerSec == 0.0) return "N/A";
+        if (!isSignificant) return "< 2σ (suppressed)";
         return driftUsPerSec >= 0
-            ? $"+{driftUsPerSec:0} µs/s"
-            : $"{driftUsPerSec:0} µs/s";
+            ? $"+{driftUsPerSec:0.00} µs/s"
+            : $"{driftUsPerSec:0.00} µs/s";
     }
 }

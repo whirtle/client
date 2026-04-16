@@ -351,9 +351,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _syncTask = _syncer.RunAsync(
                 (r, stats) =>
                 {
-                    _lastRtt = r.RoundTripTime;
-                    _serverClockOffset = r.ClockOffset;
-                    _player.UpdateClockOffset(r.ClockOffset);
+                    _lastRtt           = r.RoundTripTime;
+                    _serverClockOffset = stats.FilteredOffset;
+                    _player.UpdateClockOffset(stats.FilteredOffset);
                     ClockStats.Update(stats);
                     _dispatcher.TryEnqueue(
                         () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
@@ -772,9 +772,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _syncTask = _syncer.RunAsync(
             (r, stats) =>
             {
-                _lastRtt = r.RoundTripTime;
-                _serverClockOffset = r.ClockOffset;
-                _player.UpdateClockOffset(r.ClockOffset);
+                _lastRtt           = r.RoundTripTime;
+                _serverClockOffset = stats.FilteredOffset;
+                _player.UpdateClockOffset(stats.FilteredOffset);
                 ClockStats.Update(stats);
                 _dispatcher.TryEnqueue(
                     () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
