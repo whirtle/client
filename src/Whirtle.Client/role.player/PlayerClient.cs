@@ -295,7 +295,8 @@ public sealed class PlayerClient : IAsyncDisposable
             try { await SendStateAsync(CancellationToken.None).ConfigureAwait(false); }
             catch { }
         };
-        _playbackEngine.UpdateClockOffset(_clockOffset);
+        if (_clockSynced)
+            _playbackEngine.UpdateClockOffset(_clockOffset);
         _playbackEngine.SetVolume(_volume / 100f);
         _playbackEngine.SetUserMuted(_muted);
         _playbackEngine.Start();

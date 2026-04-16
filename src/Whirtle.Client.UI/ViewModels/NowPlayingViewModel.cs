@@ -32,6 +32,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     // Metadata state and seek-bar tick
     private readonly NowPlayingState _nowPlaying = new();
     private TimeSpan _serverClockOffset;                         // updated by sync loop
+    private volatile bool _clockConverged;                       // set when sync error drops below threshold (or timeout)
+    private ClockSyncStats? _latestClockStats;                   // most recent stats from sync loop
     private readonly DispatcherTimer _positionTimer;             // advances seek bar
 
     // Server-initiated mode
@@ -349,12 +351,31 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
             // Start background tasks — receive loop routes server/time to the syncer.
             _receiveLoopTask = ReceiveLoopAsync(token);
+
+            // Gate playback until the clock error drops below 20 ms (or 5 s elapses).
+            var convergenceSw = System.Diagnostics.Stopwatch.StartNew();
+            var convergenceTask = _syncer.WaitForConvergenceAsync(
+                targetStdDevUs: 20_000, TimeSpan.FromSeconds(5), token);
+            _ = convergenceTask.ContinueWith(t =>
+                {
+                    convergenceSw.Stop();
+                    if (t.Result)
+                        Log.Information("Clock synchronised to <20 ms in {ElapsedMs:F0} ms", convergenceSw.Elapsed.TotalMilliseconds);
+                    else
+                        Log.Warning("Clock did not converge within 5 s (elapsed {ElapsedMs:F0} ms) — starting playback anyway", convergenceSw.Elapsed.TotalMilliseconds);
+                    _clockConverged = true;
+                    if (_latestClockStats is { } s && _player is { } p)
+                        p.UpdateClockOffset(s.FilteredOffset);
+                }, TaskScheduler.Default);
+
             _syncTask = _syncer.RunAsync(
                 (r, stats) =>
                 {
                     _lastRtt           = r.RoundTripTime;
                     _serverClockOffset = stats.FilteredOffset;
-                    _player.UpdateClockOffset(stats.FilteredOffset);
+                    _latestClockStats  = stats;
+                    if (_clockConverged)
+                        _player?.UpdateClockOffset(stats.FilteredOffset);
                     ClockStats.Update(stats);
                     _dispatcher.TryEnqueue(
                         () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
@@ -497,6 +518,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _lastRtt             = TimeSpan.MaxValue;
         _lastBufferCount     = -1;
         _serverClockOffset   = TimeSpan.Zero;
+        _clockConverged      = false;
+        _latestClockStats    = null;
         ClockStats.Reset();
     }
 
@@ -779,12 +802,31 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
         // Start background tasks — receive loop routes server/time to the syncer.
         _receiveLoopTask = ReceiveLoopAsync(_connectionCts.Token);
+
+        // Gate playback until the clock error drops below 20 ms (or 5 s elapses).
+        var convergenceSw = System.Diagnostics.Stopwatch.StartNew();
+        var convergenceTask = _syncer.WaitForConvergenceAsync(
+            targetStdDevUs: 20_000, TimeSpan.FromSeconds(5), _connectionCts.Token);
+        _ = convergenceTask.ContinueWith(t =>
+            {
+                convergenceSw.Stop();
+                if (t.Result)
+                    Log.Information("Clock synchronised to <20 ms in {ElapsedMs:F0} ms", convergenceSw.Elapsed.TotalMilliseconds);
+                else
+                    Log.Warning("Clock did not converge within 5 s (elapsed {ElapsedMs:F0} ms) — starting playback anyway", convergenceSw.Elapsed.TotalMilliseconds);
+                _clockConverged = true;
+                if (_latestClockStats is { } s && _player is { } p)
+                    p.UpdateClockOffset(s.FilteredOffset);
+            }, TaskScheduler.Default);
+
         _syncTask = _syncer.RunAsync(
             (r, stats) =>
             {
                 _lastRtt           = r.RoundTripTime;
                 _serverClockOffset = stats.FilteredOffset;
-                _player.UpdateClockOffset(stats.FilteredOffset);
+                _latestClockStats  = stats;
+                if (_clockConverged)
+                    _player?.UpdateClockOffset(stats.FilteredOffset);
                 ClockStats.Update(stats);
                 _dispatcher.TryEnqueue(
                     () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
