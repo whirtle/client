@@ -214,9 +214,9 @@ public sealed class ClockSynchronizer
         _filter.Update(offsetUs, maxErrorUs, result.ClientReceivedUs);
 
         Log.Information(
-            "Clock sync: raw_offset={RawOff:+F1;-F1} µs, " +
-            "filtered_offset={FiltOff:+F1;-F1} µs ±{Sigma:F2} µs, " +
-            "drift={Drift:+F3;-F3} µs/s {DriftSig}, " +
+            "Clock sync: raw_offset={RawOff:+0.0;-0.0} µs, " +
+            "filtered_offset={FiltOff:+0.0;-0.0} µs ±{Sigma:F2} µs, " +
+            "drift={Drift:+0.000;-0.000} µs/s {DriftSig}, " +
             "RTT={Rtt} µs, max_err={MaxErr} µs",
             offsetUs,
             _filter.OffsetUs, _filter.OffsetStdDevUs,
