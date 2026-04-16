@@ -24,26 +24,41 @@ public sealed partial class ClockStatsViewModel : ObservableObject
 
     // ── Observable stats ──────────────────────────────────────────────────
 
-    /// <summary>Mean clock offset across the current measurement window (ms).</summary>
-    [ObservableProperty] private double _meanOffsetMs;
+    /// <summary>Kalman-filtered clock offset in ms.</summary>
+    [ObservableProperty] private double _filteredOffsetMs;
 
-    /// <summary>Total accepted sync samples since the session started.</summary>
-    [ObservableProperty] private int _sampleCount;
+    /// <summary>
+    /// Standard deviation of the offset estimate in µs (√P_OO).
+    /// A proxy for synchronisation accuracy; decreases as the filter converges.
+    /// </summary>
+    [ObservableProperty] private double _offsetStdDevUs;
+
+    /// <summary>Estimated clock drift in parts per million (µs/s × 1).</summary>
+    [ObservableProperty] private double _driftUsPerS;
+
+    /// <summary>Standard deviation of the drift estimate in µs/s.</summary>
+    [ObservableProperty] private double _driftStdDevUsPerS;
+
+    /// <summary>
+    /// Whether drift compensation is currently being applied to timestamp conversions.
+    /// True when |drift| &gt; 2σ_drift.
+    /// </summary>
+    [ObservableProperty] private bool _driftIsSignificant;
+
+    /// <summary>Total accepted sync updates since the session started.</summary>
+    [ObservableProperty] private int _updateCount;
+
+    /// <summary>
+    /// Cumulative times the adaptive forgetting factor fired.
+    /// Spikes indicate sudden network or clock disruptions.
+    /// </summary>
+    [ObservableProperty] private int _forgetCount;
 
     /// <summary>
     /// Elapsed seconds since the last accepted sync.
     /// -1.0 when no sync has completed yet.
     /// </summary>
     [ObservableProperty] private double _secondsSinceLastSync = -1.0;
-
-    /// <summary>Running total of sync rounds discarded as RTT outliers.</summary>
-    [ObservableProperty] private int _outlierCount;
-
-    /// <summary>
-    /// Estimated drift between local and server clocks in µs/s.
-    /// Positive means the server clock is moving ahead of the client.
-    /// </summary>
-    [ObservableProperty] private double _driftMicrosecondsPerSecond;
 
     // ── Constructor ───────────────────────────────────────────────────────
 
@@ -58,7 +73,7 @@ public sealed partial class ClockStatsViewModel : ObservableObject
     // ── Public API ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Updates all observable properties from the latest sync stats.
+    /// Updates all observable properties from the latest Kalman filter stats.
     /// Safe to call from any thread; dispatches to the UI thread internally.
     /// </summary>
     public void Update(ClockSyncStats stats)
@@ -67,10 +82,13 @@ public sealed partial class ClockStatsViewModel : ObservableObject
 
         _dispatcher.TryEnqueue(() =>
         {
-            MeanOffsetMs                = stats.MeanOffset.TotalMilliseconds;
-            SampleCount                 = stats.SampleCount;
-            OutlierCount                = stats.OutlierCount;
-            DriftMicrosecondsPerSecond  = stats.DriftMicrosecondsPerSecond;
+            FilteredOffsetMs    = stats.FilteredOffsetUs / 1_000.0;
+            OffsetStdDevUs      = stats.OffsetStdDevUs;
+            DriftUsPerS         = stats.DriftUsPerS;
+            DriftStdDevUsPerS   = stats.DriftStdDevUsPerS;
+            DriftIsSignificant  = stats.DriftIsSignificant;
+            UpdateCount         = stats.UpdateCount;
+            ForgetCount         = stats.ForgetCount;
             RefreshElapsed();
         });
     }
@@ -81,11 +99,14 @@ public sealed partial class ClockStatsViewModel : ObservableObject
         _lastSyncUtcUs = 0;
         _dispatcher.TryEnqueue(() =>
         {
-            MeanOffsetMs               = 0;
-            SampleCount                = 0;
-            SecondsSinceLastSync       = -1.0;
-            OutlierCount               = 0;
-            DriftMicrosecondsPerSecond = 0;
+            FilteredOffsetMs    = 0;
+            OffsetStdDevUs      = 0;
+            DriftUsPerS         = 0;
+            DriftStdDevUsPerS   = 0;
+            DriftIsSignificant  = false;
+            UpdateCount         = 0;
+            ForgetCount         = 0;
+            SecondsSinceLastSync = -1.0;
         });
     }
 
@@ -111,8 +132,6 @@ public sealed partial class ClockStatsViewModel : ObservableObject
             return;
         }
 
-        // Convert the stored µs epoch timestamp to a comparable value using
-        // the same epoch as DateTimeOffset.UtcNow (Unix epoch in µs).
         long nowUs = (DateTimeOffset.UtcNow.Ticks - DateTimeOffset.UnixEpoch.Ticks) / 10;
         SecondsSinceLastSync = Math.Max(0.0, (nowUs - _lastSyncUtcUs) / 1_000_000.0);
     }

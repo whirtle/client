@@ -84,11 +84,12 @@ public class MessageSerializerTests
     [Fact]
     public void Roundtrip_ServerTimeMessage()
     {
-        var original = new ServerTimeMessage(100L, 200L);
+        var original = new ServerTimeMessage(100L, 200L, 201L);
         var result   = (ServerTimeMessage)Roundtrip(original);
 
         Assert.Equal(100L, result.ClientTransmitted);
         Assert.Equal(200L, result.ServerReceived);
+        Assert.Equal(201L, result.ServerTransmitted);
     }
 
     [Fact]

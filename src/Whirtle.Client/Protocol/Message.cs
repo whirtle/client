@@ -134,12 +134,13 @@ public sealed record ServerHelloMessage(
 
 /// <summary>
 /// Sent by the server as the clock-sync reply.
-/// Echoes <see cref="ClientTransmitted"/> and adds the server's Unix timestamp in microseconds.
+/// Echoes <see cref="ClientTransmitted"/> and adds T2 and T3 server timestamps in Unix microseconds.
 /// Wire type: <c>server/time</c>
 /// </summary>
 public sealed record ServerTimeMessage(
     long ClientTransmitted,
-    long ServerReceived) : Message;
+    long ServerReceived,
+    long ServerTransmitted) : Message;
 
 /// <summary>
 /// Sent by the server with one or more role-specific state updates.
