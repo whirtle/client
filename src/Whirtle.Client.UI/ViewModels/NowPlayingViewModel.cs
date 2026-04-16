@@ -36,6 +36,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
     // Server-initiated mode
     private CancellationTokenSource? _serverModeCts;
+    private Task                      _serverModeTask = Task.CompletedTask;
     private readonly ConnectionManager _connectionManager = new();
 
     // ── Handshake capability declarations ─────────────────────────────────────
@@ -604,7 +605,16 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     /// </summary>
     internal async Task ShutdownAsync()
     {
+        // Capture before cancelling so we await the task that was actually running.
+        var serverModeTask = _serverModeTask;
         StopServerInitiatedMode();
+
+        // Wait for the server-accept loop (and any in-progress HandleInboundConnectionAsync)
+        // to finish before tearing down the session.  Without this, the loop can set up a
+        // brand-new PlaybackEngine/WASAPI thread after TearDownSessionAsync returns, leaving
+        // it running when Application.Current.Exit() tears down the compositor (→ 0xc0000005).
+        try { await serverModeTask.ConfigureAwait(false); } catch { }
+
         try { await TearDownSessionAsync(); }
         catch (Exception ex) { Log.Warning(ex, "Error during shutdown"); }
     }
@@ -612,9 +622,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     internal void StartServerInitiatedMode()
     {
         Log.Debug("Server-initiated mode starting");
-        _serverModeCts = new CancellationTokenSource();
+        _serverModeCts   = new CancellationTokenSource();
+        _serverModeTask  = RunServerAcceptLoopAsync(_serverModeCts.Token);
         ConnectionStatus = "Listening for server…";
-        _ = RunServerAcceptLoopAsync(_serverModeCts.Token);
     }
 
     private async Task RunServerAcceptLoopAsync(CancellationToken cancellationToken)
