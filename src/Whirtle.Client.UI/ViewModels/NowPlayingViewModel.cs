@@ -722,9 +722,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         // outcome is traceable in the logs even when the decision seems surprising.
         Log.Debug(
             "Multi-server negotiation: incoming={IncomingId} reason={IncomingReason}, " +
-            "currentServer={CurrentId}, lastPlayedServer={LastPlayedId}",
+            "currentServer={CurrentName} storedId={CurrentStoredId}, lastPlayedServer={LastPlayedId}",
             hello.ServerId, hello.ConnectionReason,
             IsConnected ? ServerName : "(none)",
+            _connectionManager.CurrentServerId ?? "(none)",
             _connectionManager.LastPlayedServerId ?? "(none)");
 
         if (!_connectionManager.ShouldAccept(hello.ServerId, hello.ConnectionReason))
@@ -934,6 +935,12 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Warning(ex, "Connection lost");
+            // Clear the connection manager so that the next incoming server-initiated
+            // connection is not incorrectly rejected due to a stale server ID.
+            // This matters when the server restarts with a new ID: without the clear,
+            // ShouldAccept would compare the new ID against the old one and reject it
+            // even though we have no active connection.
+            _connectionManager.Clear();
             _dispatcher.TryEnqueue(() =>
             {
                 IsConnected      = false;

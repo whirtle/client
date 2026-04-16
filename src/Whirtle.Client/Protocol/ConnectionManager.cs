@@ -30,6 +30,13 @@ public sealed class ConnectionManager
     private string? _currentConnectionReason;
 
     /// <summary>
+    /// The server ID recorded by the most recent call to <see cref="Accept"/>.
+    /// <see langword="null"/> when <see cref="Clear"/> has been called or no
+    /// connection has been accepted yet.
+    /// </summary>
+    public string? CurrentServerId => _currentServerId;
+
+    /// <summary>
     /// The server ID of the most recent server that engaged this client for
     /// playback. Persist this value across restarts for the best user experience.
     /// </summary>
