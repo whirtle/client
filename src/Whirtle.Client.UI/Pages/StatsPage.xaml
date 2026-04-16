@@ -105,6 +105,107 @@
                 HorizontalAlignment="Right" />
 
         </Grid>
+
+        <!-- Separator -->
+        <Rectangle Height="1" Margin="0,16,0,16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+        <!-- Section header -->
+        <TextBlock
+            Text="BUFFER"
+            Margin="0,0,0,12"
+            FontSize="10"
+            Opacity="0.6"
+            CharacterSpacing="100" />
+
+        <Grid ColumnSpacing="16" RowSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Queued frames -->
+            <TextBlock
+                Grid.Row="0" Grid.Column="0"
+                Text="Queued frames"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="0" Grid.Column="1"
+                x:Name="QueuedFramesText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+            <!-- Queued audio -->
+            <TextBlock
+                Grid.Row="1" Grid.Column="0"
+                Text="Queued audio"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="1" Grid.Column="1"
+                x:Name="QueuedAudioText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+        </Grid>
+
+        <!-- Separator -->
+        <Rectangle Height="1" Margin="0,16,0,16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+        <!-- Section header -->
+        <TextBlock
+            Text="CODECS"
+            Margin="0,0,0,12"
+            FontSize="10"
+            Opacity="0.6"
+            CharacterSpacing="100" />
+
+        <Grid ColumnSpacing="16" RowSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Chunks received -->
+            <TextBlock
+                Grid.Row="0" Grid.Column="0"
+                Text="Chunks received"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="0" Grid.Column="1"
+                x:Name="ChunksReceivedText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+            <!-- Per-codec detail (spans both columns; hidden when empty) -->
+            <TextBlock
+                Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                x:Name="CodecDetailText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                TextWrapping="Wrap"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+        </Grid>
+
     </StackPanel>
 
 </Page>
