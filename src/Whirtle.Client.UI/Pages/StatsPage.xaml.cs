@@ -71,6 +71,9 @@ public sealed partial class StatsPage : Page
             case nameof(NowPlayingViewModel.StatCodecDetails):
                 CodecDetailText.Text = PlaybackStats.StatCodecDetails;
                 break;
+            case nameof(NowPlayingViewModel.StatBufferUnderruns):
+                BufferUnderrunsText.Text = PlaybackStats.StatBufferUnderruns.ToString("N0");
+                break;
         }
     }
 
@@ -83,8 +86,9 @@ public sealed partial class StatsPage : Page
         DriftText.Text          = FormatDrift(ClockStats.DriftMicrosecondsPerSecond);
         QueuedFramesText.Text   = PlaybackStats.StatBufferedFrames.ToString();
         QueuedAudioText.Text    = FormatDuration(PlaybackStats.StatBufferedDuration);
-        ChunksReceivedText.Text = PlaybackStats.StatTotalChunks.ToString("N0");
-        CodecDetailText.Text    = PlaybackStats.StatCodecDetails;
+        ChunksReceivedText.Text  = PlaybackStats.StatTotalChunks.ToString("N0");
+        CodecDetailText.Text     = PlaybackStats.StatCodecDetails;
+        BufferUnderrunsText.Text = PlaybackStats.StatBufferUnderruns.ToString("N0");
     }
 
     private static string FormatDuration(TimeSpan duration)

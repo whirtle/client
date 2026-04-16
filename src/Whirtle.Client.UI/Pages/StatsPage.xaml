@@ -125,6 +125,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- Queued frames -->
@@ -152,6 +153,21 @@
             <TextBlock
                 Grid.Row="1" Grid.Column="1"
                 x:Name="QueuedAudioText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+            <!-- Buffer underruns -->
+            <TextBlock
+                Grid.Row="2" Grid.Column="0"
+                Text="Buffer underruns"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="2" Grid.Column="1"
+                x:Name="BufferUnderrunsText"
                 Style="{ThemeResource BodyTextBlockStyle}"
                 FontFamily="Consolas"
                 VerticalAlignment="Center"
