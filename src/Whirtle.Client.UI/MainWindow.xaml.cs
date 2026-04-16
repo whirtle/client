@@ -430,6 +430,7 @@ public sealed partial class MainWindow : Window
 
     private SettingsWindow? _settingsWindow;
     private LogsWindow?     _logsWindow;
+    private StatsWindow?    _statsWindow;
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
@@ -448,6 +449,13 @@ public sealed partial class MainWindow : Window
     {
         _logsWindow ??= new LogsWindow();
         _logsWindow.Show();
+        args.Handled = true;
+    }
+
+    private void StatsAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        _statsWindow ??= new StatsWindow();
+        _statsWindow.Show();
         args.Handled = true;
     }
 

@@ -11,6 +11,7 @@ Title="Whirtle">
     <Grid KeyboardAcceleratorPlacementMode="Hidden" VerticalAlignment="Top">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="LogsAccelerator_Invoked" />
+            <KeyboardAccelerator Key="S" Modifiers="Control" Invoked="StatsAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
         <Grid.RowDefinitions>
             <RowDefinition Height="32" />
