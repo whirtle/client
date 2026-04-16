@@ -845,7 +845,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         IsMuted = !IsMuted;
         _settings.SaveVolume(Volume, IsMuted);
         if (_controller is null) return;
-        await _controller.SetVolumeAsync(IsMuted ? 0.0 : Volume);
+        await _controller.SetMuteAsync(IsMuted);
     }
 
     [RelayCommand]
