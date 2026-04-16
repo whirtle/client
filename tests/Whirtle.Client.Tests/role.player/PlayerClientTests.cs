@@ -117,7 +117,7 @@ public class PlayerClientTests
     }
 
     [Fact]
-    public async Task ProcessFrameAsync_SetStaticDelayCommand_Clamps0To5000()
+    public async Task ProcessFrameAsync_SetStaticDelayCommand_ClampsUpperBoundTo5000()
     {
         var (player, _, _) = Build();
 
@@ -125,6 +125,17 @@ public class PlayerClientTests
             new ServerCommandMessage(Player: new ServerCommandPlayer("set_static_delay", StaticDelayMs: 9999))));
 
         Assert.Equal(5_000, player.StaticDelayMs);
+    }
+
+    [Fact]
+    public async Task ProcessFrameAsync_SetStaticDelayCommand_ClampsLowerBoundToNeg500()
+    {
+        var (player, _, _) = Build();
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new ServerCommandMessage(Player: new ServerCommandPlayer("set_static_delay", StaticDelayMs: -9999))));
+
+        Assert.Equal(-500, player.StaticDelayMs);
     }
 
     [Fact]
@@ -342,6 +353,89 @@ public class PlayerClientTests
         // No audio should have been written to the renderer.
         await Task.Delay(50); // give engine time to process if chunks leaked through
         Assert.Empty(((FakeWasapiRenderer)renderers[0]).Written);
+    }
+
+    // ── codec statistics ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void TotalChunksReceived_StartsAtZero()
+    {
+        var (player, _, _) = Build();
+        Assert.Equal(0, player.TotalChunksReceived);
+    }
+
+    [Fact]
+    public async Task TotalChunksReceived_IncreasesWithEachChunk()
+    {
+        var (player, _, _) = Build();
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 1, 16))));
+
+        const long futureUs = 300_000_000L;
+        for (int i = 0; i < 3; i++)
+            await player.ProcessFrameAsync(new AudioChunkFrame(
+                Timestamp:   futureUs + i * 20_000L,
+                EncodedData: new byte[4]));
+
+        Assert.Equal(3, player.TotalChunksReceived);
+    }
+
+    [Fact]
+    public async Task GetCodecStats_Empty_WhenNoChunksReceived()
+    {
+        var (player, _, _) = Build();
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 1, 16))));
+
+        Assert.Empty(player.GetCodecStats());
+    }
+
+    [Fact]
+    public async Task GetCodecStats_TracksEncodedAndDecodedBytes()
+    {
+        var (player, _, _) = Build();
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 1, 16))));
+
+        // 4-byte PCM payload → 2 int16 samples → 4 decoded bytes; ratio = 1.0
+        const long futureUs = 300_000_000L;
+        for (int i = 0; i < 2; i++)
+            await player.ProcessFrameAsync(new AudioChunkFrame(
+                Timestamp:   futureUs + i * 20_000L,
+                EncodedData: new byte[4]));
+
+        var stats = player.GetCodecStats();
+        Assert.Single(stats);
+        Assert.Equal(2,   stats[0].ChunkCount);
+        Assert.Equal(8L,  stats[0].EncodedBytes); // 2 chunks × 4 bytes
+        Assert.Equal(8L,  stats[0].DecodedBytes); // 2 chunks × 2 samples × 2 bytes/sample
+        Assert.Equal(1.0, stats[0].AverageCompressionRatio);
+    }
+
+    [Fact]
+    public async Task GetCodecStats_ResetsOnNewStreamStart()
+    {
+        var (player, _, _) = Build();
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 1, 16))));
+
+        const long futureUs = 300_000_000L;
+        await player.ProcessFrameAsync(new AudioChunkFrame(
+            Timestamp:   futureUs,
+            EncodedData: new byte[4]));
+
+        Assert.Equal(1, player.TotalChunksReceived);
+
+        // Second stream/start should reset counters.
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 1, 16))));
+
+        Assert.Equal(0, player.TotalChunksReceived);
+        Assert.Empty(player.GetCodecStats());
     }
 
     // ── stream/clear ─────────────────────────────────────────────────────────

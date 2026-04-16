@@ -20,8 +20,9 @@ namespace Whirtle.Client.UI;
 
 public sealed partial class MainWindow : Window
 {
-    private bool _hideOnClose    = false;
-    private bool _isShuttingDown = false;
+    private bool      _hideOnClose    = false;
+    private bool      _isShuttingDown = false;
+    private SizeInt32 _lastClientSize;
 
     // Kept alive for the lifetime of the window (MicaController requires it).
     private MicaController?              _micaController;
@@ -60,14 +61,47 @@ public sealed partial class MainWindow : Window
         titleBar.ButtonPressedForegroundColor  = Colors.White;
         titleBar.ButtonInactiveForegroundColor = Colors.White;
 
-        AppWindow.Resize(new SizeInt32(480, 584));
+        // Prevent manual resizing and maximising; window size is driven by content.
+        if (AppWindow.Presenter is OverlappedPresenter op)
+        {
+            op.IsResizable   = false;
+            op.IsMaximizable = false;
+        }
+
+        // Anchor the width; height will be set by FitWindowToContent once the
+        // content has laid out.  ResizeClient targets the XAML client area so
+        // the measurement is consistent with ExtendsContentIntoTitleBar = true.
+        AppWindow.ResizeClient(new SizeInt32(480, 480));
         RestoreWindowPosition();
+
+        // Refit whenever the root content changes size (e.g. first layout pass,
+        // FRE scrim appearing/disappearing, dynamic content changes).
+        ((FrameworkElement)Content).SizeChanged += (_, _) => FitWindowToContent();
 
         ContentFrame.Navigate(typeof(NowPlayingPage));
 
         AppWindow.Closing += AppWindow_Closing;
 
         TrayIcon.DoubleClickCommand = new RelayCommand(RestoreFromTray);
+    }
+
+    // ── Content-driven sizing ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Resizes the window client area to exactly fit the measured root content.
+    /// Guarded by <see cref="_lastClientSize"/> to avoid a feedback loop where
+    /// <see cref="AppWindow.ResizeClient"/> triggers another SizeChanged.
+    /// </summary>
+    private void FitWindowToContent()
+    {
+        var root  = (FrameworkElement)Content;
+        var scale = root.XamlRoot?.RasterizationScale ?? 1.0;
+        int w = (int)Math.Ceiling(root.ActualWidth  * scale);
+        int h = (int)Math.Ceiling(root.ActualHeight * scale);
+        if (w <= 0 || h <= 0) return;
+        if (w == _lastClientSize.Width && h == _lastClientSize.Height) return;
+        _lastClientSize = new SizeInt32(w, h);
+        AppWindow.ResizeClient(_lastClientSize);
     }
 
     // ── Mica backdrop ──────────────────────────────────────────────────────
@@ -396,6 +430,7 @@ public sealed partial class MainWindow : Window
 
     private SettingsWindow? _settingsWindow;
     private LogsWindow?     _logsWindow;
+    private StatsWindow?    _statsWindow;
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
@@ -414,6 +449,13 @@ public sealed partial class MainWindow : Window
     {
         _logsWindow ??= new LogsWindow();
         _logsWindow.Show();
+        args.Handled = true;
+    }
+
+    private void StatsAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        _statsWindow ??= new StatsWindow();
+        _statsWindow.Show();
         args.Handled = true;
     }
 

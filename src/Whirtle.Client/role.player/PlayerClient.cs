@@ -54,8 +54,31 @@ public sealed class PlayerClient : IAsyncDisposable
     private int    _staticDelayMs = 0;
     private string _playerState   = "synchronized";
 
+    // ── Codec statistics ──────────────────────────────────────────────────────
+    private long _totalChunksReceived;
+    private readonly Dictionary<AudioFormat, (long Chunks, long Encoded, long Decoded)> _codecStats = new();
+
     /// <summary>Number of frames currently held in the jitter buffer. Zero when no stream is active.</summary>
     public int BufferedFrameCount => _playbackEngine?.BufferedFrameCount ?? 0;
+
+    /// <summary>Total audio duration currently held in the jitter buffer.</summary>
+    public TimeSpan BufferedAudioDuration => _playbackEngine?.BufferedAudioDuration ?? TimeSpan.Zero;
+
+    /// <summary>Total number of audio chunks received since the current stream started.</summary>
+    public long TotalChunksReceived => _totalChunksReceived;
+
+    /// <summary>
+    /// Returns a snapshot of per-codec statistics accumulated since the current stream started.
+    /// </summary>
+    public IReadOnlyList<CodecStats> GetCodecStats()
+    {
+        lock (_codecStats)
+        {
+            return _codecStats
+                .Select(kv => new CodecStats(kv.Key, kv.Value.Chunks, kv.Value.Encoded, kv.Value.Decoded))
+                .ToList();
+        }
+    }
 
     /// <summary>Current volume level (0–100).</summary>
     public int  Volume        => _volume;
@@ -252,6 +275,10 @@ public sealed class PlayerClient : IAsyncDisposable
 
         _decoder?.Dispose();
 
+        // Reset per-stream counters so statistics reflect only the current stream.
+        lock (_codecStats) { _codecStats.Clear(); }
+        _totalChunksReceived = 0;
+
         var format = AudioFormatExtensions.FromCodecString(player.Codec);
 
         _decoder = AudioDecoderFactory.Create(format, player.SampleRate, player.Channels);
@@ -305,6 +332,19 @@ public sealed class PlayerClient : IAsyncDisposable
         var audioFrame = _decoder!.Decode(chunk.EncodedData);
         _playbackEngine!.Enqueue(effectiveTimestamp, audioFrame);
 
+        // Accumulate codec statistics.
+        _totalChunksReceived++;
+        long encodedBytes = chunk.EncodedData.Length;
+        long decodedBytes = (long)audioFrame.Samples.Length * sizeof(short);
+        lock (_codecStats)
+        {
+            _codecStats.TryGetValue(_decoder.Format, out var prev);
+            _codecStats[_decoder.Format] = (
+                prev.Chunks  + 1,
+                prev.Encoded + encodedBytes,
+                prev.Decoded + decodedBytes);
+        }
+
         if (Log.IsEnabled(LogEventLevel.Debug))
         {
             int bufferedFrames = _playbackEngine.BufferedFrameCount;
@@ -337,7 +377,7 @@ public sealed class PlayerClient : IAsyncDisposable
                 break;
 
             case "set_static_delay" when cmd.StaticDelayMs.HasValue:
-                _staticDelayMs = Math.Clamp(cmd.StaticDelayMs.Value, 0, 5_000);
+                _staticDelayMs = Math.Clamp(cmd.StaticDelayMs.Value, -500, 5_000);
                 // Frames already in the buffer carry the old adjusted timestamp and
                 // would produce a burst of incorrect drift readings. Flush them so the
                 // engine re-buffers with timestamps adjusted by the new delay value.

@@ -74,6 +74,35 @@ public sealed partial class SettingsViewModel : ObservableObject
         Save();
     }
 
+    // ── Stats window bounds ────────────────────────────────────────────────
+    private int? _statsWindowX;
+    private int? _statsWindowY;
+    private int? _statsWindowWidth;
+    private int? _statsWindowHeight;
+
+    public int? StatsWindowX      => _statsWindowX;
+    public int? StatsWindowY      => _statsWindowY;
+    public int? StatsWindowWidth  => _statsWindowWidth;
+    public int? StatsWindowHeight => _statsWindowHeight;
+
+    public void SaveStatsWindowBounds(int x, int y, int width, int height)
+    {
+        _statsWindowX      = x;
+        _statsWindowY      = y;
+        _statsWindowWidth  = width;
+        _statsWindowHeight = height;
+        Save();
+    }
+
+    // ── Last-played server (multi-server tiebreak) ────────────────────────
+    private string? _lastPlayedServerId;
+
+    public string? LastPlayedServerId
+    {
+        get => _lastPlayedServerId;
+        set { _lastPlayedServerId = value; Save(); }
+    }
+
     // ── Volume / mute (global, persisted) ─────────────────────────────────
     private double _volume  = 0.8;
     private bool   _isMuted = false;
@@ -103,7 +132,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnCurrentDeviceStaticDelayMsChanged(int value)
     {
-        if (value < 0) CurrentDeviceStaticDelayMs = 0;
+        if (value < -500) CurrentDeviceStaticDelayMs = -500;
     }
 
     partial void OnTermsAcceptedChanged(bool value)
@@ -288,8 +317,13 @@ public sealed partial class SettingsViewModel : ObservableObject
             _logsWindowY            = saved.LogsWindowY;
             _logsWindowWidth        = saved.LogsWindowWidth;
             _logsWindowHeight       = saved.LogsWindowHeight;
+            _statsWindowX           = saved.StatsWindowX;
+            _statsWindowY           = saved.StatsWindowY;
+            _statsWindowWidth       = saved.StatsWindowWidth;
+            _statsWindowHeight      = saved.StatsWindowHeight;
             _volume                 = saved.Volume  ?? 0.8;
             _isMuted                = saved.IsMuted ?? false;
+            _lastPlayedServerId     = saved.LastPlayedServerId;
 
             if (saved.SavedServers is { } servers)
             {
@@ -413,7 +447,12 @@ public sealed partial class SettingsViewModel : ObservableObject
                 _logsWindowX,
                 _logsWindowY,
                 _logsWindowWidth,
-                _logsWindowHeight);
+                _logsWindowHeight,
+                _lastPlayedServerId,
+                _statsWindowX,
+                _statsWindowY,
+                _statsWindowWidth,
+                _statsWindowHeight);
 
             var json    = JsonSerializer.Serialize(data, JsonOptions);
             var tmpPath = SettingsPath + ".tmp";
@@ -448,8 +487,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         bool                               TelemetryConsent  = false,
         double?                            Volume            = null,
         bool?                              IsMuted           = null,
-        int?                               LogsWindowX       = null,
-        int?                               LogsWindowY       = null,
-        int?                               LogsWindowWidth   = null,
-        int?                               LogsWindowHeight  = null);
+        int?                               LogsWindowX        = null,
+        int?                               LogsWindowY        = null,
+        int?                               LogsWindowWidth    = null,
+        int?                               LogsWindowHeight   = null,
+        string?                            LastPlayedServerId  = null,
+        int?                               StatsWindowX       = null,
+        int?                               StatsWindowY       = null,
+        int?                               StatsWindowWidth   = null,
+        int?                               StatsWindowHeight  = null);
 }

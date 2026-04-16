@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Whirtle.Client.UI.Pages.StatsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="Transparent">
+
+    <StackPanel Margin="20,16,20,20" Spacing="0">
+
+        <!-- Section header -->
+        <TextBlock
+            Text="CLOCK SYNC"
+            Margin="0,0,0,12"
+            FontSize="10"
+            Opacity="0.6"
+            CharacterSpacing="100" />
+
+        <!-- Stats rows -->
+        <Grid ColumnSpacing="16" RowSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Mean offset -->
+            <TextBlock
+                Grid.Row="0" Grid.Column="0"
+                Text="Mean offset"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="0" Grid.Column="1"
+                x:Name="MeanOffsetText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+            <!-- Samples used -->
+            <TextBlock
+                Grid.Row="1" Grid.Column="0"
+                Text="Samples used"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="1" Grid.Column="1"
+                x:Name="SampleCountText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+            <!-- Last sync -->
+            <TextBlock
+                Grid.Row="2" Grid.Column="0"
+                Text="Last sync"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="2" Grid.Column="1"
+                x:Name="LastSyncText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+            <!-- Outliers discarded -->
+            <TextBlock
+                Grid.Row="3" Grid.Column="0"
+                Text="Outliers discarded"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="3" Grid.Column="1"
+                x:Name="OutlierCountText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+            <!-- Estimated drift -->
+            <TextBlock
+                Grid.Row="4" Grid.Column="0"
+                Text="Estimated drift"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="4" Grid.Column="1"
+                x:Name="DriftText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+        </Grid>
+
+        <!-- Separator -->
+        <Rectangle Height="1" Margin="0,16,0,16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+        <!-- Section header -->
+        <TextBlock
+            Text="BUFFER"
+            Margin="0,0,0,12"
+            FontSize="10"
+            Opacity="0.6"
+            CharacterSpacing="100" />
+
+        <Grid ColumnSpacing="16" RowSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Queued frames -->
+            <TextBlock
+                Grid.Row="0" Grid.Column="0"
+                Text="Queued frames"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="0" Grid.Column="1"
+                x:Name="QueuedFramesText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+            <!-- Queued audio -->
+            <TextBlock
+                Grid.Row="1" Grid.Column="0"
+                Text="Queued audio"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="1" Grid.Column="1"
+                x:Name="QueuedAudioText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+        </Grid>
+
+        <!-- Separator -->
+        <Rectangle Height="1" Margin="0,16,0,16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+        <!-- Section header -->
+        <TextBlock
+            Text="CODECS"
+            Margin="0,0,0,12"
+            FontSize="10"
+            Opacity="0.6"
+            CharacterSpacing="100" />
+
+        <Grid ColumnSpacing="16" RowSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Chunks received -->
+            <TextBlock
+                Grid.Row="0" Grid.Column="0"
+                Text="Chunks received"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="0" Grid.Column="1"
+                x:Name="ChunksReceivedText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+            <!-- Per-codec detail (spans both columns; hidden when empty) -->
+            <TextBlock
+                Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                x:Name="CodecDetailText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                TextWrapping="Wrap"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+        </Grid>
+
+    </StackPanel>
+
+</Page>

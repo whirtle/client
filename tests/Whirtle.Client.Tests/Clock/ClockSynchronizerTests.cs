@@ -124,7 +124,7 @@ public class ClockSynchronizerTests
 
         clock.Set(0);
         var runTask = syncer.RunAsync(
-            results.Add,
+            (r, _) => results.Add(r),
             interval: TimeSpan.FromMilliseconds(10),
             cancellationToken: cts.Token);
 
@@ -155,7 +155,7 @@ public class ClockSynchronizerTests
 
         clock.Set(0);
         var runTask = syncer.RunAsync(
-            results.Add,
+            (r, _) => results.Add(r),
             interval: TimeSpan.FromHours(1), // steady-state never fires within the test
             cancellationToken: cts.Token);
 
@@ -278,6 +278,147 @@ public class ClockSynchronizerTests
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
 
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => syncer.RunAsync(_ => { }, interval: TimeSpan.Zero, cts.Token));
+            () => syncer.RunAsync((_, _) => { }, interval: TimeSpan.Zero, cts.Token));
+    }
+
+    // ── GetStats / stats tracking ─────────────────────────────────────────────
+
+    [Fact]
+    public void GetStats_ReturnsZeroDefaults_BeforeAnySamples()
+    {
+        var (syncer, _, _) = Build();
+
+        var stats = syncer.GetStats();
+
+        Assert.Equal(TimeSpan.Zero, stats.MeanOffset);
+        Assert.Equal(0, stats.SampleCount);
+        Assert.Equal(0L, stats.LastSyncUtcMicroseconds);
+        Assert.Equal(0, stats.OutlierCount);
+        Assert.Equal(0.0, stats.DriftMicrosecondsPerSecond);
+    }
+
+    [Fact]
+    public void GetStats_IncrementsSampleCount_ForEachAcceptedSample()
+    {
+        var (syncer, _, _) = Build();
+
+        static ClockSyncResult Sample(long rttUs, long offsetUs) =>
+            new(TimeSpan.FromMicroseconds(offsetUs), TimeSpan.FromMicroseconds(rttUs));
+
+        syncer.AcceptResult(Sample(100, 50));
+        Assert.Equal(1, syncer.GetStats().SampleCount);
+
+        syncer.AcceptResult(Sample(100, 60));
+        Assert.Equal(2, syncer.GetStats().SampleCount);
+    }
+
+    [Fact]
+    public void GetStats_IncrementsOutlierCount_WhenHighRttSampleDiscarded()
+    {
+        var (syncer, _, _) = Build();
+
+        static ClockSyncResult Sample(long rttUs, long offsetUs) =>
+            new(TimeSpan.FromMicroseconds(offsetUs), TimeSpan.FromMicroseconds(rttUs));
+
+        // Seed with two normal samples so the outlier gate is active.
+        syncer.AcceptResult(Sample(100, 50));
+        syncer.AcceptResult(Sample(100, 50));
+
+        Assert.Equal(0, syncer.GetStats().OutlierCount);
+
+        // RTT > 2× median (> 200 µs) — must be counted as an outlier.
+        syncer.AcceptResult(Sample(201, 999));
+        Assert.Equal(1, syncer.GetStats().OutlierCount);
+
+        // Sample count must not have changed.
+        Assert.Equal(2, syncer.GetStats().SampleCount);
+    }
+
+    [Fact]
+    public void GetStats_RecordsLastSyncTimestamp_AfterAcceptedSample()
+    {
+        var (syncer, clock, _) = Build();
+
+        clock.Set(12_000_000); // arbitrary non-zero µs timestamp
+        syncer.AcceptResult(new ClockSyncResult(TimeSpan.Zero, TimeSpan.FromMicroseconds(100)));
+
+        Assert.Equal(12_000_000L, syncer.GetStats().LastSyncUtcMicroseconds);
+    }
+
+    [Fact]
+    public void GetStats_LastSyncTimestamp_NotUpdated_ForOutlier()
+    {
+        var (syncer, clock, _) = Build();
+
+        static ClockSyncResult Sample(long rttUs, long offsetUs) =>
+            new(TimeSpan.FromMicroseconds(offsetUs), TimeSpan.FromMicroseconds(rttUs));
+
+        // Accepted sample at t=1000.
+        clock.Set(1_000);
+        syncer.AcceptResult(Sample(100, 50));
+        syncer.AcceptResult(Sample(100, 50));
+        long afterAccepted = syncer.GetStats().LastSyncUtcMicroseconds;
+
+        // Outlier at t=9999 — timestamp should not advance.
+        clock.Set(9_999);
+        syncer.AcceptResult(Sample(500, 999)); // > 2×100 µs median
+        Assert.Equal(afterAccepted, syncer.GetStats().LastSyncUtcMicroseconds);
+    }
+
+    [Fact]
+    public void GetStats_MeanOffset_AveragesWindowEntries()
+    {
+        var (syncer, _, _) = Build();
+
+        syncer.AcceptResult(new ClockSyncResult(TimeSpan.FromMicroseconds(100), TimeSpan.FromMicroseconds(100)));
+        syncer.AcceptResult(new ClockSyncResult(TimeSpan.FromMicroseconds(300), TimeSpan.FromMicroseconds(100)));
+
+        // Mean of 100 µs and 300 µs offsets = 200 µs.
+        Assert.Equal(
+            TimeSpan.FromMicroseconds(200),
+            syncer.GetStats().MeanOffset);
+    }
+
+    [Fact]
+    public void GetStats_DriftIsZero_WithFewerThanTwoSamples()
+    {
+        var (syncer, _, _) = Build();
+
+        syncer.AcceptResult(new ClockSyncResult(TimeSpan.FromMicroseconds(100), TimeSpan.FromMicroseconds(100)));
+
+        Assert.Equal(0.0, syncer.GetStats().DriftMicrosecondsPerSecond);
+    }
+
+    [Fact]
+    public void GetStats_DriftIsPositive_WhenOffsetIncreases()
+    {
+        // Server clock is moving ahead: offset increases from +100 µs to +600 µs
+        // over a 500 µs wall-clock interval → drift = +500 µs / 500 µs × 1e6 = +1 000 000 µs/s = 1 s/s
+        // (extreme, but serves as a clean unit test).
+        var (syncer, clock, _) = Build();
+
+        clock.Set(0);
+        syncer.AcceptResult(new ClockSyncResult(TimeSpan.FromMicroseconds(100), TimeSpan.FromMicroseconds(100)));
+
+        clock.Set(500);
+        syncer.AcceptResult(new ClockSyncResult(TimeSpan.FromMicroseconds(600), TimeSpan.FromMicroseconds(100)));
+
+        Assert.True(syncer.GetStats().DriftMicrosecondsPerSecond > 0,
+            "Drift should be positive when offset is increasing.");
+    }
+
+    [Fact]
+    public void GetStats_DriftIsNegative_WhenOffsetDecreases()
+    {
+        var (syncer, clock, _) = Build();
+
+        clock.Set(0);
+        syncer.AcceptResult(new ClockSyncResult(TimeSpan.FromMicroseconds(600), TimeSpan.FromMicroseconds(100)));
+
+        clock.Set(500);
+        syncer.AcceptResult(new ClockSyncResult(TimeSpan.FromMicroseconds(100), TimeSpan.FromMicroseconds(100)));
+
+        Assert.True(syncer.GetStats().DriftMicrosecondsPerSecond < 0,
+            "Drift should be negative when offset is decreasing.");
     }
 }
