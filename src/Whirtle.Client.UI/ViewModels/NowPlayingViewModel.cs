@@ -73,6 +73,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private TimeSpan _lastRtt        = TimeSpan.MaxValue; // unknown until first sync
     private int      _lastBufferCount = -1;               // -1 = engine not running
 
+    // ── Clock statistics ───────────────────────────────────────────────────
+
+    public ClockStatsViewModel ClockStats { get; }
+
     // ── Now-playing metadata ───────────────────────────────────────────────
 
     [ObservableProperty] private string? _title;
@@ -210,6 +214,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _deviceEnumerator = deviceEnumerator;
         _dispatcher       = dispatcher;
         _settings         = settings;
+        ClockStats        = new ClockStatsViewModel(dispatcher);
 
         // Keep ServerPickerLabel in sync when connection mode changes in settings.
         _settings.PropertyChanged += (_, e) =>
@@ -306,11 +311,12 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             // Start background tasks — receive loop routes server/time to the syncer.
             _receiveLoopTask = ReceiveLoopAsync(token);
             _syncTask = _syncer.RunAsync(
-                r =>
+                (r, stats) =>
                 {
                     _lastRtt = r.RoundTripTime;
                     _serverClockOffset = r.ClockOffset;
                     _player.UpdateClockOffset(r.ClockOffset);
+                    ClockStats.Update(stats);
                     _dispatcher.TryEnqueue(
                         () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
                 },
@@ -446,6 +452,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _lastRtt         = TimeSpan.MaxValue;
         _lastBufferCount = -1;
         _serverClockOffset = TimeSpan.Zero;
+        ClockStats.Reset();
     }
 
     /// <summary>
@@ -693,10 +700,12 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         // Start background tasks — receive loop routes server/time to the syncer.
         _receiveLoopTask = ReceiveLoopAsync(_connectionCts.Token);
         _syncTask = _syncer.RunAsync(
-            r =>
+            (r, stats) =>
             {
                 _lastRtt = r.RoundTripTime;
+                _serverClockOffset = r.ClockOffset;
                 _player.UpdateClockOffset(r.ClockOffset);
+                ClockStats.Update(stats);
                 _dispatcher.TryEnqueue(
                     () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
             },
