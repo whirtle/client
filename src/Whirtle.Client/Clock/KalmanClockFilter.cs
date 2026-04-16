@@ -122,7 +122,7 @@ internal sealed class KalmanClockFilter
         var (pOOp, pODp, pDDp) = PredictCovariance(_pOO, _pOD, _pDD, dtS);
 
         Log.Debug(
-            "Clock Kalman predict: dt={Dt:F3} s, pred_offset={PredOffset:+F2;-F2} µs, pOO={Poo:F6}",
+            "Clock Kalman predict: dt={Dt:F3} s, pred_offset={PredOffset:+0.00;-0.00} µs, pOO={Poo:F6}",
             dtS, predOffset, pOOp);
 
         if (_count == 1)
@@ -186,7 +186,7 @@ internal sealed class KalmanClockFilter
         _count        = 1;
 
         Log.Information(
-            "Clock Kalman init (count=1): offset={Offset:+F2;-F2} µs, " +
+            "Clock Kalman init (count=1): offset={Offset:+0.00;-0.00} µs, " +
             "σ_offset={Sigma:F2} µs",
             _offset, OffsetStdDevUs);
     }
@@ -204,7 +204,7 @@ internal sealed class KalmanClockFilter
         pDDp   = (_pOO + r) / (dtS * dtS);
 
         Log.Information(
-            "Clock Kalman init (count=2): drift={Drift:+F4;-F4} µs/s, " +
+            "Clock Kalman init (count=2): drift={Drift:+0.0000;-0.0000} µs/s, " +
             "σ_drift={Sigma:F4} µs/s",
             _drift, Math.Sqrt(pDDp));
     }
@@ -275,8 +275,8 @@ internal sealed class KalmanClockFilter
 
         var sig = DriftIsSignificant;
         Log.Debug(
-            "Clock Kalman update: y={Y:+F2;-F2} µs, K=[{Ko:F6},{Kd:F6}], " +
-            "offset={Off:+F2;-F2} µs, drift={Drift:+F4;-F4} µs/s, " +
+            "Clock Kalman update: y={Y:+0.00;-0.00} µs, K=[{Ko:F6},{Kd:F6}], " +
+            "offset={Off:+0.00;-0.00} µs, drift={Drift:+0.0000;-0.0000} µs/s, " +
             "σ_offset={SigOff:F3} µs, σ_drift={SigDri:F4} µs/s, " +
             "drift_sig={DriftSig}",
             innovation, kOff, kDri,
