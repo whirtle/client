@@ -31,8 +31,18 @@ namespace Whirtle.Client.Playback;
 public sealed class PlaybackEngine : IAsyncDisposable
 {
     // Tuning constants
-    private const int    MinBufferFrames = 4;   // frames required before playback starts/recovers
-    private const double MaxDriftMs      = 200; // drift threshold before entering Error state; must exceed renderer latency (default 100 ms)
+    private const int    MinBufferFrames  = 4;   // frames required before playback starts/recovers
+    private const double MaxDriftMs       = 200; // drift threshold before entering Error state; must exceed renderer latency (default 100 ms)
+
+    // Ahead-buffer tuning: keeps only a small window of samples ahead of where volume
+    // is applied (WasapiRenderer.Write), so volume changes take effect quickly.
+    // Under CPU pressure the window expands automatically to avoid underruns.
+    internal const int TargetAheadMs      = 50;  // nominal ms of samples ahead of volume application
+    private  const int MaxAheadMs         = 200; // ceiling when falling behind
+    internal const int LowWaterMs         = 10;  // buffer level (ms) that signals we're falling behind
+    private  const int BehindThreshold    = 5;   // consecutive low-water events before doubling target
+    private  const int RecoveryStepMs     = 10;  // ms stepped down per recovery interval
+    internal const int RecoveryFrameCount = 50;  // healthy-buffer frames between recovery steps
 
     private readonly JitterBuffer       _buffer;
     private readonly IWasapiRenderer    _renderer;
@@ -44,13 +54,21 @@ public sealed class PlaybackEngine : IAsyncDisposable
     private volatile bool           _paused;
     private CancellationTokenSource _cts  = new();
     private Task                    _renderTask = Task.CompletedTask;
-    private bool                    _userMuted  = false;
+    private bool                    _userMuted   = false;
     private bool                    _engineMuted = false;
+
+    // Adaptive ahead-buffer state (render-loop-only; no volatile needed)
+    private int _aheadTargetMs  = TargetAheadMs;
+    private int _behindCount    = 0;
+    private int _recoveryFrames = 0;
 
     public PlaybackState State => _state;
 
     /// <summary>Number of frames currently held in the jitter buffer.</summary>
     public int BufferedFrameCount => _buffer.Count;
+
+    /// <summary>Current ahead-of-volume buffer target in milliseconds. Normally <see cref="TargetAheadMs"/>; increases temporarily under CPU pressure.</summary>
+    internal int AheadTargetMs => _aheadTargetMs;
 
     /// <summary>
     /// Raised when the playback state or buffer occupancy changes meaningfully.
@@ -125,6 +143,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
         _buffer.Clear();
         _renderer.ClearBuffer();
         TransitionTo(PlaybackState.Buffering);
+        ResetAheadBuffer();
     }
 
     /// <summary>
@@ -259,13 +278,42 @@ public sealed class PlaybackEngine : IAsyncDisposable
             : resampled;
 
         // Pace writes by WASAPI buffer level rather than a fixed timer.
-        // Task.Delay on Windows has ~15 ms granularity; using it for 96 ms frame timing
-        // accumulates 15–25 ms of overshoot per frame, rapidly exceeding the drift
-        // threshold.  Waiting until the hardware buffer has room lets the device clock
-        // drive the rate instead.
-        int halfCapacity = _renderer.BufferCapacityBytes / 2;
-        while (_renderer.BufferedBytes > halfCapacity && !ct.IsCancellationRequested)
+        // Task.Delay on Windows has ~15 ms granularity; using it for frame timing
+        // accumulates overshoot per frame.  Waiting until the hardware buffer has room
+        // lets the device clock drive the rate instead.
+        //
+        // We keep only TargetAheadMs of samples buffered ahead of where volume is
+        // applied (WasapiRenderer.Write), so volume changes take effect promptly.
+        // If the buffer level drops below LowWaterMs on BehindThreshold consecutive
+        // frames, CPU pressure is assumed and the target is doubled (up to MaxAheadMs),
+        // then gradually stepped back down once normal conditions resume.
+        int bytesPerMs    = _renderer.SampleRate * _renderer.Channels * sizeof(float) / 1000;
+        int targetBytes   = _aheadTargetMs * bytesPerMs;
+        int lowWaterBytes = LowWaterMs     * bytesPerMs;
+
+        while (_renderer.BufferedBytes > targetBytes && !ct.IsCancellationRequested)
             await Task.Delay(5, ct).ConfigureAwait(false);
+
+        if (_renderer.BufferedBytes < lowWaterBytes)
+        {
+            if (++_behindCount >= BehindThreshold)
+            {
+                _aheadTargetMs  = Math.Min(_aheadTargetMs * 2, MaxAheadMs);
+                _behindCount    = 0;
+                _recoveryFrames = 0;
+                Log.Warning("Audio falling behind; increasing ahead target to {AheadTargetMs} ms", _aheadTargetMs);
+            }
+        }
+        else
+        {
+            _behindCount = 0;
+            if (_aheadTargetMs > TargetAheadMs && ++_recoveryFrames >= RecoveryFrameCount)
+            {
+                _aheadTargetMs  = Math.Max(_aheadTargetMs - RecoveryStepMs, TargetAheadMs);
+                _recoveryFrames = 0;
+                Log.Debug("Audio caught up; reducing ahead target to {AheadTargetMs} ms", _aheadTargetMs);
+            }
+        }
 
         _renderer.Write(samples);
     }
@@ -306,6 +354,13 @@ public sealed class PlaybackEngine : IAsyncDisposable
     }
 
     private void ApplyMuteState() => _renderer.SetMuted(_engineMuted || _userMuted);
+
+    private void ResetAheadBuffer()
+    {
+        _aheadTargetMs  = TargetAheadMs;
+        _behindCount    = 0;
+        _recoveryFrames = 0;
+    }
 
     /// <summary>
     /// Returns the difference in ms between when we are playing the frame

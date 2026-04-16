@@ -284,6 +284,80 @@ public class PlaybackEngineTests
     }
 
     [Fact]
+    public async Task AheadBuffer_IncreasesTarget_WhenConsistentlyBehind()
+    {
+        // FakeWasapiRenderer.BufferedBytes defaults to 0, which is below LowWaterMs.
+        // After BehindThreshold (5) consecutive frames the target should double.
+        var (engine, _, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero);
+        engine.Start();
+
+        // Enqueue enough frames to stay in Synchronized through the BehindThreshold.
+        for (int i = 0; i < 10; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => engine.AheadTargetMs > PlaybackEngine.TargetAheadMs, TimeSpan.FromSeconds(2));
+
+        Assert.True(engine.AheadTargetMs > PlaybackEngine.TargetAheadMs,
+            $"Expected ahead target to exceed {PlaybackEngine.TargetAheadMs} ms, but it is {engine.AheadTargetMs} ms");
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task AheadBuffer_DoesNotIncrease_WhenBufferHealthy()
+    {
+        // With BufferedBytes held above LowWaterMs, the behind counter never fires.
+        var (engine, renderer, clock) = Build();
+
+        int bytesPerMs = renderer.SampleRate * renderer.Channels * sizeof(float) / 1000;
+        renderer.BufferedBytesValue = PlaybackEngine.LowWaterMs * bytesPerMs + 1;
+
+        engine.UpdateClockOffset(TimeSpan.Zero);
+        engine.Start();
+
+        for (int i = 0; i < 10; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        // Wait until the engine leaves Synchronized (either error or frames consumed).
+        await PollUntil(() => engine.State != PlaybackState.Synchronized, TimeSpan.FromSeconds(3));
+
+        Assert.Equal(PlaybackEngine.TargetAheadMs, engine.AheadTargetMs);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task AheadBuffer_RecoversTowardNominal_AfterSustainingHealthyBuffer()
+    {
+        // Phase 1: let the target elevate (BufferedBytes = 0).
+        // Phase 2: switch to a healthy buffer level and verify the target steps back down.
+        var (engine, renderer, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero);
+        engine.Start();
+
+        long ts = clock.UtcNowMicroseconds;
+
+        for (int i = 0; i < 10; i++)
+            engine.Enqueue(ts + i * 20_000L, Frame());
+
+        await PollUntil(() => engine.AheadTargetMs > PlaybackEngine.TargetAheadMs, TimeSpan.FromSeconds(2));
+        int elevated = engine.AheadTargetMs;
+
+        // Phase 2: healthy buffer level, engine will be in Error and refill.
+        int bytesPerMs = renderer.SampleRate * renderer.Channels * sizeof(float) / 1000;
+        renderer.BufferedBytesValue = PlaybackEngine.LowWaterMs * bytesPerMs + 1;
+
+        ts += 10 * 20_000L;
+        for (int i = 0; i < PlaybackEngine.RecoveryFrameCount + 10; i++)
+            engine.Enqueue(ts + i * 20_000L, Frame());
+
+        await PollUntil(() => engine.AheadTargetMs < elevated, TimeSpan.FromSeconds(3));
+
+        Assert.True(engine.AheadTargetMs < elevated,
+            $"Expected ahead target to decrease from {elevated} ms, but it is {engine.AheadTargetMs} ms");
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
     public async Task DisposeAsync_StopsEngine()
     {
         var (engine, renderer, _) = Build();
