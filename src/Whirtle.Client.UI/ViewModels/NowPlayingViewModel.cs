@@ -73,6 +73,13 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private TimeSpan _lastRtt        = TimeSpan.MaxValue; // unknown until first sync
     private int      _lastBufferCount = -1;               // -1 = engine not running
 
+    // ── Clock statistics ───────────────────────────────────────────────────
+
+    public ClockStatsViewModel ClockStats { get; }
+
+    // Stats polling timer — updates buffer and codec stats once per second.
+    private readonly DispatcherTimer _statsTimer;
+
     // ── Now-playing metadata ───────────────────────────────────────────────
 
     [ObservableProperty] private string? _title;
@@ -124,6 +131,22 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
     [ObservableProperty] private int _signalStrength; // 0–3
 
+    // ── Buffer / codec statistics ──────────────────────────────────────────────
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BufferDisplay))]
+    private int _statBufferedFrames;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BufferDisplay))]
+    private TimeSpan _statBufferedDuration;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ChunksDisplay))]
+    private long _statTotalChunks;
+
+    [ObservableProperty] private string _statCodecDetails = "";
+
     // ── Audio devices ──────────────────────────────────────────────────────
 
     [ObservableProperty] private AudioDeviceInfo? _selectedDevice;
@@ -152,6 +175,18 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             return $"{CodecName} · {kHzStr}";
         }
     }
+
+    public string BufferDisplay
+    {
+        get
+        {
+            int    frames = _statBufferedFrames;
+            double ms     = _statBufferedDuration.TotalMilliseconds;
+            return $"Buffer: {frames} frame{(frames == 1 ? "" : "s")} · {ms:0} ms";
+        }
+    }
+
+    public string ChunksDisplay => $"Chunks received: {_statTotalChunks:N0}";
 
     /// <summary>
     /// Text shown in the status-bar server button.
@@ -210,6 +245,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _deviceEnumerator = deviceEnumerator;
         _dispatcher       = dispatcher;
         _settings         = settings;
+        ClockStats        = new ClockStatsViewModel(dispatcher);
 
         // Keep ServerPickerLabel in sync when connection mode changes in settings.
         _settings.PropertyChanged += (_, e) =>
@@ -221,9 +257,15 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _volume  = _settings.Volume;
         _isMuted = _settings.IsMuted;
 
+        _connectionManager.LastPlayedServerId = _settings.LastPlayedServerId;
+
         // Ticker that advances the seek bar using the spec formula while playing.
         _positionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _positionTimer.Tick += (_, _) => TickPosition();
+
+        // Stats ticker — polls buffer and codec counters from the player once per second.
+        _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _statsTimer.Tick += (_, _) => TickStats();
 
         LoadAudioDevices();
     }
@@ -243,6 +285,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     [RelayCommand]
     private async Task ConnectAsync(ServiceEndpoint endpoint)
     {
+        _settings.ConnectionMode = ConnectionMode.ClientInitiated;
         StopServerInitiatedMode();
         try { await TearDownSessionAsync(); }
         catch (Exception ex) { Log.Warning(ex, "Error tearing down previous session"); }
@@ -299,15 +342,17 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 token);
             IsConnected  = true;
             ConnectionStatus = $"Connected — {endpoint.Host}:{endpoint.Port}";
+            _statsTimer.Start();
 
             // Start background tasks — receive loop routes server/time to the syncer.
             _receiveLoopTask = ReceiveLoopAsync(token);
             _syncTask = _syncer.RunAsync(
-                r =>
+                (r, stats) =>
                 {
                     _lastRtt = r.RoundTripTime;
                     _serverClockOffset = r.ClockOffset;
                     _player.UpdateClockOffset(r.ClockOffset);
+                    ClockStats.Update(stats);
                     _dispatcher.TryEnqueue(
                         () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
                 },
@@ -432,17 +477,23 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private void ResetPlaybackState()
     {
         _positionTimer.Stop();
+        _statsTimer.Stop();
         _connectionManager.Clear();
-        IsConnected      = false;
-        ConnectionStatus = "Not connected";
-        ServerName       = null;
-        CodecName        = null;
-        SampleRate       = null;
-        PositionSeconds  = 0;
-        SignalStrength   = 0;
-        _lastRtt         = TimeSpan.MaxValue;
-        _lastBufferCount = -1;
-        _serverClockOffset = TimeSpan.Zero;
+        IsConnected          = false;
+        ConnectionStatus     = "Not connected";
+        ServerName           = null;
+        CodecName            = null;
+        SampleRate           = null;
+        PositionSeconds      = 0;
+        SignalStrength       = 0;
+        StatBufferedFrames   = 0;
+        StatBufferedDuration = TimeSpan.Zero;
+        StatTotalChunks      = 0;
+        StatCodecDetails     = "";
+        _lastRtt             = TimeSpan.MaxValue;
+        _lastBufferCount     = -1;
+        _serverClockOffset   = TimeSpan.Zero;
+        ClockStats.Reset();
     }
 
     /// <summary>
@@ -456,6 +507,31 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         long localNowUs  = (DateTimeOffset.UtcNow.Ticks - DateTimeOffset.UnixEpoch.Ticks) / 10;
         long serverNowUs = localNowUs + (long)_serverClockOffset.TotalMicroseconds;
         PositionSeconds  = _nowPlaying.CalculatePositionMs(serverNowUs) / 1000.0;
+    }
+
+    /// <summary>
+    /// Polls buffer occupancy and codec statistics from the active player and
+    /// updates the corresponding observable properties. Must run on the UI thread.
+    /// </summary>
+    private void TickStats()
+    {
+        if (_player is null) return;
+
+        StatBufferedFrames   = _player.BufferedFrameCount;
+        StatBufferedDuration = _player.BufferedAudioDuration;
+        StatTotalChunks      = _player.TotalChunksReceived;
+        StatCodecDetails     = BuildCodecDetails(_player.GetCodecStats());
+    }
+
+    private static string BuildCodecDetails(IReadOnlyList<Whirtle.Client.Role.CodecStats> stats)
+    {
+        if (stats.Count == 0) return "";
+        return string.Join("\n", stats.Select(s =>
+        {
+            string name  = s.Format.ToCodecString().ToUpperInvariant();
+            double ratio = s.AverageCompressionRatio;
+            return $"{name}: {s.ChunkCount:N0} chunks · {ratio:0.0}× ratio";
+        }));
     }
 
     /// <summary>
@@ -638,10 +714,19 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             "Server-initiated: inbound handshake complete: serverId={ServerId}, serverName={ServerName}, reason={Reason}",
             hello.ServerId, hello.Name, hello.ConnectionReason);
 
+        // Log the full negotiation context before the decision so that the
+        // outcome is traceable in the logs even when the decision seems surprising.
+        Log.Debug(
+            "Multi-server negotiation: incoming={IncomingId} reason={IncomingReason}, " +
+            "currentServer={CurrentId}, lastPlayedServer={LastPlayedId}",
+            hello.ServerId, hello.ConnectionReason,
+            IsConnected ? ServerName : "(none)",
+            _connectionManager.LastPlayedServerId ?? "(none)");
+
         if (!_connectionManager.ShouldAccept(hello.ServerId, hello.ConnectionReason))
         {
             Log.Information(
-                "Rejected lower-priority server {ServerId} (reason={Reason})",
+                "Multi-server negotiation: rejected {ServerId} (reason={Reason}) — keeping current connection",
                 hello.ServerId, hello.ConnectionReason);
             try { await protocol.DisconnectAsync("another_server", serverModeCancellation); }
             catch { /* best-effort */ }
@@ -649,7 +734,18 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             return;
         }
 
+        var hadExistingConnection = IsConnected;
         _connectionManager.Accept(hello.ServerId, hello.ConnectionReason);
+        if (hello.ConnectionReason == "playback")
+        {
+            _settings.LastPlayedServerId = hello.ServerId;
+            Log.Debug("Multi-server negotiation: updated last-played server to {ServerId}", hello.ServerId);
+        }
+
+        if (hadExistingConnection)
+            Log.Information(
+                "Multi-server negotiation: accepted {ServerId} (reason={Reason}), displacing current connection",
+                hello.ServerId, hello.ConnectionReason);
 
         // Tear down any existing session before taking over.
         await TearDownSessionAsync();
@@ -670,10 +766,12 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         // Start background tasks — receive loop routes server/time to the syncer.
         _receiveLoopTask = ReceiveLoopAsync(_connectionCts.Token);
         _syncTask = _syncer.RunAsync(
-            r =>
+            (r, stats) =>
             {
                 _lastRtt = r.RoundTripTime;
+                _serverClockOffset = r.ClockOffset;
                 _player.UpdateClockOffset(r.ClockOffset);
+                ClockStats.Update(stats);
                 _dispatcher.TryEnqueue(
                     () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
             },
@@ -689,6 +787,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             ServerName       = displayName;
             IsConnected      = true;
             ConnectionStatus = $"Connected — {displayName}";
+            _statsTimer.Start();
         });
     }
 
@@ -699,6 +798,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task PlayAsync()
     {
         if (_controller is null) return;
+        _player?.Resume();
         await _controller.PlayAsync();
         IsPlaying = true;
     }
@@ -707,6 +807,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task PauseAsync()
     {
         if (_controller is null) return;
+        _player?.Pause();
         await _controller.PauseAsync();
         IsPlaying = false;
     }
