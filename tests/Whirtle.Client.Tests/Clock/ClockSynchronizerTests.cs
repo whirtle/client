@@ -124,7 +124,7 @@ public class ClockSynchronizerTests
 
         clock.Set(0);
         var runTask = syncer.RunAsync(
-            results.Add,
+            (r, _) => results.Add(r),
             interval: TimeSpan.FromMilliseconds(10),
             cancellationToken: cts.Token);
 
@@ -155,7 +155,7 @@ public class ClockSynchronizerTests
 
         clock.Set(0);
         var runTask = syncer.RunAsync(
-            results.Add,
+            (r, _) => results.Add(r),
             interval: TimeSpan.FromHours(1), // steady-state never fires within the test
             cancellationToken: cts.Token);
 
@@ -278,6 +278,6 @@ public class ClockSynchronizerTests
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
 
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => syncer.RunAsync(_ => { }, interval: TimeSpan.Zero, cts.Token));
+            () => syncer.RunAsync((_, _) => { }, interval: TimeSpan.Zero, cts.Token));
     }
 }
