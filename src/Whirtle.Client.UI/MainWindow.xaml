@@ -8,14 +8,14 @@
     xmlns:controls="using:Whirtle.Client.UI.Controls"
 Title="Whirtle">
 
-    <Grid KeyboardAcceleratorPlacementMode="Hidden" VerticalAlignment="Top">
+    <Grid KeyboardAcceleratorPlacementMode="Hidden">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="LogsAccelerator_Invoked" />
             <KeyboardAccelerator Key="S" Modifiers="Control" Invoked="StatsAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
         <Grid.RowDefinitions>
             <RowDefinition Height="32" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
             <RowDefinition Height="24" />
         </Grid.RowDefinitions>
 
