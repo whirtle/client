@@ -54,7 +54,11 @@
     <TargetPlatformVersion>10.0.26100.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.26100.0</TargetPlatformMinVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
+    <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
+    <TrustedSigningAccountName>whirtle-artifact-signing</TrustedSigningAccountName>
+    <TrustedSigningEndpointUrl>https://eus.codesigning.azure.net/</TrustedSigningEndpointUrl>
+    <TrustedSigningCertificateProfileName>whirtle-windows-app-signing</TrustedSigningCertificateProfileName>
     <NoWarn>$(NoWarn);NU1702</NoWarn>
     <EntryPointProjectUniqueName>..\src\Whirtle.Client.UI\Whirtle.Client.UI.csproj</EntryPointProjectUniqueName>
     <GenerateAppInstallerFile>True</GenerateAppInstallerFile>
@@ -112,6 +116,7 @@
   <Import Project="$(WapProjPath)\Microsoft.DesktopBridge.targets" />
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Trusted.Signing.Client" Version="1.*" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\src\Whirtle.Client.UI\Whirtle.Client.UI.csproj" />
