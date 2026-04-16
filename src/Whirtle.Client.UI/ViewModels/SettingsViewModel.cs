@@ -186,7 +186,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public int AudioFormatIndex
     {
-        get => _currentDeviceFormat switch
+        get => CurrentDeviceFormat switch
         {
             AudioFormat.Flac => 0,
             AudioFormat.Opus => 1,
@@ -302,7 +302,10 @@ public sealed partial class SettingsViewModel : ObservableObject
             if (saved is null) return;
 
             // Write directly to backing fields to avoid firing PropertyChanged
-            // (and triggering Save) during initialisation.
+            // (and triggering Save or partial-write side-effects) during initialisation.
+            // MVVMTK0034 suppressed intentionally: OnTermsAcceptedChanged calls CommitNow()
+            // which would write a partially-loaded settings file if triggered here.
+#pragma warning disable MVVMTK0034
             _clientName             = saved.ClientName;
             _clientId               = saved.ClientId;
             _preferredAudioDeviceId = saved.PreferredAudioDeviceId;
@@ -311,6 +314,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             _logLevel               = saved.LogLevel;
             _termsAccepted          = saved.TermsAccepted;
             _telemetryConsent       = saved.TelemetryConsent;
+#pragma warning restore MVVMTK0034
             _windowX                = saved.WindowX;
             _windowY                = saved.WindowY;
             _logsWindowX            = saved.LogsWindowX;
@@ -333,12 +337,14 @@ public sealed partial class SettingsViewModel : ObservableObject
 
             // Pre-load the preferred device's settings so they're ready before
             // the device ComboBox is populated.
+#pragma warning disable MVVMTK0034
             if (!string.IsNullOrEmpty(_preferredAudioDeviceId) &&
                 _deviceSettings.TryGetValue(_preferredAudioDeviceId, out var ds))
             {
                 _currentDeviceFormat        = ds.PreferredFormat;
                 _currentDeviceStaticDelayMs = ds.StaticDelayMs;
             }
+#pragma warning restore MVVMTK0034
         }
         catch { /* first run or corrupted file — use defaults */ }
     }
@@ -422,7 +428,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             // the live selection before serialising.
             if (SelectedAudioDevice is { } d)
             {
-                _preferredAudioDeviceId = d.Id;
+                PreferredAudioDeviceId = d.Id;
                 _deviceSettings[d.Id] = new DeviceSettings
                 {
                     PreferredFormat = CurrentDeviceFormat,
@@ -433,7 +439,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             var data = new SettingsData(
                 ClientName,
                 ClientId,
-                _preferredAudioDeviceId,
+                PreferredAudioDeviceId,
                 _deviceSettings,
                 ConnectionMode,
                 LogLevel,
