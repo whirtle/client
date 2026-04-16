@@ -18,6 +18,7 @@ internal sealed class JitterBuffer
     private readonly SortedList<long, AudioFrame> _frames = new();
     private readonly int _capacity;
     private long _nextExpected = long.MinValue;
+    private TimeSpan _totalDuration = TimeSpan.Zero;
 
     /// <param name="capacity">Maximum number of frames held before older frames are evicted.</param>
     public JitterBuffer(int capacity = 64)
@@ -28,6 +29,9 @@ internal sealed class JitterBuffer
 
     /// <summary>Number of frames currently buffered.</summary>
     public int Count { get { lock (_frames) return _frames.Count; } }
+
+    /// <summary>Total audio duration of all frames currently buffered.</summary>
+    public TimeSpan TotalDuration { get { lock (_frames) return _totalDuration; } }
 
     /// <summary>
     /// Inserts a frame. If the buffer is full the oldest frame is evicted
@@ -42,9 +46,13 @@ internal sealed class JitterBuffer
                 return; // late arrival — discard
 
             if (_frames.Count >= _capacity)
+            {
+                _totalDuration -= _frames.Values[0].Duration;
                 _frames.RemoveAt(0); // evict oldest
+            }
 
             _frames[timestamp] = frame;
+            _totalDuration += frame.Duration;
         }
     }
 
@@ -72,9 +80,10 @@ internal sealed class JitterBuffer
                 return false;
             }
 
-            timestamp     = _frames.Keys[0];
-            frame         = _frames.Values[0];
-            _nextExpected = timestamp + 1; // drop duplicates and late arrivals
+            timestamp      = _frames.Keys[0];
+            frame          = _frames.Values[0];
+            _nextExpected  = timestamp + 1; // drop duplicates and late arrivals
+            _totalDuration -= frame.Duration;
             _frames.RemoveAt(0);
             return true;
         }
@@ -86,7 +95,8 @@ internal sealed class JitterBuffer
         lock (_frames)
         {
             _frames.Clear();
-            _nextExpected = long.MinValue;
+            _totalDuration = TimeSpan.Zero;
+            _nextExpected  = long.MinValue;
         }
     }
 }

@@ -67,6 +67,9 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// <summary>Number of frames currently held in the jitter buffer.</summary>
     public int BufferedFrameCount => _buffer.Count;
 
+    /// <summary>Total audio duration currently held in the jitter buffer.</summary>
+    public TimeSpan BufferedAudioDuration => _buffer.TotalDuration;
+
     /// <summary>Current ahead-of-volume buffer target in milliseconds. Normally <see cref="TargetAheadMs"/>; increases temporarily under CPU pressure.</summary>
     internal int AheadTargetMs => _aheadTargetMs;
 

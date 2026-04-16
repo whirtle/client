@@ -10,7 +10,8 @@ namespace Whirtle.Client.UI.Pages;
 
 public sealed partial class StatsPage : Page
 {
-    private ClockStatsViewModel ViewModel => App.Current.NowPlayingViewModel.ClockStats;
+    private ClockStatsViewModel  ClockStats   => App.Current.NowPlayingViewModel.ClockStats;
+    private NowPlayingViewModel  PlaybackStats => App.Current.NowPlayingViewModel;
 
     public StatsPage()
     {
@@ -21,45 +22,73 @@ public sealed partial class StatsPage : Page
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        ClockStats.PropertyChanged   += OnClockStatsPropertyChanged;
+        PlaybackStats.PropertyChanged += OnPlaybackStatsPropertyChanged;
         RefreshAll();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        ClockStats.PropertyChanged   -= OnClockStatsPropertyChanged;
+        PlaybackStats.PropertyChanged -= OnPlaybackStatsPropertyChanged;
     }
 
-    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnClockStatsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         switch (e.PropertyName)
         {
             case nameof(ClockStatsViewModel.MeanOffsetMs):
-                MeanOffsetText.Text = FormatOffset(ViewModel.MeanOffsetMs);
+                MeanOffsetText.Text = FormatOffset(ClockStats.MeanOffsetMs);
                 break;
             case nameof(ClockStatsViewModel.SampleCount):
-                SampleCountText.Text = ViewModel.SampleCount.ToString();
+                SampleCountText.Text = ClockStats.SampleCount.ToString();
                 break;
             case nameof(ClockStatsViewModel.SecondsSinceLastSync):
-                LastSyncText.Text = FormatElapsed(ViewModel.SecondsSinceLastSync);
+                LastSyncText.Text = FormatElapsed(ClockStats.SecondsSinceLastSync);
                 break;
             case nameof(ClockStatsViewModel.OutlierCount):
-                OutlierCountText.Text = ViewModel.OutlierCount.ToString();
+                OutlierCountText.Text = ClockStats.OutlierCount.ToString();
                 break;
             case nameof(ClockStatsViewModel.DriftMicrosecondsPerSecond):
-                DriftText.Text = FormatDrift(ViewModel.DriftMicrosecondsPerSecond);
+                DriftText.Text = FormatDrift(ClockStats.DriftMicrosecondsPerSecond);
+                break;
+        }
+    }
+
+    private void OnPlaybackStatsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(NowPlayingViewModel.StatBufferedFrames):
+                QueuedFramesText.Text = PlaybackStats.StatBufferedFrames.ToString();
+                break;
+            case nameof(NowPlayingViewModel.StatBufferedDuration):
+                QueuedAudioText.Text = FormatDuration(PlaybackStats.StatBufferedDuration);
+                break;
+            case nameof(NowPlayingViewModel.StatTotalChunks):
+                ChunksReceivedText.Text = PlaybackStats.StatTotalChunks.ToString("N0");
+                break;
+            case nameof(NowPlayingViewModel.StatCodecDetails):
+                CodecDetailText.Text = PlaybackStats.StatCodecDetails;
                 break;
         }
     }
 
     private void RefreshAll()
     {
-        MeanOffsetText.Text   = FormatOffset(ViewModel.MeanOffsetMs);
-        SampleCountText.Text  = ViewModel.SampleCount.ToString();
-        LastSyncText.Text     = FormatElapsed(ViewModel.SecondsSinceLastSync);
-        OutlierCountText.Text = ViewModel.OutlierCount.ToString();
-        DriftText.Text        = FormatDrift(ViewModel.DriftMicrosecondsPerSecond);
+        MeanOffsetText.Text     = FormatOffset(ClockStats.MeanOffsetMs);
+        SampleCountText.Text    = ClockStats.SampleCount.ToString();
+        LastSyncText.Text       = FormatElapsed(ClockStats.SecondsSinceLastSync);
+        OutlierCountText.Text   = ClockStats.OutlierCount.ToString();
+        DriftText.Text          = FormatDrift(ClockStats.DriftMicrosecondsPerSecond);
+        QueuedFramesText.Text   = PlaybackStats.StatBufferedFrames.ToString();
+        QueuedAudioText.Text    = FormatDuration(PlaybackStats.StatBufferedDuration);
+        ChunksReceivedText.Text = PlaybackStats.StatTotalChunks.ToString("N0");
+        CodecDetailText.Text    = PlaybackStats.StatCodecDetails;
     }
+
+    private static string FormatDuration(TimeSpan duration)
+        => $"{duration.TotalMilliseconds:0} ms";
 
     private static string FormatOffset(double ms)
         => $"{ms:+0.00;-0.00;0.00} ms";

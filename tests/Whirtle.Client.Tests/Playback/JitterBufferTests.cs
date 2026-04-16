@@ -9,6 +9,9 @@ public class JitterBufferTests
 {
     private static AudioFrame Frame() => new(new short[2], 48_000, 1);
 
+    /// <summary>Creates a frame whose duration is exactly <paramref name="ms"/> milliseconds.</summary>
+    private static AudioFrame FrameMs(int ms) => new(new short[48 * ms], 48_000, 1);
+
     [Fact]
     public void Enqueue_ThenDequeue_ReturnsFrameInOrder()
     {
@@ -77,6 +80,69 @@ public class JitterBufferTests
     public void Constructor_ZeroCapacity_Throws()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new JitterBuffer(0));
+    }
+
+    // ── TotalDuration ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TotalDuration_StartsAtZero()
+    {
+        Assert.Equal(TimeSpan.Zero, new JitterBuffer().TotalDuration);
+    }
+
+    [Fact]
+    public void TotalDuration_AccumulatesOnEnqueue()
+    {
+        var buf = new JitterBuffer();
+        buf.Enqueue(1, FrameMs(20));
+        buf.Enqueue(2, FrameMs(20));
+
+        Assert.Equal(TimeSpan.FromMilliseconds(40), buf.TotalDuration);
+    }
+
+    [Fact]
+    public void TotalDuration_DecreasesOnDequeue()
+    {
+        var buf = new JitterBuffer();
+        buf.Enqueue(1, FrameMs(20));
+        buf.Enqueue(2, FrameMs(20));
+        buf.TryDequeue(out _, out _);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(20), buf.TotalDuration);
+    }
+
+    [Fact]
+    public void TotalDuration_ZeroAfterClear()
+    {
+        var buf = new JitterBuffer();
+        buf.Enqueue(1, FrameMs(20));
+        buf.Enqueue(2, FrameMs(20));
+        buf.Clear();
+
+        Assert.Equal(TimeSpan.Zero, buf.TotalDuration);
+    }
+
+    [Fact]
+    public void TotalDuration_LateFrameNotCounted()
+    {
+        var buf = new JitterBuffer();
+        buf.Enqueue(10, FrameMs(20));
+        buf.TryDequeue(out _, out _); // cursor advances past 10
+
+        buf.Enqueue(5, FrameMs(20)); // late — dropped
+
+        Assert.Equal(TimeSpan.Zero, buf.TotalDuration);
+    }
+
+    [Fact]
+    public void TotalDuration_EvictedFrameNotCounted()
+    {
+        var buf = new JitterBuffer(capacity: 2);
+        buf.Enqueue(1, FrameMs(20));
+        buf.Enqueue(2, FrameMs(20));
+        buf.Enqueue(3, FrameMs(20)); // evicts timestamp 1
+
+        Assert.Equal(TimeSpan.FromMilliseconds(40), buf.TotalDuration);
     }
 
     // ── Concurrent-access stress ───────────────────────────────────────────────
