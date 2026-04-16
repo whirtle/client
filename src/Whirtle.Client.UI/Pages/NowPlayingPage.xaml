@@ -22,10 +22,8 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" Loaded="Page_Loaded">
         <StackPanel
-            Padding="24"
-            Spacing="16"
-            MaxWidth="860"
-            HorizontalAlignment="Center">
+            Padding="10,24"
+            Spacing="16">
 
             <!-- Invisible focus absorber: receives initial keyboard focus so no
                  interactive control appears highlighted when the page first loads. -->

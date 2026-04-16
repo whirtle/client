@@ -20,9 +20,8 @@ namespace Whirtle.Client.UI;
 
 public sealed partial class MainWindow : Window
 {
-    private bool      _hideOnClose    = false;
-    private bool      _isShuttingDown = false;
-    private SizeInt32 _lastClientSize;
+    private bool _hideOnClose    = false;
+    private bool _isShuttingDown = false;
 
     // Kept alive for the lifetime of the window (MicaController requires it).
     private MicaController?              _micaController;
@@ -61,47 +60,35 @@ public sealed partial class MainWindow : Window
         titleBar.ButtonPressedForegroundColor  = Colors.White;
         titleBar.ButtonInactiveForegroundColor = Colors.White;
 
-        // Prevent manual resizing and maximising; window size is driven by content.
+        // Prevent manual resizing and maximising; window has a fixed logical size.
         if (AppWindow.Presenter is OverlappedPresenter op)
         {
             op.IsResizable   = false;
             op.IsMaximizable = false;
         }
 
-        // Anchor the width; height will be set by FitWindowToContent once the
-        // content has laid out.  ResizeClient targets the XAML client area so
-        // the measurement is consistent with ExtendsContentIntoTitleBar = true.
-        AppWindow.ResizeClient(new SizeInt32(480, 480));
         RestoreWindowPosition();
 
-        // Refit whenever the root content changes size (e.g. first layout pass,
-        // FRE scrim appearing/disappearing, dynamic content changes).
-        ((FrameworkElement)Content).SizeChanged += (_, _) => FitWindowToContent();
+        // Resize once after Activate() places the window on a monitor — that
+        // is the earliest point at which XamlRoot.RasterizationScale is valid
+        // and we can compute the correct physical pixel count for the target
+        // logical size.  The pattern mirrors what App.xaml.cs does for the
+        // firewall check.
+        void OnFirstActivated(object sender, WindowActivatedEventArgs e)
+        {
+            Activated -= OnFirstActivated;
+            var scale = ((FrameworkElement)Content).XamlRoot?.RasterizationScale ?? 1.0;
+            AppWindow.Resize(new SizeInt32(
+                (int)Math.Ceiling(400 * scale),
+                (int)Math.Ceiling(550 * scale)));
+        }
+        Activated += OnFirstActivated;
 
         ContentFrame.Navigate(typeof(NowPlayingPage));
 
         AppWindow.Closing += AppWindow_Closing;
 
         TrayIcon.DoubleClickCommand = new RelayCommand(RestoreFromTray);
-    }
-
-    // ── Content-driven sizing ──────────────────────────────────────────────
-
-    /// <summary>
-    /// Resizes the window client area to exactly fit the measured root content.
-    /// Guarded by <see cref="_lastClientSize"/> to avoid a feedback loop where
-    /// <see cref="AppWindow.ResizeClient"/> triggers another SizeChanged.
-    /// </summary>
-    private void FitWindowToContent()
-    {
-        var root  = (FrameworkElement)Content;
-        var scale = root.XamlRoot?.RasterizationScale ?? 1.0;
-        int w = (int)Math.Ceiling(root.ActualWidth  * scale);
-        int h = (int)Math.Ceiling(root.ActualHeight * scale);
-        if (w <= 0 || h <= 0) return;
-        if (w == _lastClientSize.Width && h == _lastClientSize.Height) return;
-        _lastClientSize = new SizeInt32(w, h);
-        AppWindow.ResizeClient(_lastClientSize);
     }
 
     // ── Mica backdrop ──────────────────────────────────────────────────────
