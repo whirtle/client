@@ -337,7 +337,7 @@ public sealed class PlayerClient : IAsyncDisposable
                 break;
 
             case "set_static_delay" when cmd.StaticDelayMs.HasValue:
-                _staticDelayMs = Math.Clamp(cmd.StaticDelayMs.Value, 0, 5_000);
+                _staticDelayMs = Math.Clamp(cmd.StaticDelayMs.Value, -500, 5_000);
                 // Frames already in the buffer carry the old adjusted timestamp and
                 // would produce a burst of incorrect drift readings. Flush them so the
                 // engine re-buffers with timestamps adjusted by the new delay value.

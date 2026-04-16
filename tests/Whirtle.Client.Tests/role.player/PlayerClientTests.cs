@@ -117,7 +117,7 @@ public class PlayerClientTests
     }
 
     [Fact]
-    public async Task ProcessFrameAsync_SetStaticDelayCommand_Clamps0To5000()
+    public async Task ProcessFrameAsync_SetStaticDelayCommand_ClampsUpperBoundTo5000()
     {
         var (player, _, _) = Build();
 
@@ -125,6 +125,17 @@ public class PlayerClientTests
             new ServerCommandMessage(Player: new ServerCommandPlayer("set_static_delay", StaticDelayMs: 9999))));
 
         Assert.Equal(5_000, player.StaticDelayMs);
+    }
+
+    [Fact]
+    public async Task ProcessFrameAsync_SetStaticDelayCommand_ClampsLowerBoundToNeg500()
+    {
+        var (player, _, _) = Build();
+
+        await player.ProcessFrameAsync(new ProtocolFrame(
+            new ServerCommandMessage(Player: new ServerCommandPlayer("set_static_delay", StaticDelayMs: -9999))));
+
+        Assert.Equal(-500, player.StaticDelayMs);
     }
 
     [Fact]
