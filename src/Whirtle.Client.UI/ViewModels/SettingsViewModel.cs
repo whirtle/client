@@ -112,7 +112,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnCurrentDeviceStaticDelayMsChanged(int value)
     {
-        if (value < 0) CurrentDeviceStaticDelayMs = 0;
+        if (value < -500) CurrentDeviceStaticDelayMs = -500;
     }
 
     partial void OnTermsAcceptedChanged(bool value)

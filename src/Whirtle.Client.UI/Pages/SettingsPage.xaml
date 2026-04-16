@@ -104,14 +104,14 @@ Background="Transparent">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Static delay (ms)" Style="{StaticResource SettingLabelStyle}" />
                                     <NumberBox
-                                        Minimum="0"
+                                        Minimum="-500"
                                         Maximum="5000"
                                         SmallChange="10"
                                         LargeChange="100"
                                         SpinButtonPlacementMode="Inline"
                                         Value="{x:Bind ViewModel.CurrentDeviceStaticDelayMs, Mode=TwoWay}" />
                                     <TextBlock
-                                        Text="Positive values delay this client relative to the group (room correction)."
+                                        Text="Positive values delay this client relative to the group (room correction). Negative values advance it."
                                         Style="{ThemeResource CaptionTextBlockStyle}"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 </StackPanel>
