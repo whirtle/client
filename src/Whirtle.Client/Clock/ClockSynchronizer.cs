@@ -51,6 +51,10 @@ public sealed class ClockSynchronizer
     private sealed record PendingSync(long T0, TaskCompletionSource<ClockSyncResult> Tcs);
     private PendingSync? _pending;
 
+    // Non-null while a caller is waiting for clock convergence.
+    private TaskCompletionSource<bool>? _convergenceTcs;
+    private double _convergenceTargetUs;
+
     public ClockSynchronizer(ProtocolClient client)
         : this(client, SystemClock.Instance) { }
 
@@ -118,6 +122,30 @@ public sealed class ClockSynchronizer
     }
 
     /// <summary>
+    /// Returns a task that completes when <see cref="RunAsync"/>'s Kalman filter
+    /// estimate has converged to within <paramref name="targetStdDevUs"/> microseconds,
+    /// or when <paramref name="timeout"/> elapses. The task result is
+    /// <see langword="true"/> on convergence, <see langword="false"/> on timeout.
+    /// Must be called before <see cref="RunAsync"/> to avoid missing early results.
+    /// </summary>
+    public Task<bool> WaitForConvergenceAsync(
+        double            targetStdDevUs,
+        TimeSpan          timeout,
+        CancellationToken cancellationToken = default)
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _convergenceTcs      = tcs;
+        _convergenceTargetUs = targetStdDevUs;
+
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(timeout);
+        cts.Token.Register(
+            () => tcs.TrySetResult(false), useSynchronizationContext: false);
+
+        return tcs.Task;
+    }
+
+    /// <summary>
     /// Continuously syncs the clock, invoking <paramref name="onSync"/> after each
     /// successful measurement. Throws <see cref="OperationCanceledException"/> when
     /// <paramref name="cancellationToken"/> is cancelled.
@@ -148,7 +176,7 @@ public sealed class ClockSynchronizer
             {
                 var result = await SyncOnceAsync(cancellationToken).ConfigureAwait(false);
                 FeedFilter(result);
-                onSync(result, GetStats());
+                NotifySync(result, onSync);
             }
             catch (OperationCanceledException) { cancellationToken.ThrowIfCancellationRequested(); }
             catch { /* transient failure — continue */ }
@@ -172,7 +200,7 @@ public sealed class ClockSynchronizer
             {
                 var result = await SyncOnceAsync(cancellationToken).ConfigureAwait(false);
                 FeedFilter(result);
-                onSync(result, GetStats());
+                NotifySync(result, onSync);
             }
             catch (OperationCanceledException)
             {
@@ -201,6 +229,22 @@ public sealed class ClockSynchronizer
 
     // Interval between rapid syncs.
     private static readonly TimeSpan RapidSyncInterval = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    /// Calls <paramref name="onSync"/> with the latest filter snapshot and, if a
+    /// convergence waiter is pending, signals it when the standard deviation has
+    /// dropped below the target.
+    /// </summary>
+    private void NotifySync(ClockSyncResult result, Action<ClockSyncResult, ClockSyncStats> onSync)
+    {
+        var stats = GetStats();
+        onSync(result, stats);
+        if (_convergenceTcs is { Task.IsCompleted: false } tcs &&
+            stats.OffsetStdDevUs < _convergenceTargetUs)
+        {
+            tcs.TrySetResult(true);
+        }
+    }
 
     /// <summary>
     /// Feeds a completed sync measurement into the Kalman filter and logs a

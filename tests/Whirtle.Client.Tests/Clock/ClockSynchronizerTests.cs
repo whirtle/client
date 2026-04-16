@@ -257,6 +257,69 @@ public class ClockSynchronizerTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => runTask);
     }
 
+    // ── WaitForConvergenceAsync ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task WaitForConvergenceAsync_ReturnsFalse_OnTimeout()
+    {
+        var (syncer, _, _) = Build();
+
+        // targetStdDevUs is impossibly small — the filter will never converge that fast.
+        var result = await syncer.WaitForConvergenceAsync(
+            targetStdDevUs: 0.001,
+            timeout: TimeSpan.FromMilliseconds(50));
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task WaitForConvergenceAsync_ReturnsFalse_WhenCancelled()
+    {
+        var (syncer, _, _) = Build();
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
+
+        var result = await syncer.WaitForConvergenceAsync(
+            targetStdDevUs: 0.001,
+            timeout: TimeSpan.FromSeconds(60),
+            cancellationToken: cts.Token);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task WaitForConvergenceAsync_ReturnsTrue_WhenStdDevDropsBelowTarget()
+    {
+        // After a few rapid syncs with a symmetric 200 µs RTT the filter's std-dev
+        // drops well below 200_000 µs (200 ms), so the convergence task must complete.
+        var (syncer, clock, _) = Build(rapidSyncInterval: TimeSpan.FromMilliseconds(5));
+        clock.Set(0);
+        using var cts = new CancellationTokenSource();
+
+        // Register convergence waiter BEFORE starting RunAsync.
+        var convergenceTask = syncer.WaitForConvergenceAsync(
+            targetStdDevUs: 200_000, timeout: TimeSpan.FromSeconds(5));
+
+        var runTask = syncer.RunAsync(
+            (_, _) => { },
+            interval: TimeSpan.FromHours(1),
+            cancellationToken: cts.Token);
+
+        // Deliver three symmetric replies so the Kalman filter converges.
+        for (int i = 0; i < 3; i++)
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            while (!syncer.Deliver(Reply(0, 100)))
+                await Task.Delay(1, deadline.Token);
+            await Task.Delay(10);
+        }
+
+        var converged = await convergenceTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(converged);
+
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => runTask);
+    }
+
     [Fact]
     public async Task RunAsync_StatsFilteredOffset_ReflectsKalmanEstimate()
     {
