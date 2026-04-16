@@ -1,2 +1,2 @@
-MainPackage=C:\src\whirtle\client\UIClientPackaging\bin\x64\Release\UIClientPackaging_0.1.3.0_x64.msix
-SymbolPackage=C:\src\whirtle\client\UIClientPackaging\obj\x64\Release\Symbols\UIClientPackaging_0.1.3.0_x64.appxsym
+MainPackage=C:\src\whirtle\client\UIClientPackaging\bin\x64\Release\UIClientPackaging_0.1.5.0_x64.msix
+SymbolPackage=C:\src\whirtle\client\UIClientPackaging\obj\x64\Release\Symbols\UIClientPackaging_0.1.5.0_x64.appxsym
