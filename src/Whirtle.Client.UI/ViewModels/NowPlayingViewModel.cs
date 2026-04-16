@@ -182,13 +182,13 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         get
         {
-            int    frames = _statBufferedFrames;
-            double ms     = _statBufferedDuration.TotalMilliseconds;
+            int    frames = StatBufferedFrames;
+            double ms     = StatBufferedDuration.TotalMilliseconds;
             return $"Buffer: {frames} frame{(frames == 1 ? "" : "s")} · {ms:0} ms";
         }
     }
 
-    public string ChunksDisplay => $"Chunks received: {_statTotalChunks:N0}";
+    public string ChunksDisplay => $"Chunks received: {StatTotalChunks:N0}";
 
     /// <summary>
     /// Text shown in the status-bar server button.
@@ -200,20 +200,20 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         get
         {
-            if (_serverName is not null) return _serverName;
+            if (ServerName is not null) return ServerName;
             return _settings.ConnectionMode == ConnectionMode.ServerInitiated
                 ? "Automatically connect"
                 : "Select a server";
         }
     }
 
-    public int     VolumePercent      => (int)(_volume * 100);
-    public string  PlayPauseGlyph     => _isPlaying ? "\uE769" : "\uE768"; // Pause : Play
-    public string  PlayPauseTooltip   => _isPlaying ? "Pause"  : "Play";
-    public string  VolumeGlyph        => _isMuted   ? "\uE74F" : "\uE767"; // Muted : Speaker
-    public string  MuteButtonTooltip  => _isMuted   ? "Unmute" : "Mute";
-    public bool    IsNotConnected     => !_isConnected;
-    public Visibility DisconnectVisibility => _isConnected ? Visibility.Visible : Visibility.Collapsed;
+    public int     VolumePercent      => (int)(Volume * 100);
+    public string  PlayPauseGlyph     => IsPlaying ? "\uE769" : "\uE768"; // Pause : Play
+    public string  PlayPauseTooltip   => IsPlaying ? "Pause"  : "Play";
+    public string  VolumeGlyph        => IsMuted   ? "\uE74F" : "\uE767"; // Muted : Speaker
+    public string  MuteButtonTooltip  => IsMuted   ? "Unmute" : "Mute";
+    public bool    IsNotConnected     => !IsConnected;
+    public Visibility DisconnectVisibility => IsConnected ? Visibility.Visible : Visibility.Collapsed;
 
     public InfoBarSeverity ConnectionInfoSeverity
         => IsConnected ? InfoBarSeverity.Success : InfoBarSeverity.Informational;
@@ -256,8 +256,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 OnPropertyChanged(nameof(ServerPickerLabel));
         };
 
-        _volume  = _settings.Volume;
-        _isMuted = _settings.IsMuted;
+        Volume  = _settings.Volume;
+        IsMuted = _settings.IsMuted;
 
         _connectionManager.LastPlayedServerId = _settings.LastPlayedServerId;
 
