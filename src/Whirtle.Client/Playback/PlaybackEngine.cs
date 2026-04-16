@@ -56,6 +56,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
     private Task                    _renderTask = Task.CompletedTask;
     private bool                    _userMuted   = false;
     private bool                    _engineMuted = false;
+    private int                     _bufferUnderrunCount;
 
     // Adaptive ahead-buffer state (render-loop-only; no volatile needed)
     private int _aheadTargetMs  = TargetAheadMs;
@@ -69,6 +70,9 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     /// <summary>Total audio duration currently held in the jitter buffer.</summary>
     public TimeSpan BufferedAudioDuration => _buffer.TotalDuration;
+
+    /// <summary>Number of times playback entered the error state due to the jitter buffer being empty.</summary>
+    public int BufferUnderrunCount => _bufferUnderrunCount;
 
     /// <summary>Current ahead-of-volume buffer target in milliseconds. Normally <see cref="TargetAheadMs"/>; increases temporarily under CPU pressure.</summary>
     internal int AheadTargetMs => _aheadTargetMs;
@@ -237,6 +241,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
             }
             long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
             Log.Warning("Playback underrun — jitter buffer empty (estServerNow={ServerNowUs} μs)", serverNowUs);
+            _bufferUnderrunCount++;
             await EnterErrorAsync(ct);
             return;
         }

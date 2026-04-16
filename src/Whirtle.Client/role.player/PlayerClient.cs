@@ -67,6 +67,9 @@ public sealed class PlayerClient : IAsyncDisposable
     /// <summary>Total number of audio chunks received since the current stream started.</summary>
     public long TotalChunksReceived => _totalChunksReceived;
 
+    /// <summary>Number of buffer underruns (jitter buffer empty during playback) since the current stream started.</summary>
+    public int BufferUnderrunCount => _playbackEngine?.BufferUnderrunCount ?? 0;
+
     /// <summary>
     /// Returns a snapshot of per-codec statistics accumulated since the current stream started.
     /// </summary>
