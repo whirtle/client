@@ -45,6 +45,15 @@ public sealed class ClockSynchronizer
     // Rolling window of recent measurements. Accessed only from RunAsync's single loop.
     private readonly Queue<ClockSyncResult> _window = new(WindowSize);
 
+    // Stats counters — accessed only from RunAsync's single async loop; no locking needed.
+    private int  _sampleCount  = 0;
+    private int  _outlierCount = 0;
+    private long _lastSyncUtcUs = 0;
+
+    // Parallel time series for drift estimation: (timestampUs, offsetUs) for each
+    // accepted sample.  Evicted in lock-step with _window.
+    private readonly Queue<(long TimestampUs, long OffsetUs)> _timeSeries = new(WindowSize);
+
     // Non-null while a sync is waiting for the server reply.
     private sealed record PendingSync(long T0, TaskCompletionSource<ClockSyncResult> Tcs);
     private PendingSync? _pending;
@@ -134,9 +143,9 @@ public sealed class ClockSynchronizer
     /// will time out and be retried.
     /// </remarks>
     public async Task RunAsync(
-        Action<ClockSyncResult> onSync,
-        TimeSpan?               interval          = null,
-        CancellationToken       cancellationToken = default)
+        Action<ClockSyncResult, ClockSyncStats> onSync,
+        TimeSpan?                               interval          = null,
+        CancellationToken                       cancellationToken = default)
     {
         var period = interval ?? DefaultInterval;
 
@@ -147,7 +156,8 @@ public sealed class ClockSynchronizer
             try
             {
                 var result = await SyncOnceAsync(cancellationToken).ConfigureAwait(false);
-                onSync(AcceptResult(result));
+                var best   = AcceptResult(result);
+                onSync(best, GetStats());
             }
             catch (OperationCanceledException) { cancellationToken.ThrowIfCancellationRequested(); }
             catch { /* transient failure — continue to next rapid round */ }
@@ -170,7 +180,8 @@ public sealed class ClockSynchronizer
             try
             {
                 var result = await SyncOnceAsync(cancellationToken).ConfigureAwait(false);
-                onSync(AcceptResult(result));
+                var best   = AcceptResult(result);
+                onSync(best, GetStats());
             }
             catch (OperationCanceledException)
             {
@@ -214,19 +225,78 @@ public sealed class ClockSynchronizer
                     "Clock sync: discarding high-RTT sample ({Rtt} μs > 2×median {Median} μs)",
                     (long)raw.RoundTripTime.TotalMicroseconds,
                     (long)median.TotalMicroseconds);
+                _outlierCount++;
                 return _window.MinBy(r => r.RoundTripTime)!;
             }
         }
 
+        var nowUs = _clock.UtcNowMicroseconds;
+
         if (_window.Count >= WindowSize)
+        {
             _window.Dequeue();
+            _timeSeries.Dequeue();
+        }
         _window.Enqueue(raw);
+        _timeSeries.Enqueue((nowUs, (long)raw.ClockOffset.TotalMicroseconds));
+
+        _sampleCount++;
+        _lastSyncUtcUs = nowUs;
 
         var sortedWindow = _window.Select(r => r.RoundTripTime).OrderBy(x => x).ToList();
         var medianRtt = sortedWindow[sortedWindow.Count / 2];
         Log.Debug("Clock sync: median RTT {MedianRtt} μs", (long)medianRtt.TotalMicroseconds);
 
         return _window.MinBy(r => r.RoundTripTime)!;
+    }
+
+    /// <summary>
+    /// Returns a snapshot of synchronisation statistics for the current window.
+    /// Safe to call from any thread, but intended for use inside the
+    /// <see cref="RunAsync"/> loop or from the <c>onSync</c> callback.
+    /// </summary>
+    internal ClockSyncStats GetStats()
+    {
+        var meanOffset = _window.Count > 0
+            ? TimeSpan.FromMicroseconds(_window.Average(r => r.ClockOffset.TotalMicroseconds))
+            : TimeSpan.Zero;
+
+        return new ClockSyncStats(
+            MeanOffset:                  meanOffset,
+            SampleCount:                 _sampleCount,
+            LastSyncUtcMicroseconds:     _lastSyncUtcUs,
+            OutlierCount:                _outlierCount,
+            DriftMicrosecondsPerSecond:  ComputeDrift());
+    }
+
+    /// <summary>
+    /// Estimates clock drift as the least-squares slope of the time series of
+    /// (timestamp, offset) pairs, converted to µs of offset change per second.
+    /// Returns zero when fewer than two accepted samples are available.
+    /// </summary>
+    private double ComputeDrift()
+    {
+        if (_timeSeries.Count < 2) return 0.0;
+
+        // Subtract the mean timestamp first to keep the arithmetic well-conditioned
+        // (raw µs-since-epoch values are ~10^15, which would cause precision loss
+        // when squaring in double arithmetic).
+        double tMean = _timeSeries.Average(p => (double)p.TimestampUs);
+        double oMean = _timeSeries.Average(p => (double)p.OffsetUs);
+
+        double num = 0.0;
+        double den = 0.0;
+        foreach (var (ts, os) in _timeSeries)
+        {
+            double dt = ts - tMean;
+            num += dt * (os - oMean);
+            den += dt * dt;
+        }
+
+        if (den == 0.0) return 0.0;
+
+        // slope is (µs offset) / (µs time); multiply by 1_000_000 → µs/s.
+        return (num / den) * 1_000_000.0;
     }
 
     private static ClockSyncResult Compute(long t0, long t1, long t2)
