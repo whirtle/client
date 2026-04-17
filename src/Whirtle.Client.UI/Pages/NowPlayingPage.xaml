@@ -151,13 +151,11 @@
                                     own internal value management.  IsHitTestVisible="False"
                                     and IsTabStop="False" make it non-interactive.
                                 -->
-                                <Slider
+                                <ProgressBar
                                     Grid.Column="1"
                                     x:Name="SeekBar"
                                     Minimum="0"
-                                    VerticalAlignment="Center"
-                                    IsHitTestVisible="False"
-                                    IsTabStop="False" />
+                                    VerticalAlignment="Center" />
 
                                 <TextBlock
                                     Grid.Column="2"
