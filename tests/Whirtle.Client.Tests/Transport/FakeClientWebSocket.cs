@@ -14,6 +14,8 @@ internal sealed class FakeClientWebSocket : IClientWebSocket
     private TaskCompletionSource? _connectBlock;
 
     public WebSocketState State => _state;
+    public WebSocketCloseStatus? CloseStatus => null;
+    public string? CloseStatusDescription => null;
 
     public void EnqueueMessage(byte[] data, WebSocketMessageType type = WebSocketMessageType.Binary)
         => _incoming.Writer.TryWrite(new Queued(data, type, null));

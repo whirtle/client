@@ -3,6 +3,7 @@
 
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
+using Serilog;
 
 namespace Whirtle.Client.Transport;
 
@@ -76,7 +77,12 @@ public sealed class WebSocketTransport : ITransport, IAsyncDisposable
                 result = await _webSocket.ReceiveAsync(buffer, cancellationToken).ConfigureAwait(false);
 
                 if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    Log.Debug("WebSocket closed by remote: status={CloseStatus} description={Description}",
+                        _webSocket.CloseStatus?.ToString() ?? "None",
+                        _webSocket.CloseStatusDescription ?? "");
                     yield break;
+                }
 
                 message.Write(buffer, 0, result.Count);
             }
