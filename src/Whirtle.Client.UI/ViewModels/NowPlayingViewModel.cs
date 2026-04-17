@@ -1027,11 +1027,21 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                         break;
                 }
             }
+            // Server closed the WebSocket cleanly — treat as a disconnect.
+            Log.Information("Server closed the connection: server={ServerId} ({ServerName})",
+                _connectionManager.CurrentServerId, ServerName);
+            _connectionManager.Clear();
+            _dispatcher.TryEnqueue(() =>
+            {
+                IsConnected      = false;
+                ConnectionStatus = "Disconnected";
+            });
         }
         catch (OperationCanceledException) { /* normal shutdown */ }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Connection lost");
+            Log.Warning(ex, "Connection lost: server={ServerId} ({ServerName})",
+                _connectionManager.CurrentServerId, ServerName);
             // Clear the connection manager so that the next incoming server-initiated
             // connection is not incorrectly rejected due to a stale server ID.
             // This matters when the server restarts with a new ID: without the clear,
@@ -1043,6 +1053,15 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 IsConnected      = false;
                 ConnectionStatus = "Connection lost";
             });
+        }
+        finally
+        {
+            // Null out _controller so that PlayAsync / PauseAsync guards
+            // (if (_controller is null) return) fire correctly if the transport
+            // is gone before a new connection arrives. TearDownSessionAsync also
+            // clears this during proper shutdown — nulling here is safe because
+            // TearDownSessionAsync awaits this task before reassigning it.
+            _controller = null;
         }
     }
 

@@ -16,6 +16,8 @@ internal sealed class SystemClientWebSocket : IClientWebSocket
     }
 
     public WebSocketState State => _inner.State;
+    public WebSocketCloseStatus? CloseStatus => _inner.CloseStatus;
+    public string? CloseStatusDescription => _inner.CloseStatusDescription;
 
     public Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
         => _inner.ConnectAsync(uri, cancellationToken);

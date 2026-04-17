@@ -8,6 +8,8 @@ namespace Whirtle.Client.Transport;
 internal interface IClientWebSocket : IDisposable
 {
     WebSocketState State { get; }
+    WebSocketCloseStatus? CloseStatus { get; }
+    string? CloseStatusDescription { get; }
     Task ConnectAsync(Uri uri, CancellationToken cancellationToken);
     ValueTask SendAsync(ReadOnlyMemory<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken);
     ValueTask<ValueWebSocketReceiveResult> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken);

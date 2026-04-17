@@ -23,6 +23,8 @@ internal sealed class AcceptedWebSocket : IClientWebSocket
     }
 
     public WebSocketState State => _ws.State;
+    public WebSocketCloseStatus? CloseStatus => _ws.CloseStatus;
+    public string? CloseStatusDescription => _ws.CloseStatusDescription;
 
     public Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
         => Task.CompletedTask; // already connected
