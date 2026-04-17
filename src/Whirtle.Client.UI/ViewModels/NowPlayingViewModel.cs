@@ -29,10 +29,16 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private Task _receiveLoopTask = Task.CompletedTask;
     private Task _syncTask        = Task.CompletedTask;
 
+    // ── Clock-convergence thresholds ──────────────────────────────────────────
+    /// <summary>Offset standard-deviation target (µs) used by <see cref="ClockSynchronizer.WaitForConvergenceAsync"/>.</summary>
+    private const int ClockConvergenceTargetStdDevUs = 20_000;  // 20 ms
+    /// <summary>Maximum seconds to wait for convergence before relying on whatever offset we have.</summary>
+    private const int ClockConvergenceTimeoutSeconds  = 5;
+
     // Metadata state and seek-bar tick
     private readonly NowPlayingState _nowPlaying = new();
     private TimeSpan _serverClockOffset;                         // updated by sync loop
-    private volatile bool _clockConverged;                       // set when sync error drops below threshold (or timeout)
+    private volatile bool _clockReady;                           // true once we rely on the clock (converged or timed out)
     private ClockSyncStats? _latestClockStats;                   // most recent stats from sync loop
     private readonly DispatcherTimer _positionTimer;             // advances seek bar
 
@@ -111,8 +117,16 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     // ── Connection ─────────────────────────────────────────────────────────
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsNotConnected), nameof(DisconnectVisibility), nameof(ConnectionInfoSeverity), nameof(TrayTooltip))]
+    [NotifyPropertyChangedFor(nameof(IsNotConnected), nameof(DisconnectVisibility), nameof(ConnectionInfoSeverity), nameof(TrayTooltip), nameof(IsPlayEnabled))]
     private bool _isConnected;
+
+    /// <summary>True once the clock is ready for playback — either it converged within the target or the timeout expired.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPlayEnabled))]
+    private bool _isClockReady;
+
+    /// <summary>True once the clock actually converged within the target (not just timed out).</summary>
+    [ObservableProperty] private bool _isClockConverged;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TrayTooltip))]
@@ -216,6 +230,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     public string  VolumeGlyph        => IsMuted   ? "\uE74F" : "\uE767"; // Muted : Speaker
     public string  MuteButtonTooltip  => IsMuted   ? "Unmute" : "Mute";
     public bool    IsNotConnected     => !IsConnected;
+    public bool    IsPlayEnabled      => IsConnected && IsClockReady;
     public Visibility DisconnectVisibility => IsConnected ? Visibility.Visible : Visibility.Collapsed;
 
     public InfoBarSeverity ConnectionInfoSeverity
@@ -352,20 +367,31 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             // Start background tasks — receive loop routes server/time to the syncer.
             _receiveLoopTask = ReceiveLoopAsync(token);
 
-            // Gate playback until the clock error drops below 20 ms (or 5 s elapses).
+            // Gate playback until the clock error drops below the convergence target (or the timeout elapses).
             var convergenceSw = System.Diagnostics.Stopwatch.StartNew();
             var convergenceTask = _syncer.WaitForConvergenceAsync(
-                targetStdDevUs: 20_000, TimeSpan.FromSeconds(5), token);
+                targetStdDevUs: ClockConvergenceTargetStdDevUs,
+                TimeSpan.FromSeconds(ClockConvergenceTimeoutSeconds), token);
             _ = convergenceTask.ContinueWith(t =>
                 {
                     convergenceSw.Stop();
-                    if (t.Result)
-                        Log.Information("Clock synchronised to <20 ms in {ElapsedMs:F0} ms", convergenceSw.Elapsed.TotalMilliseconds);
+                    bool converged = t.Result;
+                    if (converged)
+                        Log.Information(
+                            "Clock synchronised to <{TargetMs} ms in {ElapsedMs:F0} ms",
+                            ClockConvergenceTargetStdDevUs / 1_000, convergenceSw.Elapsed.TotalMilliseconds);
                     else
-                        Log.Warning("Clock did not converge within 5 s (elapsed {ElapsedMs:F0} ms) — starting playback anyway", convergenceSw.Elapsed.TotalMilliseconds);
-                    _clockConverged = true;
+                        Log.Warning(
+                            "Clock did not converge within {TimeoutS} s (elapsed {ElapsedMs:F0} ms) — starting playback anyway",
+                            ClockConvergenceTimeoutSeconds, convergenceSw.Elapsed.TotalMilliseconds);
+                    _clockReady = true;
                     if (_latestClockStats is { } s && _player is { } p)
                         p.UpdateClockOffset(s.FilteredOffset);
+                    _dispatcher.TryEnqueue(() =>
+                    {
+                        IsClockReady    = true;
+                        IsClockConverged = converged;
+                    });
                 }, TaskScheduler.Default);
 
             _syncTask = _syncer.RunAsync(
@@ -374,7 +400,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                     _lastRtt           = r.RoundTripTime;
                     _serverClockOffset = stats.FilteredOffset;
                     _latestClockStats  = stats;
-                    if (_clockConverged)
+                    if (_clockReady)
                         _player?.UpdateClockOffset(stats.FilteredOffset);
                     ClockStats.Update(stats);
                     _dispatcher.TryEnqueue(
@@ -518,7 +544,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _lastRtt             = TimeSpan.MaxValue;
         _lastBufferCount     = -1;
         _serverClockOffset   = TimeSpan.Zero;
-        _clockConverged      = false;
+        _clockReady          = false;
+        IsClockReady        = false;
+        IsClockConverged     = false;
         _latestClockStats    = null;
         ClockStats.Reset();
     }
@@ -804,20 +832,31 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         // Start background tasks — receive loop routes server/time to the syncer.
         _receiveLoopTask = ReceiveLoopAsync(_connectionCts.Token);
 
-        // Gate playback until the clock error drops below 20 ms (or 5 s elapses).
+        // Gate playback until the clock error drops below the convergence target (or the timeout elapses).
         var convergenceSw = System.Diagnostics.Stopwatch.StartNew();
         var convergenceTask = _syncer.WaitForConvergenceAsync(
-            targetStdDevUs: 20_000, TimeSpan.FromSeconds(5), _connectionCts.Token);
+            targetStdDevUs: ClockConvergenceTargetStdDevUs,
+            TimeSpan.FromSeconds(ClockConvergenceTimeoutSeconds), _connectionCts.Token);
         _ = convergenceTask.ContinueWith(t =>
             {
                 convergenceSw.Stop();
-                if (t.Result)
-                    Log.Information("Clock synchronised to <20 ms in {ElapsedMs:F0} ms", convergenceSw.Elapsed.TotalMilliseconds);
+                bool converged = t.Result;
+                if (converged)
+                    Log.Information(
+                        "Clock synchronised to <{TargetMs} ms in {ElapsedMs:F0} ms",
+                        ClockConvergenceTargetStdDevUs / 1_000, convergenceSw.Elapsed.TotalMilliseconds);
                 else
-                    Log.Warning("Clock did not converge within 5 s (elapsed {ElapsedMs:F0} ms) — starting playback anyway", convergenceSw.Elapsed.TotalMilliseconds);
-                _clockConverged = true;
+                    Log.Warning(
+                        "Clock did not converge within {TimeoutS} s (elapsed {ElapsedMs:F0} ms) — starting playback anyway",
+                        ClockConvergenceTimeoutSeconds, convergenceSw.Elapsed.TotalMilliseconds);
+                _clockReady = true;
                 if (_latestClockStats is { } s && _player is { } p)
                     p.UpdateClockOffset(s.FilteredOffset);
+                _dispatcher.TryEnqueue(() =>
+                {
+                    IsClockReady    = true;
+                    IsClockConverged = converged;
+                });
             }, TaskScheduler.Default);
 
         _syncTask = _syncer.RunAsync(
@@ -826,7 +865,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 _lastRtt           = r.RoundTripTime;
                 _serverClockOffset = stats.FilteredOffset;
                 _latestClockStats  = stats;
-                if (_clockConverged)
+                if (_clockReady)
                     _player?.UpdateClockOffset(stats.FilteredOffset);
                 ClockStats.Update(stats);
                 _dispatcher.TryEnqueue(

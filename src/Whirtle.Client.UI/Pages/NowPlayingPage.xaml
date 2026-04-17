@@ -110,7 +110,7 @@
                                     CornerRadius="17"
                                     Style="{ThemeResource AccentButtonStyle}"
                                     ToolTipService.ToolTip="{x:Bind ViewModel.PlayPauseTooltip, Mode=OneWay}"
-                                    IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
+                                    IsEnabled="{x:Bind ViewModel.IsPlayEnabled, Mode=OneWay}"
                                     Command="{x:Bind ViewModel.PlayPauseCommand}">
                                     <FontIcon
                                         Glyph="{x:Bind ViewModel.PlayPauseGlyph, Mode=OneWay}"

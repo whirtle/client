@@ -52,7 +52,7 @@ public sealed class PlayerClient : IAsyncDisposable
     private int    _volume;
     private bool   _muted;
     private int    _staticDelayMs = 0;
-    private string _playerState   = "synchronized";
+    private string _playerState   = "buffering";
 
     // ── Codec statistics ──────────────────────────────────────────────────────
     private long _totalChunksReceived;

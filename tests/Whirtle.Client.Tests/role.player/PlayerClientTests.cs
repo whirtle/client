@@ -331,6 +331,21 @@ public class PlayerClientTests
         Assert.Equal(1, player.BufferedFrameCount);
     }
 
+    // ── SendInitialRequestsAsync ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task SendInitialRequestsAsync_InitialState_IsBufferingNotSynchronized()
+    {
+        // The client must not report "synchronized" to the server until the clock has
+        // actually converged.  The initial client/state must carry "buffering".
+        var (player, transport, _) = Build();
+
+        await player.SendInitialRequestsAsync();
+
+        var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[0]);
+        Assert.Equal("buffering", state.State);
+    }
+
     // ── stream/end ────────────────────────────────────────────────────────────
 
     [Fact]
