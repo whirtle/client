@@ -74,23 +74,17 @@ public sealed partial class SettingsViewModel : ObservableObject
         Save();
     }
 
-    // ── Stats window bounds ────────────────────────────────────────────────
+    // ── Stats window position ─────────────────────────────────────────────
     private int? _statsWindowX;
     private int? _statsWindowY;
-    private int? _statsWindowWidth;
-    private int? _statsWindowHeight;
 
-    public int? StatsWindowX      => _statsWindowX;
-    public int? StatsWindowY      => _statsWindowY;
-    public int? StatsWindowWidth  => _statsWindowWidth;
-    public int? StatsWindowHeight => _statsWindowHeight;
+    public int? StatsWindowX => _statsWindowX;
+    public int? StatsWindowY => _statsWindowY;
 
-    public void SaveStatsWindowBounds(int x, int y, int width, int height)
+    public void SaveStatsWindowPosition(int x, int y)
     {
-        _statsWindowX      = x;
-        _statsWindowY      = y;
-        _statsWindowWidth  = width;
-        _statsWindowHeight = height;
+        _statsWindowX = x;
+        _statsWindowY = y;
         Save();
     }
 
@@ -323,8 +317,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             _logsWindowHeight       = saved.LogsWindowHeight;
             _statsWindowX           = saved.StatsWindowX;
             _statsWindowY           = saved.StatsWindowY;
-            _statsWindowWidth       = saved.StatsWindowWidth;
-            _statsWindowHeight      = saved.StatsWindowHeight;
             _volume                 = saved.Volume  ?? 0.8;
             _isMuted                = saved.IsMuted ?? false;
             _lastPlayedServerId     = saved.LastPlayedServerId;
@@ -456,9 +448,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                 _logsWindowHeight,
                 _lastPlayedServerId,
                 _statsWindowX,
-                _statsWindowY,
-                _statsWindowWidth,
-                _statsWindowHeight);
+                _statsWindowY);
 
             var json    = JsonSerializer.Serialize(data, JsonOptions);
             var tmpPath = SettingsPath + ".tmp";
@@ -499,7 +489,5 @@ public sealed partial class SettingsViewModel : ObservableObject
         int?                               LogsWindowHeight   = null,
         string?                            LastPlayedServerId  = null,
         int?                               StatsWindowX       = null,
-        int?                               StatsWindowY       = null,
-        int?                               StatsWindowWidth   = null,
-        int?                               StatsWindowHeight  = null);
+        int?                               StatsWindowY       = null);
 }

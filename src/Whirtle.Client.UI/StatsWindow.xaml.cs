@@ -5,6 +5,7 @@ using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Windows.Foundation;
 using Windows.Graphics;
 using WinRT;
 
@@ -24,8 +25,9 @@ public sealed partial class StatsWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(DragBar);
 
-        RestoreWindowBounds();
+        RestoreWindowPosition();
         TryApplyMica();
+        ((FrameworkElement)Content).Loaded += (_, _) => SizeToContent();
 
         // Closing the stats window should hide it, not destroy it, for the same
         // reason as LogsWindow: destroying it when MainWindow is hidden to the tray
@@ -34,7 +36,7 @@ public sealed partial class StatsWindow : Window
         {
             args.Cancel = true;
             App.Current.NowPlayingViewModel.ClockStats.StopTicker();
-            SaveWindowBounds();
+            SaveWindowPosition();
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             NativeWindow.ShowWindow(hwnd, NativeWindow.SW_HIDE);
         };
@@ -43,30 +45,37 @@ public sealed partial class StatsWindow : Window
     public void Show()
     {
         App.Current.NowPlayingViewModel.ClockStats.StartTicker();
+        SizeToContent();
         Activate();
         // Re-apply the saved position: Activate() calls ShowWindow(SW_SHOWNORMAL)
         // internally, which can reposition the window to a stale "normal" placement
         // rather than where it was when hidden.
+        RestoreWindowPosition();
+    }
+
+    private void RestoreWindowPosition()
+    {
         var settings = App.Current.SettingsViewModel;
         if (settings.StatsWindowX is { } x && settings.StatsWindowY is { } y)
             AppWindow.Move(new PointInt32(x, y));
     }
 
-    private void RestoreWindowBounds()
+    private void SizeToContent()
     {
-        var settings = App.Current.SettingsViewModel;
-        var w = settings.StatsWindowWidth  ?? 380;
-        var h = settings.StatsWindowHeight ?? 280;
-        AppWindow.Resize(new SizeInt32(w, h));
-        if (settings.StatsWindowX is { } x && settings.StatsWindowY is { } y)
-            AppWindow.Move(new PointInt32(x, y));
+        if (Content is not FrameworkElement root) return;
+        var scale        = root.XamlRoot?.RasterizationScale ?? 1.0;
+        const int maxLogicalWidth = 450;
+        var w = (int)Math.Ceiling(maxLogicalWidth * scale);
+        root.Measure(new Size(maxLogicalWidth, double.PositiveInfinity));
+        var h = (int)Math.Ceiling(root.DesiredSize.Height * scale) + 8;
+        if (h > 0)
+            AppWindow.Resize(new SizeInt32(w, h));
     }
 
-    private void SaveWindowBounds()
+    private void SaveWindowPosition()
     {
-        var pos  = AppWindow.Position;
-        var size = AppWindow.Size;
-        App.Current.SettingsViewModel.SaveStatsWindowBounds(pos.X, pos.Y, size.Width, size.Height);
+        var pos = AppWindow.Position;
+        App.Current.SettingsViewModel.SaveStatsWindowPosition(pos.X, pos.Y);
     }
 
     private void TryApplyMica()
