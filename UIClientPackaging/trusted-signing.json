@@ -1,0 +1,5 @@
+{
+  "Endpoint": "https://eus.codesigning.azure.net/",
+  "CodeSigningAccountName": "whirtle-artifact-signing",
+  "CertificateProfileName": "whirtle-windows-app-signing"
+}
