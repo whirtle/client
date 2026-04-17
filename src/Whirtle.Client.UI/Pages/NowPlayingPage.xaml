@@ -49,12 +49,12 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <!-- Album art (rounded square, accent colour fill when no art) -->
+                            <!-- Album art (rounded square, grey fill when no art) -->
                             <Border
                                 Grid.Column="0"
                                 Width="112" Height="112"
                                 CornerRadius="8"
-                                Background="{ThemeResource SystemAccentColorDark1}">
+                                Background="#FF404040">
                                 <Image
                                     x:Name="AlbumArtImage"
                                     Stretch="UniformToFill" />
