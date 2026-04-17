@@ -1,2 +1,6 @@
-MainPackage=C:\src\whirtle\client\UIClientPackaging\bin\x64\Release\UIClientPackaging_0.1.5.0_x64.msix
-SymbolPackage=C:\src\whirtle\client\UIClientPackaging\obj\x64\Release\Symbols\UIClientPackaging_0.1.5.0_x64.appxsym
+MainPackage=C:\src\whirtle\client\UIClientPackaging\bin\x64\Release\UIClientPackaging_0.1.8.0_x64.msix
+SymbolPackage=C:\src\whirtle\client\UIClientPackaging\obj\x64\Release\Symbols\UIClientPackaging_0.1.8.0_x64.appxsym
+ResourcePack=C:\src\whirtle\client\UIClientPackaging\bin\x64\Release\UIClientPackaging_0.1.8.0_scale-100.msix
+ResourcePack=C:\src\whirtle\client\UIClientPackaging\bin\x64\Release\UIClientPackaging_0.1.8.0_scale-125.msix
+ResourcePack=C:\src\whirtle\client\UIClientPackaging\bin\x64\Release\UIClientPackaging_0.1.8.0_scale-150.msix
+ResourcePack=C:\src\whirtle\client\UIClientPackaging\bin\x64\Release\UIClientPackaging_0.1.8.0_scale-400.msix
