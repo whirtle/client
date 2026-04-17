@@ -84,7 +84,7 @@
 
                     <!-- ═══ 2 · TRANSPORT ════════════════════════════════════ -->
                     <Border Style="{StaticResource CardStyle}">
-                        <StackPanel Spacing="12" HorizontalAlignment="Center">
+                        <StackPanel Spacing="12">
 
                             <!-- Playback buttons -->
                             <StackPanel
