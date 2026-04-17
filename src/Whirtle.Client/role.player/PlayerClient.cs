@@ -52,7 +52,7 @@ public sealed class PlayerClient : IAsyncDisposable
     private int    _volume;
     private bool   _muted;
     private int    _staticDelayMs = 0;
-    private string _playerState   = "buffering";
+    private string _playerState   = "synchronized";
 
     // ── Codec statistics ──────────────────────────────────────────────────────
     private long _totalChunksReceived;
@@ -161,31 +161,29 @@ public sealed class PlayerClient : IAsyncDisposable
             cancellationToken);
 
     /// <summary>
-    /// Sends the initial <c>client/state</c> and <c>stream/request-format</c>
-    /// messages that must be issued once after the handshake completes.
+    /// Sends <c>stream/request-format</c> once after the handshake completes.
+    /// <c>client/state</c> is intentionally deferred until the clock is ready;
+    /// call <see cref="SendStateAsync"/> once <see cref="UpdateClockOffset"/> has been invoked.
     /// </summary>
     /// <param name="preferredFormat">Preferred audio format to request from the server.</param>
     /// <param name="sampleRate">Preferred sample rate derived from the output device's max capability.</param>
     /// <param name="channels">Preferred channel count derived from the output device's max capability.</param>
     /// <param name="bitDepth">Preferred bit depth derived from the output device's max capability.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public async Task SendInitialRequestsAsync(
+    public Task SendInitialRequestsAsync(
         AudioFormat       preferredFormat   = AudioFormat.Flac,
         int               sampleRate        = 48_000,
         int               channels          = 2,
         int               bitDepth          = 24,
         CancellationToken cancellationToken  = default)
-    {
-        await SendStateAsync(cancellationToken).ConfigureAwait(false);
-        await _protocol.SendAsync(
+        => _protocol.SendAsync(
             new StreamRequestFormatMessage(
                 Player: new StreamRequestFormatPlayer(
                     Codec:      preferredFormat.ToCodecString(),
                     Channels:   channels,
                     SampleRate: sampleRate,
                     BitDepth:   bitDepth)),
-            cancellationToken).ConfigureAwait(false);
-    }
+            cancellationToken);
 
     /// <summary>
     /// Sends a <c>stream/request-format</c> message to ask the server to
@@ -305,7 +303,9 @@ public sealed class PlayerClient : IAsyncDisposable
 
         // Re-send state so the server knows the actual output latency
         // (static_delay_ms includes renderer latency, which is now known).
-        await SendStateAsync(ct).ConfigureAwait(false);
+        // Skip if the clock isn't ready yet — the convergence callback will send state instead.
+        if (_clockSynced)
+            await SendStateAsync(ct).ConfigureAwait(false);
     }
 
     private void HandleAudioChunk(AudioChunkFrame chunk)
