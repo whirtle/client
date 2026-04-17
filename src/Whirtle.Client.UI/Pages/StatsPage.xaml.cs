@@ -76,6 +76,12 @@ public sealed partial class StatsPage : Page
             case nameof(NowPlayingViewModel.StatBufferUnderruns):
                 BufferUnderrunsText.Text = PlaybackStats.StatBufferUnderruns.ToString("N0");
                 break;
+            case nameof(NowPlayingViewModel.IsClockConverged):
+                ConvergedText.Text = FormatBool(PlaybackStats.IsClockConverged);
+                break;
+            case nameof(NowPlayingViewModel.IsClockReady):
+                ClockReadyText.Text = FormatBool(PlaybackStats.IsClockReady);
+                break;
         }
     }
 
@@ -91,6 +97,8 @@ public sealed partial class StatsPage : Page
         ChunksReceivedText.Text  = PlaybackStats.StatTotalChunks.ToString("N0");
         CodecDetailText.Text     = PlaybackStats.StatCodecDetails;
         BufferUnderrunsText.Text = PlaybackStats.StatBufferUnderruns.ToString("N0");
+        ConvergedText.Text       = FormatBool(PlaybackStats.IsClockConverged);
+        ClockReadyText.Text      = FormatBool(PlaybackStats.IsClockReady);
     }
 
     private static string FormatDuration(TimeSpan duration)
@@ -104,6 +112,8 @@ public sealed partial class StatsPage : Page
         if (seconds < 0) return "N/A";
         return $"{seconds:0.0} s ago";
     }
+
+    private static string FormatBool(bool value) => value ? "Yes" : "No";
 
     private static string FormatDrift(double driftUsPerSec, bool isSignificant)
     {

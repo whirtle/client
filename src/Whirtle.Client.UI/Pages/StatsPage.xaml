@@ -27,6 +27,8 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- Filtered offset -->
@@ -99,6 +101,36 @@
             <TextBlock
                 Grid.Row="4" Grid.Column="1"
                 x:Name="DriftText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+            <!-- Converged (hit the std-dev target) -->
+            <TextBlock
+                Grid.Row="5" Grid.Column="0"
+                Text="Converged"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="5" Grid.Column="1"
+                x:Name="ConvergedText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
+
+            <!-- Clock ready (converged or timed out — playback relying on clock) -->
+            <TextBlock
+                Grid.Row="6" Grid.Column="0"
+                Text="Clock ready"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="6" Grid.Column="1"
+                x:Name="ClockReadyText"
                 Style="{ThemeResource BodyTextBlockStyle}"
                 FontFamily="Consolas"
                 VerticalAlignment="Center"
