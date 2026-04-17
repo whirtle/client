@@ -334,16 +334,16 @@ public class PlayerClientTests
     // ── SendInitialRequestsAsync ──────────────────────────────────────────────
 
     [Fact]
-    public async Task SendInitialRequestsAsync_InitialState_IsBufferingNotSynchronized()
+    public async Task SendInitialRequestsAsync_SendsOnlyFormatRequest_NoStateMessage()
     {
-        // The client must not report "synchronized" to the server until the clock has
-        // actually converged.  The initial client/state must carry "buffering".
+        // State must be deferred until the clock is ready; SendInitialRequestsAsync
+        // must send only stream/request-format, never client/state.
         var (player, transport, _) = Build();
 
         await player.SendInitialRequestsAsync();
 
-        var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[0]);
-        Assert.Equal("buffering", state.State);
+        Assert.Single(transport.Sent);
+        Assert.IsType<StreamRequestFormatMessage>(Serializer.Deserialize(transport.Sent[0]));
     }
 
     // ── stream/end ────────────────────────────────────────────────────────────

@@ -386,7 +386,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                             ClockConvergenceTimeoutSeconds, convergenceSw.Elapsed.TotalMilliseconds);
                     _clockReady = true;
                     if (_latestClockStats is { } s && _player is { } p)
+                    {
                         p.UpdateClockOffset(s.FilteredOffset);
+                        _ = Task.Run(async () => { try { await p.SendStateAsync(CancellationToken.None).ConfigureAwait(false); } catch { } });
+                    }
                     _dispatcher.TryEnqueue(() =>
                     {
                         IsClockReady    = true;
@@ -851,7 +854,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                         ClockConvergenceTimeoutSeconds, convergenceSw.Elapsed.TotalMilliseconds);
                 _clockReady = true;
                 if (_latestClockStats is { } s && _player is { } p)
+                {
                     p.UpdateClockOffset(s.FilteredOffset);
+                    _ = Task.Run(async () => { try { await p.SendStateAsync(CancellationToken.None).ConfigureAwait(false); } catch { } });
+                }
                 _dispatcher.TryEnqueue(() =>
                 {
                     IsClockReady    = true;
