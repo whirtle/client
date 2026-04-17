@@ -95,6 +95,7 @@
                                 <!-- Previous -->
                                 <Button
                                     Width="26" Height="26"
+                                    Padding="0"
                                     CornerRadius="13"
                                     ToolTipService.ToolTip="Previous track"
                                     IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
@@ -105,6 +106,7 @@
                                 <!-- Play / Pause (accent-coloured circle) -->
                                 <Button
                                     Width="34" Height="34"
+                                    Padding="0"
                                     CornerRadius="17"
                                     Style="{ThemeResource AccentButtonStyle}"
                                     ToolTipService.ToolTip="{x:Bind ViewModel.PlayPauseTooltip, Mode=OneWay}"
@@ -118,6 +120,7 @@
                                 <!-- Next -->
                                 <Button
                                     Width="26" Height="26"
+                                    Padding="0"
                                     CornerRadius="13"
                                     ToolTipService.ToolTip="Next track"
                                     IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
