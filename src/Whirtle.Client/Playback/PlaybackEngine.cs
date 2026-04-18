@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Steve Peterson
 // SPDX-License-Identifier: MIT
 
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Serilog;
 using Serilog.Events;
 using Whirtle.Client.Codec;
@@ -21,7 +23,7 @@ namespace Whirtle.Client.Playback;
 ///
 /// State machine
 /// ─────────────
-///  Buffering     → Synchronized  : buffer reaches MinBufferFrames
+///  Buffering     → Synchronized  : buffer reaches StartupBufferFrames (late frames dropped to MinBufferFrames)
 ///  Synchronized  → Error         : underrun or scheduleOffset > MaxScheduleOffsetMs
 ///  Error         → Buffering     : buffer recovers to MinBufferFrames;
 ///                                   <see cref="PlaybackStateChanged"/> fires with
@@ -31,7 +33,8 @@ namespace Whirtle.Client.Playback;
 public sealed class PlaybackEngine : IAsyncDisposable
 {
     // Tuning constants
-    private const int    MinBufferFrames  = 4;   // frames required before playback starts/recovers
+    private const int    MinBufferFrames        = 4;   // frames required before playback recovers from underrun
+    private const int    StartupBufferFrames    = 8;   // frames required before initial/resumed playback starts (provides headroom to drop late frames)
     private const double MaxScheduleOffsetMs = 200; // schedule-offset threshold before entering Error state; must exceed renderer latency (default 100 ms)
 
     // Ahead-buffer tuning: keeps only a small window of samples ahead of where volume
@@ -43,6 +46,25 @@ public sealed class PlaybackEngine : IAsyncDisposable
     private  const int BehindThreshold    = 5;   // consecutive low-water events before doubling target
     private  const int RecoveryStepMs     = 10;  // ms stepped down per recovery interval
     internal const int RecoveryFrameCount = 50;  // healthy-buffer frames between recovery steps
+
+    // Rate correction amortization: spread the correction for a residual offset across N frames
+    // instead of absorbing it all in one frame. A 7 ms miss on a 96 ms frame at N=1 would produce
+    // a 7% rate change (audible pitch wobble); at N=4 it's a 1.8% change accumulating over 4 frames.
+    private const int RateCorrectionFrames = 4;
+
+    // Windows multimedia timer: raises system timer resolution from default ~15.6 ms to 1 ms so
+    // Task.Delay in the precise-pacing wait doesn't overshoot by a full tick (which was producing
+    // consistent 7 ms write-time misses and driving rate correction).
+    [DllImport("winmm.dll", ExactSpelling = true)]
+    [SupportedOSPlatform("windows")]
+    private static extern uint timeBeginPeriod(uint uPeriod);
+
+    [DllImport("winmm.dll", ExactSpelling = true)]
+    [SupportedOSPlatform("windows")]
+    private static extern uint timeEndPeriod(uint uPeriod);
+
+    private const uint TimerResolutionMs = 1;
+    private bool _timerResolutionRaised;
 
     private readonly JitterBuffer       _buffer;
     private readonly IWasapiRenderer    _renderer;
@@ -57,11 +79,12 @@ public sealed class PlaybackEngine : IAsyncDisposable
     private bool                    _userMuted   = false;
     private bool                    _engineMuted = false;
     private int                     _bufferUnderrunCount;
+    private int                     _minBufferFloorHitCount;
 
     // Adaptive ahead-buffer state (render-loop-only; no volatile needed)
-    private int _aheadTargetMs  = TargetAheadMs;
-    private int _behindCount    = 0;
-    private int _recoveryFrames = 0;
+    private int _aheadTargetMs   = TargetAheadMs;
+    private int _behindCount     = 0;
+    private int _recoveryFrames  = 0;
 
     public PlaybackState State => _state;
 
@@ -73,6 +96,13 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     /// <summary>Number of times playback entered the error state due to the jitter buffer being empty.</summary>
     public int BufferUnderrunCount => _bufferUnderrunCount;
+
+    /// <summary>
+    /// Number of times the late-frame drop at buffering→synchronized transition was held back by the
+    /// <see cref="MinBufferFrames"/> floor, leaving late frames in the buffer that will force rate
+    /// correction on startup.
+    /// </summary>
+    public int MinBufferFloorHitCount => _minBufferFloorHitCount;
 
     /// <summary>Current ahead-of-volume buffer target in milliseconds. Normally <see cref="TargetAheadMs"/>; increases temporarily under CPU pressure.</summary>
     internal int AheadTargetMs => _aheadTargetMs;
@@ -112,9 +142,14 @@ public sealed class PlaybackEngine : IAsyncDisposable
         // before replacing it so the object is not leaked.
         _cts.Dispose();
         _cts        = new CancellationTokenSource();
+        if (!_timerResolutionRaised && OperatingSystem.IsWindows())
+        {
+            if (timeBeginPeriod(TimerResolutionMs) == 0) // TIMERR_NOERROR
+                _timerResolutionRaised = true;
+        }
         _renderTask = RenderLoopAsync(_cts.Token);
         _renderer.Start();
-        Log.Debug("Playback engine started; ahead target = {AheadTargetMs} ms", _aheadTargetMs);
+        Log.Debug("PlaybackEngine: engine started; ahead target = {AheadTargetMs} ms", _aheadTargetMs);
     }
 
     /// <summary>Enqueues a decoded frame for playback.</summary>
@@ -185,6 +220,11 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
         try { _renderer.Stop(); }    catch { }
         try { _renderer.Dispose(); } catch { }
+        if (_timerResolutionRaised && OperatingSystem.IsWindows())
+        {
+            timeEndPeriod(TimerResolutionMs);
+            _timerResolutionRaised = false;
+        }
         _cts.Dispose();
     }
 
@@ -216,14 +256,45 @@ public sealed class PlaybackEngine : IAsyncDisposable
         if (_paused || !_clockOffsetReady)
         {
             if (!_clockOffsetReady)
-                Log.Debug("Playback buffering — waiting for first clock sync");
+                Log.Debug("PlaybackEngine: buffering — waiting for first clock sync");
             await Task.Delay(5, ct).ConfigureAwait(false);
             return;
         }
 
-        if (_buffer.Count >= MinBufferFrames)
+        if (_buffer.Count >= StartupBufferFrames)
         {
-            Log.Debug("Playback buffering complete ({Count} frames); starting playback", _buffer.Count);
+            // Discard frames whose target dequeue window (effectiveTs − aheadTarget) is already
+            // in the past.  This prevents the startup overshoot where the first dequeue lands
+            // far behind target and forces many cycles of max-rate resampling.
+            // Guard: always keep at least MinBufferFrames so we don't stall on recovery.
+            long serverNowUs   = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
+            long aheadTargetUs = (long)_aheadTargetMs * 1_000L;
+            long threshold     = serverNowUs + aheadTargetUs;
+            int  dropped = 0;
+            while (_buffer.Count > MinBufferFrames
+                   && _buffer.TryPeekFirstTimestamp(out long ts)
+                   && ts < threshold)
+            {
+                _buffer.TryDequeue(out _, out _);
+                dropped++;
+            }
+            if (dropped > 0)
+                Log.Debug("PlaybackEngine: discarded {Count} late frames before playback start", dropped);
+            int retainedLate = _buffer.CountBefore(threshold);
+            if (retainedLate > 0)
+            {
+                _minBufferFloorHitCount++;
+                Log.Warning(
+                    "PlaybackEngine: {Count} late frames retained to hold minimum buffer floor ({Floor}); expect rate correction on startup",
+                    retainedLate, MinBufferFrames);
+            }
+
+            double headScheduleOffsetMs = _buffer.TryPeekFirstTimestamp(out long headTs)
+                ? ComputeScheduleOffsetMs(headTs)
+                : double.NaN;
+            Log.Debug(
+                "PlaybackEngine: buffering complete ({Count} frames, head scheduleOffset={HeadScheduleOffsetMs:F1} ms, target={Target} ms); starting playback",
+                _buffer.Count, headScheduleOffsetMs, -_aheadTargetMs);
             TransitionTo(PlaybackState.Synchronized);
             PlaybackStateChanged?.Invoke("synchronized");
             return;
@@ -241,7 +312,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
                 return;
             }
             long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
-            Log.Warning("Playback underrun — jitter buffer empty (estServerNow={ServerNowMs:F3} ms)", serverNowUs / 1_000.0);
+            Log.Warning("PlaybackEngine: underrun — jitter buffer empty (estServerNow={ServerNowMs:F3} ms)", serverNowUs / 1_000.0);
             _bufferUnderrunCount++;
             await EnterErrorAsync(ct);
             return;
@@ -249,33 +320,64 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
         double scheduleOffsetMs = ComputeScheduleOffsetMs(timestamp);
 
-        if (Log.IsEnabled(LogEventLevel.Debug))
-        {
-            long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
-            Log.Debug(
-                "Playback render: buffer={BufferFrames} frames, scheduleOffset={ScheduleOffsetMs:F1} ms " +
-                "(frameTs={FrameTs:F3} ms, estServerNow={ServerNowMs:F3} ms)",
-                _buffer.Count, scheduleOffsetMs,
-                timestamp / 1_000.0, serverNowUs / 1_000.0);
-        }
-
         if (scheduleOffsetMs > MaxScheduleOffsetMs)
         {
             Log.Warning(
-                "Playback schedule offset {ScheduleOffsetMs:+0.0;-0.0} ms exceeds threshold ({MaxScheduleOffsetMs} ms); entering error state",
+                "PlaybackEngine: schedule offset {ScheduleOffsetMs:+0.0;-0.0} ms exceeds threshold ({MaxScheduleOffsetMs} ms); entering error state",
                 scheduleOffsetMs, MaxScheduleOffsetMs);
             await EnterErrorAsync(ct);
             return;
         }
 
-        // Compute a rate ratio to gently correct residual schedule offset.
-        // The offset is measured at dequeue time; the frame won't play until _aheadTargetMs
-        // ms later, so target dequeue offset is -_aheadTargetMs (not zero).
-        // A +1 ms adjusted offset on a 20 ms frame → ratio = 19/20 = 0.95 (speed up).
-        double frameDurationMs  = frame!.Duration.TotalMilliseconds;
+        // Precise pacing: wait until scheduleOffset equals -aheadTargetMs exactly.
+        // Writing the frame at that moment lands it at the correct write time so rate
+        // correction is only needed for gradual clock drift, not for the initial offset.
+        // This eliminates the startup 10% resampling loop: previously, rateRatio was
+        // computed at dequeue time (far too early), clamped at 1.1, and distorted the
+        // first several frames of audio even though the wall-clock gate would then
+        // delay the actual write by ~frameDuration.
+        //
+        // Cap at frameDurationMs: in steady state the natural wait is exactly one frame
+        // duration (the time it takes the previous frame to play out), so a larger wait
+        // means we're further ahead than necessary — just write and let the next frame's
+        // pacing catch up. This also bounds per-frame wall-time in tests where the fake
+        // clock is frozen.
+        double frameDurationMs = frame!.Duration.TotalMilliseconds;
+        double dequeueScheduleOffsetMs = scheduleOffsetMs;
+        double waitMs          = Math.Min(-_aheadTargetMs - scheduleOffsetMs, frameDurationMs);
+        if (waitMs > 1)
+        {
+            await Task.Delay((int)waitMs, ct).ConfigureAwait(false);
+            scheduleOffsetMs = ComputeScheduleOffsetMs(timestamp);
+        }
+
+        if (Log.IsEnabled(LogEventLevel.Debug))
+        {
+            Log.Debug(
+                "PlaybackEngine: precise-pacing dequeueScheduleOffset={DequeueMs:F1} ms, waitMs={WaitMs:F1}, postWaitScheduleOffset={PostMs:F1} ms (target={Target} ms)",
+                dequeueScheduleOffsetMs, waitMs, scheduleOffsetMs, -_aheadTargetMs);
+        }
+
+        if (Log.IsEnabled(LogEventLevel.Debug))
+        {
+            long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
+            Log.Debug(
+                "PlaybackEngine: render buffer={BufferFrames} frames, scheduleOffset={ScheduleOffsetMs:F1} ms " +
+                "(frameTs={FrameTs:F3} ms, estServerNow={ServerNowMs:F3} ms)",
+                _buffer.Count, scheduleOffsetMs,
+                timestamp / 1_000.0, serverNowUs / 1_000.0);
+        }
+
+        // Compute a rate ratio to gently correct residual schedule offset, amortized over
+        // RateCorrectionFrames frames so a small miss doesn't produce an audible pitch wobble.
+        // scheduleOffsetMs is measured at write time (post precise-pacing wait), so the
+        // target is -_aheadTargetMs; any residual offset reflects clock drift the wait
+        // couldn't smooth out (e.g. Task.Delay imprecision, CPU pressure).
+        // Example: +7 ms adjusted offset on a 96 ms frame with N=4 → ratio = 1 - 7/(4*96) ≈ 0.982
+        // (1.8% speed up per frame; the full 7 ms is absorbed after ~4 frames).
         double adjustedOffsetMs = scheduleOffsetMs + _aheadTargetMs;
         double rateRatio = frameDurationMs > 0
-            ? (frameDurationMs - adjustedOffsetMs) / frameDurationMs
+            ? 1.0 - adjustedOffsetMs / (RateCorrectionFrames * frameDurationMs)
             : 1.0;
 
         rateRatio = Math.Clamp(rateRatio, 0.9, 1.1);
@@ -284,7 +386,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
         if (Math.Abs(rateRatio - 1.0) > 0.001)
         {
             Log.Debug(
-                "Playback resampling: rateRatio={RateRatio:F4} (scheduleOffset={ScheduleOffsetMs:F1} ms, adjustedOffset={AdjustedOffsetMs:F1} ms)",
+                "PlaybackEngine: resampling rateRatio={RateRatio:F4} (scheduleOffset={ScheduleOffsetMs:F1} ms, adjustedOffset={AdjustedOffsetMs:F1} ms)",
                 rateRatio, scheduleOffsetMs, adjustedOffsetMs);
             resampled = SampleInterpolator.Interpolate(frame.Samples, frame.Channels, rateRatio);
         }
@@ -297,11 +399,6 @@ public sealed class PlaybackEngine : IAsyncDisposable
             ? ChannelDownmixer.Downmix(resampled, frame.Channels)
             : resampled;
 
-        // Pace writes by WASAPI buffer level rather than a fixed timer.
-        // Task.Delay on Windows has ~15 ms granularity; using it for frame timing
-        // accumulates overshoot per frame.  Waiting until the hardware buffer has room
-        // lets the device clock drive the rate instead.
-        //
         // We keep only TargetAheadMs of samples buffered ahead of where volume is
         // applied (WasapiRenderer.Write), so volume changes take effect promptly.
         // If the buffer level drops below LowWaterMs on BehindThreshold consecutive
@@ -311,6 +408,8 @@ public sealed class PlaybackEngine : IAsyncDisposable
         int targetBytes   = _aheadTargetMs * bytesPerMs;
         int lowWaterBytes = LowWaterMs     * bytesPerMs;
 
+        // Safety: the precise-pacing wait above normally keeps BufferedBytes near targetBytes
+        // at write time, but if Task.Delay returned early this prevents buffer overflow.
         while (_renderer.BufferedBytes > targetBytes && !ct.IsCancellationRequested)
             await Task.Delay(5, ct).ConfigureAwait(false);
 
@@ -321,7 +420,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
                 _aheadTargetMs  = Math.Min(_aheadTargetMs * 2, MaxAheadMs);
                 _behindCount    = 0;
                 _recoveryFrames = 0;
-                Log.Warning("Audio falling behind; increasing ahead target to {AheadTargetMs} ms", _aheadTargetMs);
+                Log.Warning("PlaybackEngine: audio falling behind; increasing ahead target to {AheadTargetMs} ms", _aheadTargetMs);
             }
         }
         else
@@ -331,7 +430,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
             {
                 _aheadTargetMs  = Math.Max(_aheadTargetMs - RecoveryStepMs, TargetAheadMs);
                 _recoveryFrames = 0;
-                Log.Debug("Audio caught up; reducing ahead target to {AheadTargetMs} ms", _aheadTargetMs);
+                Log.Debug("PlaybackEngine: audio caught up; reducing ahead target to {AheadTargetMs} ms", _aheadTargetMs);
             }
         }
 
@@ -345,7 +444,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
         if (_buffer.Count >= MinBufferFrames)
         {
-            Log.Debug("Playback recovered ({Count} frames buffered); resuming", _buffer.Count);
+            Log.Debug("PlaybackEngine: recovered ({Count} frames buffered); resuming", _buffer.Count);
             _engineMuted = false;
             ApplyMuteState();
             TransitionTo(PlaybackState.Buffering);

@@ -89,6 +89,39 @@ internal sealed class JitterBuffer
         }
     }
 
+    /// <summary>
+    /// Returns the timestamp of the oldest buffered frame without removing it.
+    /// Returns <c>false</c> if the buffer is empty.
+    /// </summary>
+    public bool TryPeekFirstTimestamp(out long timestamp)
+    {
+        lock (_frames)
+        {
+            if (_frames.Count == 0) { timestamp = 0; return false; }
+            timestamp = _frames.Keys[0];
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Returns the number of buffered frames whose timestamp is strictly less than
+    /// <paramref name="threshold"/>.  Useful for reporting how many frames would be
+    /// discarded by a bulk-drop operation.
+    /// </summary>
+    public int CountBefore(long threshold)
+    {
+        lock (_frames)
+        {
+            int count = 0;
+            for (int i = 0; i < _frames.Count; i++)
+            {
+                if (_frames.Keys[i] >= threshold) break;
+                count++;
+            }
+            return count;
+        }
+    }
+
     /// <summary>Removes all buffered frames and resets the cursor.</summary>
     public void Clear()
     {

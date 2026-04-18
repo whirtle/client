@@ -76,6 +76,9 @@ public sealed partial class StatsPage : Page
             case nameof(NowPlayingViewModel.StatBufferUnderruns):
                 BufferUnderrunsText.Text = PlaybackStats.StatBufferUnderruns.ToString("N0");
                 break;
+            case nameof(NowPlayingViewModel.StatMinBufferFloorHits):
+                MinBufferFloorHitsText.Text = PlaybackStats.StatMinBufferFloorHits.ToString("N0");
+                break;
             case nameof(NowPlayingViewModel.IsClockConverged):
                 ConvergedText.Text = FormatBool(PlaybackStats.IsClockConverged);
                 break;
@@ -96,8 +99,9 @@ public sealed partial class StatsPage : Page
         QueuedAudioText.Text     = FormatDuration(PlaybackStats.StatBufferedDuration);
         ChunksReceivedText.Text  = PlaybackStats.StatTotalChunks.ToString("N0");
         CodecDetailText.Text     = PlaybackStats.StatCodecDetails;
-        BufferUnderrunsText.Text = PlaybackStats.StatBufferUnderruns.ToString("N0");
-        ConvergedText.Text       = FormatBool(PlaybackStats.IsClockConverged);
+        BufferUnderrunsText.Text    = PlaybackStats.StatBufferUnderruns.ToString("N0");
+        MinBufferFloorHitsText.Text = PlaybackStats.StatMinBufferFloorHits.ToString("N0");
+        ConvergedText.Text          = FormatBool(PlaybackStats.IsClockConverged);
         ClockReadyText.Text      = FormatBool(PlaybackStats.IsClockReady);
     }
 

@@ -72,6 +72,9 @@ public sealed class PlayerClient : IAsyncDisposable
     /// <summary>Number of buffer underruns (jitter buffer empty during playback) since the current stream started.</summary>
     public int BufferUnderrunCount => _playbackEngine?.BufferUnderrunCount ?? 0;
 
+    /// <summary>Number of times the minimum-buffer floor held back late-frame drops at startup, forcing rate correction.</summary>
+    public int MinBufferFloorHitCount => _playbackEngine?.MinBufferFloorHitCount ?? 0;
+
     /// <summary>
     /// Returns a snapshot of per-codec statistics accumulated since the current stream started.
     /// </summary>

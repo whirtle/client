@@ -168,6 +168,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
     [ObservableProperty] private int _statBufferUnderruns;
 
+    [ObservableProperty] private int _statMinBufferFloorHits;
+
     // ── Audio devices ──────────────────────────────────────────────────────
 
     [ObservableProperty] private AudioDeviceInfo? _selectedDevice;
@@ -547,6 +549,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         StatTotalChunks      = 0;
         StatCodecDetails     = "";
         StatBufferUnderruns  = 0;
+        StatMinBufferFloorHits = 0;
         _lastRtt             = TimeSpan.MaxValue;
         _lastBufferCount     = -1;
         _serverClockOffset   = TimeSpan.Zero;
@@ -583,6 +586,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         StatTotalChunks      = _player.TotalChunksReceived;
         StatCodecDetails     = BuildCodecDetails(_player.GetCodecStats());
         StatBufferUnderruns  = _player.BufferUnderrunCount;
+        StatMinBufferFloorHits = _player.MinBufferFloorHitCount;
     }
 
     private static string BuildCodecDetails(IReadOnlyList<Whirtle.Client.Role.CodecStats> stats)
