@@ -129,10 +129,18 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long  timestamp = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var   imageData = payload[8..];
-                    Log.Verbose("Recv artwork channel={Channel} timestamp={Timestamp} bytes={Bytes}",
-                        typeId - 8, timestamp, imageData.Length);
-                    yield return new ArtworkFrame(
-                        timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
+                    if (imageData.Length > MaxArtworkBytes)
+                    {
+                        Log.Warning("Dropping oversized artwork frame: channel={Channel} bytes={Bytes}",
+                            typeId - 8, imageData.Length);
+                    }
+                    else
+                    {
+                        Log.Verbose("Recv artwork channel={Channel} timestamp={Timestamp} bytes={Bytes}",
+                            typeId - 8, timestamp, imageData.Length);
+                        yield return new ArtworkFrame(
+                            timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
+                    }
                 }
                 else if (typeId == 4 && payload.Length >= 8)
                 {
@@ -158,6 +166,10 @@ public sealed class ProtocolClient : IAsyncDisposable
             yield return msg;
         }
     }
+
+    // Hard cap applied before yielding an ArtworkFrame to prevent a malicious or
+    // misbehaving server from exhausting the client's address space.
+    internal const int MaxArtworkBytes = 10 * 1024 * 1024;
 
     private static string DetectMimeType(byte[] data) =>
         data.Length >= 2 && data[0] == 0xFF && data[1] == 0xD8
