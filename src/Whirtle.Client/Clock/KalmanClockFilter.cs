@@ -122,8 +122,8 @@ internal sealed class KalmanClockFilter
         var (pOOp, pODp, pDDp) = PredictCovariance(_pOO, _pOD, _pDD, dtS);
 
         Log.Debug(
-            "Clock Kalman predict: dt={Dt:F3} s, pred_offset={PredOffset:+0.00;-0.00} µs, pOO={Poo:F6}",
-            dtS, predOffset, pOOp);
+            "Clock Kalman predict: dt={Dt:F3} s, pred_offset={PredOffset:+0.000;-0.000} ms, pOO={Poo:F6}",
+            dtS, predOffset / 1_000.0, pOOp);
 
         if (_count == 1)
         {
@@ -186,9 +186,9 @@ internal sealed class KalmanClockFilter
         _count        = 1;
 
         Log.Information(
-            "Clock Kalman init (count=1): offset={Offset:+0.00;-0.00} µs, " +
-            "σ_offset={Sigma:F2} µs",
-            _offset, OffsetStdDevUs);
+            "Clock Kalman init (count=1): offset={Offset:+0.000;-0.000} ms, " +
+            "σ_offset={Sigma:F3} ms",
+            _offset / 1_000.0, OffsetStdDevUs / 1_000.0);
     }
 
     private void SecondUpdateInit(
@@ -204,9 +204,9 @@ internal sealed class KalmanClockFilter
         pDDp   = (_pOO + r) / (dtS * dtS);
 
         Log.Information(
-            "Clock Kalman init (count=2): drift={Drift:+0.0000;-0.0000} µs/s, " +
-            "σ_drift={Sigma:F4} µs/s",
-            _drift, Math.Sqrt(pDDp));
+            "Clock Kalman init (count=2): drift={Drift:+0.0000;-0.0000} ms/s, " +
+            "σ_drift={Sigma:F4} ms/s",
+            _drift / 1_000.0, Math.Sqrt(pDDp) / 1_000.0);
     }
 
     // ── Prediction ────────────────────────────────────────────────────────────
@@ -243,15 +243,15 @@ internal sealed class KalmanClockFilter
             _forgetCount++;
 
             Log.Debug(
-                "Clock Kalman forget: |y|={Y:F2} µs > threshold={T:F2} µs, " +
+                "Clock Kalman forget: |y|={Y:F3} ms > threshold={T:F3} ms, " +
                 "λ²={L:F4}, forget_count={Fc}",
-                Math.Abs(innovation), threshold, ForgetFactor, _forgetCount);
+                Math.Abs(innovation) / 1_000.0, threshold / 1_000.0, ForgetFactor, _forgetCount);
         }
         else
         {
             Log.Debug(
-                "Clock Kalman forget: |y|={Y:F2} µs ≤ threshold={T:F2} µs, no forgetting",
-                Math.Abs(innovation), threshold);
+                "Clock Kalman forget: |y|={Y:F3} ms ≤ threshold={T:F3} ms, no forgetting",
+                Math.Abs(innovation) / 1_000.0, threshold / 1_000.0);
         }
     }
 

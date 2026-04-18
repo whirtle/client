@@ -117,9 +117,9 @@ public sealed class ProtocolClient : IAsyncDisposable
             {
                 var msg = _serializer.Deserialize(data);
                 if (msg is ServerTimeMessage)
-                    Log.Debug("Recv {Type:l} {Json:l} client_now={ClientNow}",
+                    Log.Debug("Recv {Type:l} {Json:l} client_now={ClientNow:F3} ms",
                         _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data),
-                        SystemClock.Instance.UtcNowMicroseconds);
+                        SystemClock.Instance.UtcNowMicroseconds / 1_000.0);
                 else
                     Log.Debug("Recv {Type:l} {Json:l}", _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
                 yield return new ProtocolFrame(msg);
@@ -135,8 +135,8 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long  timestamp = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var   imageData = payload[8..];
-                    Log.Verbose("Recv artwork channel={Channel} timestamp={Timestamp} bytes={Bytes}",
-                        typeId - 8, timestamp, imageData.Length);
+                    Log.Verbose("Recv artwork channel={Channel} timestamp={Timestamp:F3} ms bytes={Bytes}",
+                        typeId - 8, timestamp / 1_000.0, imageData.Length);
                     yield return new ArtworkFrame(
                         timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
                 }
@@ -144,7 +144,7 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long timestamp   = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var  encodedData = payload[8..];
-                    Log.Verbose("Recv audio-chunk timestamp={Timestamp} bytes={Bytes}", timestamp, encodedData.Length);
+                    Log.Verbose("Recv audio-chunk timestamp={Timestamp:F3} ms bytes={Bytes}", timestamp / 1_000.0, encodedData.Length);
                     yield return new AudioChunkFrame(timestamp, encodedData);
                 }
             }

@@ -326,8 +326,8 @@ public sealed class PlayerClient : IAsyncDisposable
             if (effectiveTimestamp < serverNowUs)
             {
                 Log.Warning(
-                    "Dropping late audio chunk: effectiveTimestamp={Ts} serverNow={Now} delta={DeltaMs:F1} ms",
-                    effectiveTimestamp, serverNowUs,
+                    "Dropping late audio chunk: effectiveTimestamp={Ts:F3} ms serverNow={Now:F3} ms delta={DeltaMs:F1} ms",
+                    effectiveTimestamp / 1_000.0, serverNowUs / 1_000.0,
                     (serverNowUs - effectiveTimestamp) / 1_000.0);
                 return;
             }
@@ -354,13 +354,13 @@ public sealed class PlayerClient : IAsyncDisposable
             int bufferedFrames = _playbackEngine.BufferedFrameCount;
             int bufferedBytes  = bufferedFrames * audioFrame.Samples.Length * sizeof(short);
             Log.Debug(
-                "Recv Audio chunk: {EncodedBytes} bytes encoded, {BufferedBytes} bytes buffered ({BufferedFrames} frames), {DurationSeconds:F3}s/frame, serverTs={ServerTs} μs effectiveTs={EffectiveTs} μs",
+                "Recv Audio chunk: {EncodedBytes} bytes encoded, {BufferedBytes} bytes buffered ({BufferedFrames} frames), {DurationSeconds:F3}s/frame, serverTs={ServerTs:F3} ms effectiveTs={EffectiveTs:F3} ms",
                 chunk.EncodedData.Length,
                 bufferedBytes,
                 bufferedFrames,
                 audioFrame.Duration.TotalSeconds,
-                chunk.Timestamp,
-                effectiveTimestamp);
+                chunk.Timestamp / 1_000.0,
+                effectiveTimestamp / 1_000.0);
         }
     }
 
