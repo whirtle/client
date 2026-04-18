@@ -79,6 +79,9 @@ public sealed partial class StatsPage : Page
             case nameof(NowPlayingViewModel.StatMinBufferFloorHits):
                 MinBufferFloorHitsText.Text = PlaybackStats.StatMinBufferFloorHits.ToString("N0");
                 break;
+            case nameof(NowPlayingViewModel.StatAheadTargetMs):
+                AheadTargetText.Text = $"{PlaybackStats.StatAheadTargetMs} ms";
+                break;
             case nameof(NowPlayingViewModel.StatRateRatio):
                 RateRatioText.Text = FormatRateRatio(PlaybackStats.StatRateRatio);
                 break;
@@ -104,6 +107,7 @@ public sealed partial class StatsPage : Page
         CodecDetailText.Text     = PlaybackStats.StatCodecDetails;
         BufferUnderrunsText.Text    = PlaybackStats.StatBufferUnderruns.ToString("N0");
         MinBufferFloorHitsText.Text = PlaybackStats.StatMinBufferFloorHits.ToString("N0");
+        AheadTargetText.Text        = $"{PlaybackStats.StatAheadTargetMs} ms";
         RateRatioText.Text          = FormatRateRatio(PlaybackStats.StatRateRatio);
         ConvergedText.Text          = FormatBool(PlaybackStats.IsClockConverged);
         ClockReadyText.Text      = FormatBool(PlaybackStats.IsClockReady);

@@ -170,6 +170,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
     [ObservableProperty] private int _statMinBufferFloorHits;
 
+    [ObservableProperty] private int _statAheadTargetMs;
+
     [ObservableProperty] private double _statRateRatio = 1.0;
 
     // ── Audio devices ──────────────────────────────────────────────────────
@@ -552,6 +554,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         StatCodecDetails     = "";
         StatBufferUnderruns  = 0;
         StatMinBufferFloorHits = 0;
+        StatAheadTargetMs    = 0;
         StatRateRatio        = 1.0;
         _lastRtt             = TimeSpan.MaxValue;
         _lastBufferCount     = -1;
@@ -590,6 +593,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         StatCodecDetails     = BuildCodecDetails(_player.GetCodecStats());
         StatBufferUnderruns  = _player.BufferUnderrunCount;
         StatMinBufferFloorHits = _player.MinBufferFloorHitCount;
+        StatAheadTargetMs    = _player.AheadTargetMs;
         StatRateRatio        = _player.LastRateRatio;
     }
 

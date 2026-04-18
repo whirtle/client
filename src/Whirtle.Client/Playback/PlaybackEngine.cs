@@ -112,7 +112,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
     public int MinBufferFloorHitCount => _minBufferFloorHitCount;
 
     /// <summary>Current ahead-of-volume buffer target in milliseconds. Normally <see cref="TargetAheadMs"/>; increases temporarily under CPU pressure.</summary>
-    internal int AheadTargetMs => _aheadTargetMs;
+    public int AheadTargetMs => _aheadTargetMs;
 
     /// <summary>
     /// The rate ratio most recently applied by the resampler. 1.0 when playback
