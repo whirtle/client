@@ -15,6 +15,16 @@ namespace Whirtle.Client.Role;
 /// </summary>
 public sealed class ArtworkReceiver
 {
+    private static readonly IReadOnlySet<string> AllowedMimeTypes =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "image/jpeg",
+            "image/png",
+            "image/bmp",
+            "application/octet-stream",
+            string.Empty,
+        };
+
     // Guards _data, _mimeType, _timestamp, and Changed so that a reader on one
     // thread never sees a partially updated state, and so that event subscription
     // races are safely observed.
@@ -51,6 +61,11 @@ public sealed class ArtworkReceiver
     /// </summary>
     public void ProcessFrame(ArtworkFrame frame)
     {
+        ArgumentNullException.ThrowIfNull(frame);
+        ArgumentNullException.ThrowIfNull(frame.Data);
+        if (!AllowedMimeTypes.Contains(frame.MimeType))
+            throw new ArgumentException($"Unrecognised artwork MIME type '{frame.MimeType}'.", nameof(frame));
+
         // Update state and capture the current subscriber list under the lock so
         // callers always see Data, MimeType, and Timestamp in a consistent group.
         // Invoke the handler outside the lock to prevent deadlocks if a subscriber
@@ -61,7 +76,10 @@ public sealed class ArtworkReceiver
             _timestamp = frame.Timestamp;
             if (frame.Data.Length > 0)
             {
-                _data     = frame.Data;
+                // Copy defensively: the incoming byte[] is a slice of the network
+                // receive buffer; retaining a reference to it would prevent GC of the
+                // full buffer and allow mutation to corrupt stored state.
+                _data     = frame.Data.ToArray();
                 _mimeType = frame.MimeType;
             }
             else

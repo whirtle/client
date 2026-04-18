@@ -130,10 +130,18 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long  timestamp = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var   imageData = payload[8..];
-                    Log.Verbose("{Tag:l}Recv artwork channel={Channel} timestamp={Timestamp} bytes={Bytes}",
-                        _serverTag, typeId - 8, timestamp, imageData.Length);
-                    yield return new ArtworkFrame(
-                        timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
+                    if (imageData.Length > MaxArtworkBytes)
+                    {
+                        Log.Warning("{Tag:l}Dropping oversized artwork frame: channel={Channel} bytes={Bytes}",
+                            _serverTag, typeId - 8, imageData.Length);
+                    }
+                    else
+                    {
+                        Log.Verbose("{Tag:l}Recv artwork channel={Channel} timestamp={Timestamp} bytes={Bytes}",
+                            _serverTag, typeId - 8, timestamp, imageData.Length);
+                        yield return new ArtworkFrame(
+                            timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
+                    }
                 }
                 else if (typeId == 4 && payload.Length >= 8)
                 {
@@ -160,6 +168,10 @@ public sealed class ProtocolClient : IAsyncDisposable
         }
     }
 
+    // Hard cap applied before yielding an ArtworkFrame to prevent a malicious or
+    // misbehaving server from exhausting the client's address space.
+    internal const int MaxArtworkBytes = 10 * 1024 * 1024;
+
     private ServerHelloMessage SetServerTag(ServerHelloMessage hello)
     {
         var suffix = hello.ServerId.Length >= 4
@@ -174,5 +186,7 @@ public sealed class ProtocolClient : IAsyncDisposable
             ? "image/jpeg"
             : data.Length >= 4 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47
                 ? "image/png"
-                : "application/octet-stream";
+                : data.Length >= 2 && data[0] == 0x42 && data[1] == 0x4D
+                    ? "image/bmp"
+                    : "application/octet-stream";
 }
