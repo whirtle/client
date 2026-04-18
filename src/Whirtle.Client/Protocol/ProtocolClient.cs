@@ -10,8 +10,9 @@ namespace Whirtle.Client.Protocol;
 
 public sealed class ProtocolClient : IAsyncDisposable
 {
-    private readonly ITransport       _transport;
+    private readonly ITransport        _transport;
     private readonly MessageSerializer _serializer = new();
+    private string                     _serverTag  = "";
 
     public ProtocolClient(ITransport transport)
     {
@@ -48,7 +49,7 @@ public sealed class ProtocolClient : IAsyncDisposable
         {
             return msg switch
             {
-                ServerHelloMessage hello => hello,
+                ServerHelloMessage hello => SetServerTag(hello),
                 UnknownMessage     u     => throw new HandshakeException(
                                                "unexpected_message",
                                                $"Expected server/hello but received '{u.Type}'."),
@@ -66,7 +67,7 @@ public sealed class ProtocolClient : IAsyncDisposable
     public async Task SendAsync(Message message, CancellationToken cancellationToken = default)
     {
         var data = _serializer.Serialize(message);
-        Log.Debug("Send {Type:l} {Json:l}", _serializer.GetWireType(message), System.Text.Encoding.UTF8.GetString(data));
+        Log.Debug("{Tag:l}Send {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(message), System.Text.Encoding.UTF8.GetString(data));
         await _transport.SendAsync(data, cancellationToken);
     }
 
@@ -115,7 +116,7 @@ public sealed class ProtocolClient : IAsyncDisposable
             if (data[0] == (byte)'{')
             {
                 var msg = _serializer.Deserialize(data);
-                Log.Debug("Recv {Type:l} {Json:l}", _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
+                Log.Debug("{Tag:l}Recv {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
                 yield return new ProtocolFrame(msg);
             }
             else
@@ -129,8 +130,8 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long  timestamp = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var   imageData = payload[8..];
-                    Log.Verbose("Recv artwork channel={Channel} timestamp={Timestamp} bytes={Bytes}",
-                        typeId - 8, timestamp, imageData.Length);
+                    Log.Verbose("{Tag:l}Recv artwork channel={Channel} timestamp={Timestamp} bytes={Bytes}",
+                        _serverTag, typeId - 8, timestamp, imageData.Length);
                     yield return new ArtworkFrame(
                         timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
                 }
@@ -138,7 +139,7 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long timestamp   = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var  encodedData = payload[8..];
-                    Log.Verbose("Recv audio-chunk timestamp={Timestamp} bytes={Bytes}", timestamp, encodedData.Length);
+                    Log.Verbose("{Tag:l}Recv audio-chunk timestamp={Timestamp} bytes={Bytes}", _serverTag, timestamp, encodedData.Length);
                     yield return new AudioChunkFrame(timestamp, encodedData);
                 }
             }
@@ -154,9 +155,18 @@ public sealed class ProtocolClient : IAsyncDisposable
         {
             if (data.Length == 0 || data[0] != (byte)'{') continue;
             var msg = _serializer.Deserialize(data);
-            Log.Debug("Recv {Type:l} {Json:l}", _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
+            Log.Debug("{Tag:l}Recv {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
             yield return msg;
         }
+    }
+
+    private ServerHelloMessage SetServerTag(ServerHelloMessage hello)
+    {
+        var suffix = hello.ServerId.Length >= 4
+            ? hello.ServerId[^4..]
+            : hello.ServerId;
+        _serverTag = $"{hello.Name}_{suffix}: ";
+        return hello;
     }
 
     private static string DetectMimeType(byte[] data) =>

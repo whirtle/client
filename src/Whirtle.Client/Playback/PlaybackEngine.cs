@@ -85,7 +85,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
     public event Action<PlaybackState, int>? StatusChanged;
 
     /// <summary>
-    /// Raised when the engine enters or leaves a synchronised state.
+    /// Raised when the engine enters or leaves a synchronized state.
     /// Carries the Sendspin state string: <c>"error"</c> or <c>"synchronized"</c>.
     /// Subscribers should send a complete <c>client/state</c> message to the server.
     /// </summary>
