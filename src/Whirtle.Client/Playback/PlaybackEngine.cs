@@ -15,14 +15,14 @@ namespace Whirtle.Client.Playback;
 ///  Incoming AudioFrames (decoded by the codec layer) are enqueued into
 ///  a <see cref="JitterBuffer"/> keyed by the server-assigned timestamp.
 ///  A dedicated render loop dequeues frames in order, applies
-///  <see cref="SampleInterpolator"/> to compensate for clock drift derived
-///  from <see cref="ClockSyncResult"/>, and feeds them to an
+///  <see cref="SampleInterpolator"/> to correct schedule offset using the
+///  <see cref="ClockSyncResult"/> clock offset, and feeds them to an
 ///  <see cref="IWasapiRenderer"/>.
 ///
 /// State machine
 /// ─────────────
 ///  Buffering     → Synchronized  : buffer reaches MinBufferFrames
-///  Synchronized  → Error         : underrun or drift > MaxDriftMs
+///  Synchronized  → Error         : underrun or scheduleOffset > MaxScheduleOffsetMs
 ///  Error         → Buffering     : buffer recovers to MinBufferFrames;
 ///                                   <see cref="PlaybackStateChanged"/> fires with
 ///                                   <c>"error"</c> or <c>"synchronized"</c> so the
@@ -32,7 +32,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
 {
     // Tuning constants
     private const int    MinBufferFrames  = 4;   // frames required before playback starts/recovers
-    private const double MaxDriftMs       = 200; // drift threshold before entering Error state; must exceed renderer latency (default 100 ms)
+    private const double MaxScheduleOffsetMs = 200; // schedule-offset threshold before entering Error state; must exceed renderer latency (default 100 ms)
 
     // Ahead-buffer tuning: keeps only a small window of samples ahead of where volume
     // is applied (WasapiRenderer.Write), so volume changes take effect quickly.
@@ -114,6 +114,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
         _cts        = new CancellationTokenSource();
         _renderTask = RenderLoopAsync(_cts.Token);
         _renderer.Start();
+        Log.Debug("Playback engine started; ahead target = {AheadTargetMs} ms", _aheadTargetMs);
     }
 
     /// <summary>Enqueues a decoded frame for playback.</summary>
@@ -246,42 +247,51 @@ public sealed class PlaybackEngine : IAsyncDisposable
             return;
         }
 
-        double driftMs = ComputeDriftMs(timestamp);
+        double scheduleOffsetMs = ComputeScheduleOffsetMs(timestamp);
 
         if (Log.IsEnabled(LogEventLevel.Debug))
         {
             long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
             Log.Debug(
-                "Playback render: buffer={BufferFrames} frames, drift={DriftMs:F1} ms " +
+                "Playback render: buffer={BufferFrames} frames, scheduleOffset={ScheduleOffsetMs:F1} ms " +
                 "(frameTs={FrameTs:F3} ms, estServerNow={ServerNowMs:F3} ms)",
-                _buffer.Count, driftMs,
+                _buffer.Count, scheduleOffsetMs,
                 timestamp / 1_000.0, serverNowUs / 1_000.0);
         }
 
-        if (driftMs > MaxDriftMs)
+        if (scheduleOffsetMs > MaxScheduleOffsetMs)
         {
             Log.Warning(
-                "Playback drift {DriftMs:+0.0;-0.0} ms exceeds threshold ({MaxDriftMs} ms); entering error state",
-                driftMs, MaxDriftMs);
+                "Playback schedule offset {ScheduleOffsetMs:+0.0;-0.0} ms exceeds threshold ({MaxScheduleOffsetMs} ms); entering error state",
+                scheduleOffsetMs, MaxScheduleOffsetMs);
             await EnterErrorAsync(ct);
             return;
         }
 
-        // Compute a rate ratio to gently correct residual drift.
-        // Drift is measured at dequeue time; the frame won't play until _aheadTargetMs
-        // ms later, so target dequeue drift is -_aheadTargetMs (not zero).
-        // A +1 ms adjusted drift on a 20 ms frame → ratio = 19/20 = 0.95 (speed up).
-        double frameDurationMs = frame!.Duration.TotalMilliseconds;
-        double adjustedDriftMs = driftMs + _aheadTargetMs;
+        // Compute a rate ratio to gently correct residual schedule offset.
+        // The offset is measured at dequeue time; the frame won't play until _aheadTargetMs
+        // ms later, so target dequeue offset is -_aheadTargetMs (not zero).
+        // A +1 ms adjusted offset on a 20 ms frame → ratio = 19/20 = 0.95 (speed up).
+        double frameDurationMs  = frame!.Duration.TotalMilliseconds;
+        double adjustedOffsetMs = scheduleOffsetMs + _aheadTargetMs;
         double rateRatio = frameDurationMs > 0
-            ? (frameDurationMs - adjustedDriftMs) / frameDurationMs
+            ? (frameDurationMs - adjustedOffsetMs) / frameDurationMs
             : 1.0;
 
         rateRatio = Math.Clamp(rateRatio, 0.9, 1.1);
 
-        var resampled = Math.Abs(rateRatio - 1.0) > 0.001
-            ? SampleInterpolator.Interpolate(frame.Samples, frame.Channels, rateRatio)
-            : frame.Samples;
+        short[]  resampled;
+        if (Math.Abs(rateRatio - 1.0) > 0.001)
+        {
+            Log.Debug(
+                "Playback resampling: rateRatio={RateRatio:F4} (scheduleOffset={ScheduleOffsetMs:F1} ms, adjustedOffset={AdjustedOffsetMs:F1} ms)",
+                rateRatio, scheduleOffsetMs, adjustedOffsetMs);
+            resampled = SampleInterpolator.Interpolate(frame.Samples, frame.Channels, rateRatio);
+        }
+        else
+        {
+            resampled = frame.Samples;
+        }
 
         var samples = frame.Channels != _renderer.Channels
             ? ChannelDownmixer.Downmix(resampled, frame.Channels)
@@ -373,10 +383,10 @@ public sealed class PlaybackEngine : IAsyncDisposable
     }
 
     /// <summary>
-    /// Returns the difference in ms between when we are playing the frame
-    /// and when the server expected it to be played (positive = we are late).
+    /// Returns estimatedServerNow − frameTimestamp in ms.
+    /// Positive = we are dequeuing the frame late; negative = early.
     /// </summary>
-    private double ComputeDriftMs(long serverTimestamp)
+    private double ComputeScheduleOffsetMs(long serverTimestamp)
     {
         long localNowUs  = _clock.UtcNowMicroseconds;
         long serverNowUs = localNowUs + (long)_clockOffset.TotalMicroseconds;
