@@ -54,6 +54,7 @@ public sealed class ClockSynchronizer
     // Non-null while a caller is waiting for clock convergence.
     private TaskCompletionSource<bool>? _convergenceTcs;
     private double _convergenceTargetUs;
+    private int    _convergenceMinSamples;
 
     public ClockSynchronizer(ProtocolClient client)
         : this(client, SystemClock.Instance) { }
@@ -131,11 +132,13 @@ public sealed class ClockSynchronizer
     public Task<bool> WaitForConvergenceAsync(
         double            targetStdDevUs,
         TimeSpan          timeout,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int               minSamples        = 1)
     {
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _convergenceTcs      = tcs;
-        _convergenceTargetUs = targetStdDevUs;
+        _convergenceTcs         = tcs;
+        _convergenceTargetUs    = targetStdDevUs;
+        _convergenceMinSamples  = minSamples;
 
         var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout);
@@ -240,6 +243,7 @@ public sealed class ClockSynchronizer
         var stats = GetStats();
         onSync(result, stats);
         if (_convergenceTcs is { Task.IsCompleted: false } tcs &&
+            stats.UpdateCount >= _convergenceMinSamples &&
             stats.OffsetStdDevUs < _convergenceTargetUs)
         {
             tcs.TrySetResult(true);

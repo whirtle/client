@@ -34,6 +34,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private const int ClockConvergenceTargetStdDevUs = 20_000;  // 20 ms
     /// <summary>Maximum seconds to wait for convergence before relying on whatever offset we have.</summary>
     private const int ClockConvergenceTimeoutSeconds  = 5;
+    /// <summary>Minimum samples required before declaring clock convergence (matches the rapid-sync phase count).</summary>
+    private const int ClockConvergenceMinSamples      = 3;
 
     // Metadata state and seek-bar tick
     private readonly NowPlayingState _nowPlaying = new();
@@ -371,7 +373,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             var convergenceSw = System.Diagnostics.Stopwatch.StartNew();
             var convergenceTask = _syncer.WaitForConvergenceAsync(
                 targetStdDevUs: ClockConvergenceTargetStdDevUs,
-                TimeSpan.FromSeconds(ClockConvergenceTimeoutSeconds), token);
+                TimeSpan.FromSeconds(ClockConvergenceTimeoutSeconds), token,
+                minSamples: ClockConvergenceMinSamples);
             _ = convergenceTask.ContinueWith(t =>
                 {
                     convergenceSw.Stop();
