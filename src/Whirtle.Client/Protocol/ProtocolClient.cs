@@ -13,6 +13,7 @@ public sealed class ProtocolClient : IAsyncDisposable
 {
     private readonly ITransport        _transport;
     private readonly MessageSerializer _serializer = new();
+    private string                     _serverTag  = "";
 
     public ProtocolClient(ITransport transport)
     {
@@ -49,7 +50,7 @@ public sealed class ProtocolClient : IAsyncDisposable
         {
             return msg switch
             {
-                ServerHelloMessage hello => hello,
+                ServerHelloMessage hello => SetServerTag(hello),
                 UnknownMessage     u     => throw new HandshakeException(
                                                "unexpected_message",
                                                $"Expected server/hello but received '{u.Type}'."),
@@ -67,7 +68,7 @@ public sealed class ProtocolClient : IAsyncDisposable
     public async Task SendAsync(Message message, CancellationToken cancellationToken = default)
     {
         var data = _serializer.Serialize(message);
-        Log.Debug("Send {Type:l} {Json:l}", _serializer.GetWireType(message), System.Text.Encoding.UTF8.GetString(data));
+        Log.Debug("{Tag:l}Send {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(message), System.Text.Encoding.UTF8.GetString(data));
         await _transport.SendAsync(data, cancellationToken);
     }
 
@@ -117,11 +118,11 @@ public sealed class ProtocolClient : IAsyncDisposable
             {
                 var msg = _serializer.Deserialize(data);
                 if (msg is ServerTimeMessage)
-                    Log.Debug("Recv {Type:l} {Json:l} client_now={ClientNow:F3} ms",
-                        _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data),
+                    Log.Debug("{Tag:l}Recv {Type:l} {Json:l} client_now={ClientNow:F3} ms",
+                        _serverTag, _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data),
                         SystemClock.Instance.UtcNowMicroseconds / 1_000.0);
                 else
-                    Log.Debug("Recv {Type:l} {Json:l}", _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
+                    Log.Debug("{Tag:l}Recv {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
                 yield return new ProtocolFrame(msg);
             }
             else
@@ -135,16 +136,24 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long  timestamp = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var   imageData = payload[8..];
-                    Log.Verbose("Recv artwork channel={Channel} timestamp={Timestamp:F3} ms bytes={Bytes}",
-                        typeId - 8, timestamp / 1_000.0, imageData.Length);
-                    yield return new ArtworkFrame(
-                        timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
+                    if (imageData.Length > MaxArtworkBytes)
+                    {
+                        Log.Warning("{Tag:l}Dropping oversized artwork frame: channel={Channel} bytes={Bytes}",
+                            _serverTag, typeId - 8, imageData.Length);
+                    }
+                    else
+                    {
+                        Log.Verbose("{Tag:l}Recv artwork channel={Channel} timestamp={Timestamp:F3} ms bytes={Bytes}",
+                            _serverTag, typeId - 8, timestamp / 1_000.0, imageData.Length);
+                        yield return new ArtworkFrame(
+                            timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
+                    }
                 }
                 else if (typeId == 4 && payload.Length >= 8)
                 {
                     long timestamp   = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var  encodedData = payload[8..];
-                    Log.Verbose("Recv audio-chunk timestamp={Timestamp:F3} ms bytes={Bytes}", timestamp / 1_000.0, encodedData.Length);
+                    Log.Verbose("{Tag:l}Recv audio-chunk timestamp={Timestamp:F3} ms bytes={Bytes}", _serverTag, timestamp / 1_000.0, encodedData.Length);
                     yield return new AudioChunkFrame(timestamp, encodedData);
                 }
             }
@@ -160,9 +169,22 @@ public sealed class ProtocolClient : IAsyncDisposable
         {
             if (data.Length == 0 || data[0] != (byte)'{') continue;
             var msg = _serializer.Deserialize(data);
-            Log.Debug("Recv {Type:l} {Json:l}", _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
+            Log.Debug("{Tag:l}Recv {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
             yield return msg;
         }
+    }
+
+    // Hard cap applied before yielding an ArtworkFrame to prevent a malicious or
+    // misbehaving server from exhausting the client's address space.
+    internal const int MaxArtworkBytes = 10 * 1024 * 1024;
+
+    private ServerHelloMessage SetServerTag(ServerHelloMessage hello)
+    {
+        var suffix = hello.ServerId.Length >= 4
+            ? hello.ServerId[^4..]
+            : hello.ServerId;
+        _serverTag = $"{hello.Name}_{suffix}: ";
+        return hello;
     }
 
     private static string DetectMimeType(byte[] data) =>
@@ -170,5 +192,7 @@ public sealed class ProtocolClient : IAsyncDisposable
             ? "image/jpeg"
             : data.Length >= 4 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47
                 ? "image/png"
-                : "application/octet-stream";
+                : data.Length >= 2 && data[0] == 0x42 && data[1] == 0x4D
+                    ? "image/bmp"
+                    : "application/octet-stream";
 }

@@ -1,8 +1,8 @@
 <Solution>
   <Configurations>
-    <Platform Name="Any CPU" />
-    <Platform Name="arm64" />
     <Platform Name="x64" />
+    <Platform Name="arm64" />
+    <Platform Name="Any CPU" />
   </Configurations>
   <Folder Name="/Solution items/">
     <File Path=".gitignore" />

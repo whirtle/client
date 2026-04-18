@@ -146,26 +146,8 @@
                                 </Button>
                             </StackPanel>
 
-                            <!-- Position row: [current time] [seek bar] [duration] -->
-                            <Grid ColumnSpacing="8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-
-                                <TextBlock
-                                    Grid.Column="0"
-                                    VerticalAlignment="Center"
-                                    Style="{ThemeResource CaptionTextBlockStyle}"
-                                    FontFamily="{StaticResource PlusJakartaSans}"
-                                    FontSize="11"
-                                    FontWeight="Normal"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    ToolTipService.ToolTip="Current position"
-                                    Text="{x:Bind ViewModel.PositionSeconds,
-                                                  Converter={StaticResource SecondsToTime},
-                                                  Mode=OneWay}" />
+                            <!-- Progress bar + time labels -->
+                            <StackPanel Spacing="4">
 
                                 <!--
                                     Seek bar — display only.  Maximum and Value are set in
@@ -175,25 +157,37 @@
                                     and IsTabStop="False" make it non-interactive.
                                 -->
                                 <ProgressBar
-                                    Grid.Column="1"
                                     x:Name="SeekBar"
                                     Minimum="0"
-                                    Foreground="#FF5B2EFF"
-                                    VerticalAlignment="Center" />
+                                    Foreground="#FF5B2EFF" />
 
-                                <TextBlock
-                                    Grid.Column="2"
-                                    VerticalAlignment="Center"
-                                    Style="{ThemeResource CaptionTextBlockStyle}"
-                                    FontFamily="{StaticResource PlusJakartaSans}"
-                                    FontSize="11"
-                                    FontWeight="Normal"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    ToolTipService.ToolTip="Track duration"
-                                    Text="{x:Bind ViewModel.DurationSeconds,
-                                                  Converter={StaticResource SecondsToTime},
-                                                  Mode=OneWay}" />
-                            </Grid>
+                                <!-- [current time]                    [duration] -->
+                                <Grid>
+                                    <TextBlock
+                                        HorizontalAlignment="Left"
+                                        Style="{ThemeResource CaptionTextBlockStyle}"
+                                        FontFamily="{StaticResource PlusJakartaSans}"
+                                        FontSize="11"
+                                        FontWeight="Normal"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        ToolTipService.ToolTip="Current position"
+                                        Text="{x:Bind ViewModel.PositionSeconds,
+                                                      Converter={StaticResource SecondsToTime},
+                                                      Mode=OneWay}" />
+                                    <TextBlock
+                                        HorizontalAlignment="Right"
+                                        Style="{ThemeResource CaptionTextBlockStyle}"
+                                        FontFamily="{StaticResource PlusJakartaSans}"
+                                        FontSize="11"
+                                        FontWeight="Normal"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        ToolTipService.ToolTip="Track duration"
+                                        Text="{x:Bind ViewModel.DurationSeconds,
+                                                      Converter={StaticResource SecondsToTime},
+                                                      Mode=OneWay}" />
+                                </Grid>
+
+                            </StackPanel>
 
                         </StackPanel>
                     </Border>

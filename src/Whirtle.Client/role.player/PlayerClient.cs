@@ -353,12 +353,16 @@ public sealed class PlayerClient : IAsyncDisposable
         {
             int bufferedFrames = _playbackEngine.BufferedFrameCount;
             int bufferedBytes  = bufferedFrames * audioFrame.Samples.Length * sizeof(short);
+            double? msUntilPlayback = _clockSynced
+                ? (effectiveTimestamp - (_clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds)) / 1_000.0
+                : null;
             Log.Debug(
-                "Recv Audio chunk: {EncodedBytes} bytes encoded, {BufferedBytes} bytes buffered ({BufferedFrames} frames), {DurationSeconds:F3}s/frame, serverTs={ServerTs:F3} ms effectiveTs={EffectiveTs:F3} ms",
+                "Recv Audio chunk: {EncodedBytes} bytes encoded, {BufferedBytes} bytes buffered ({BufferedFrames} frames), {DurationSeconds:F3}s/frame, playsIn={PlaysInMs} ms, serverTs={ServerTs:F3} ms effectiveTs={EffectiveTs:F3} ms",
                 chunk.EncodedData.Length,
                 bufferedBytes,
                 bufferedFrames,
                 audioFrame.Duration.TotalSeconds,
+                msUntilPlayback.HasValue ? $"{msUntilPlayback.Value:F1}" : "?",
                 chunk.Timestamp / 1_000.0,
                 effectiveTimestamp / 1_000.0);
         }

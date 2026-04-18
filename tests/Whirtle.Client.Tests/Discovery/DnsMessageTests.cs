@@ -119,9 +119,30 @@ public class DnsMessageTests
     // ── Error handling ────────────────────────────────────────────────────────
 
     [Fact]
-    public void TryParse_MalformedData_ReturnsNull()
+    public void TryParse_EmptyBuffer_ReturnsNull()
+    {
+        Assert.Null(DnsMessage.TryParse([]));
+    }
+
+    [Fact]
+    public void TryParse_TooShort_ReturnsNull()
     {
         Assert.Null(DnsMessage.TryParse([0xFF, 0xFE]));
+    }
+
+    [Fact]
+    public void TryParse_OversizedPacket_ReturnsNull()
+    {
+        Assert.Null(DnsMessage.TryParse(new byte[4097]));
+    }
+
+    [Fact]
+    public void TryParse_ExcessiveRecordCount_ReturnsNull()
+    {
+        // Claim 51 answers in ANCOUNT but provide no actual records.
+        var data = new byte[12];
+        data[6] = 0x00; data[7] = 51; // ANCOUNT = 51, exceeds MaxRecordsPerSection
+        Assert.Null(DnsMessage.TryParse(data));
     }
 
     [Fact]
@@ -163,6 +184,78 @@ public class DnsMessageTests
             0x00, 0x00, 0x11, 0x94,
             0x00, 0x01,
             0xC0, // pointer first byte with no second byte
+        };
+
+        Assert.Null(DnsMessage.TryParse(data));
+    }
+
+    [Fact]
+    public void TryParse_OutOfBoundsPointer_ReturnsNull()
+    {
+        // Compression pointer that points past the end of the buffer.
+        var data = new byte[]
+        {
+            0x00, 0x00, 0x84, 0x00,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+            0x01, 0x78, 0x00,
+            0x00, 0x0C, 0x00, 0x01,
+            0x00, 0x00, 0x11, 0x94,
+            0x00, 0x02,
+            0xC0, 0xFF, // pointer to offset 255, well past buffer end
+        };
+
+        Assert.Null(DnsMessage.TryParse(data));
+    }
+
+    [Fact]
+    public void TryParse_ReservedLabelType_ReturnsNull()
+    {
+        // Label byte 0x41 has top 2 bits = 01, which is a reserved EDNS label type.
+        var data = new byte[]
+        {
+            0x00, 0x00, 0x84, 0x00,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x78, 0x00, // reserved label type in answer name
+            0x00, 0x0C, 0x00, 0x01,
+            0x00, 0x00, 0x11, 0x94,
+            0x00, 0x00,
+        };
+
+        Assert.Null(DnsMessage.TryParse(data));
+    }
+
+    [Fact]
+    public void TryParse_RdataExceedsBuffer_ReturnsNull()
+    {
+        // RDLENGTH claims more bytes than remain in the packet.
+        var data = new byte[]
+        {
+            0x00, 0x00, 0x84, 0x00,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+            0x01, 0x78, 0x00,         // name "x"
+            0x00, 0x0C,               // TYPE PTR
+            0x00, 0x01,               // CLASS IN
+            0x00, 0x00, 0x11, 0x94,   // TTL
+            0x00, 0x64,               // RDLENGTH = 100, but no bytes follow
+        };
+
+        Assert.Null(DnsMessage.TryParse(data));
+    }
+
+    [Fact]
+    public void TryParse_TxtStringExceedsRdata_ReturnsNull()
+    {
+        // TXT string length byte claims more bytes than the RDATA boundary allows.
+        var data = new byte[]
+        {
+            0x00, 0x00, 0x84, 0x00,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+            0x01, 0x78, 0x00,         // name "x"
+            0x00, 0x10,               // TYPE TXT
+            0x00, 0x01,               // CLASS IN
+            0x00, 0x00, 0x11, 0x94,   // TTL
+            0x00, 0x02,               // RDLENGTH = 2
+            0x05, 0x61,               // sLen=5 but only 1 byte of data follows — exceeds rdEnd
         };
 
         Assert.Null(DnsMessage.TryParse(data));
