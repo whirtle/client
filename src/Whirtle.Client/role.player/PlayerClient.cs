@@ -54,6 +54,8 @@ public sealed class PlayerClient : IAsyncDisposable
     private int    _staticDelayMs = 0;
     private string _playerState   = "synchronized";
 
+    private (string PlayerState, int Volume, bool Muted, int StaticDelayMs)? _lastSentState;
+
     // ── Codec statistics ──────────────────────────────────────────────────────
     private long _totalChunksReceived;
     private readonly Dictionary<AudioFormat, (long Chunks, long Encoded, long Decoded)> _codecStats = new();
@@ -146,11 +148,16 @@ public sealed class PlayerClient : IAsyncDisposable
     // ── Public API ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Sends <c>client/state</c> with the current player state.
-    /// Must be sent after connection and after any state change.
+    /// Sends <c>client/state</c> with the current player state, but only if
+    /// the state differs from the last value sent (or has never been sent).
     /// </summary>
     public Task SendStateAsync(CancellationToken cancellationToken = default)
-        => _protocol.SendAsync(
+    {
+        var current = (_playerState, _volume, _muted, _staticDelayMs);
+        if (_lastSentState == current)
+            return Task.CompletedTask;
+        _lastSentState = current;
+        return _protocol.SendAsync(
             new ClientStateMessage(
                 State:  _playerState,
                 Player: new ClientPlayerState(
@@ -159,6 +166,7 @@ public sealed class PlayerClient : IAsyncDisposable
                     StaticDelayMs:     _staticDelayMs,
                     SupportedCommands: ["set_static_delay"])),
             cancellationToken);
+    }
 
     /// <summary>
     /// Sends <c>stream/request-format</c> once after the handshake completes.
@@ -370,18 +378,22 @@ public sealed class PlayerClient : IAsyncDisposable
 
     private async Task HandleCommandAsync(ServerCommandPlayer cmd, CancellationToken ct)
     {
+        bool notifyServer = false;
+
         switch (cmd.Command)
         {
             case "volume" when cmd.Volume.HasValue:
                 _volume = Math.Clamp(cmd.Volume.Value, 0, 100);
                 _playbackEngine?.SetVolume(_volume / 100f);
                 VolumeChanged?.Invoke(_volume);
+                notifyServer = true;
                 break;
 
             case "mute" when cmd.Mute.HasValue:
                 _muted = cmd.Mute.Value;
                 _playbackEngine?.SetUserMuted(_muted);
                 MuteChanged?.Invoke(_muted);
+                notifyServer = true;
                 break;
 
             case "set_static_delay" when cmd.StaticDelayMs.HasValue:
@@ -391,10 +403,11 @@ public sealed class PlayerClient : IAsyncDisposable
                 // engine re-buffers with timestamps adjusted by the new delay value.
                 _playbackEngine?.ClearBuffer();
                 StaticDelayChanged?.Invoke(_staticDelayMs);
+                notifyServer = true;
                 break;
         }
 
-        // Spec: state updates must be sent whenever any state changes.
-        await SendStateAsync(ct).ConfigureAwait(false);
+        if (notifyServer)
+            await SendStateAsync(ct).ConfigureAwait(false);
     }
 }
