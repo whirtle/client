@@ -9,8 +9,8 @@ public sealed record LogEntry(
     string         Level,
     string         Message)
 {
-    public string FormattedTimestamp { get; } = Timestamp.ToString("M/d HH:mm:ss");
+    public string FormattedTimestamp { get; } = Timestamp.ToString("M/d HH:mm:ss.fff");
 
     public string FormattedLine =>
-        $"{FormattedTimestamp,-14}  {Level,-11}  {Message}";
+        $"{FormattedTimestamp,-18}  {Level,-11}  {Message}";
 }

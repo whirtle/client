@@ -52,7 +52,7 @@
                 <DataTemplate x:DataType="logging:LogEntry">
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="130" />
                             <ColumnDefinition Width="90"  />
                             <ColumnDefinition Width="*"   />
                         </Grid.ColumnDefinitions>
