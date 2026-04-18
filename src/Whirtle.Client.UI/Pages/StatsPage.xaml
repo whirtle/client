@@ -160,6 +160,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- Queued frames -->
@@ -222,20 +223,35 @@
                 VerticalAlignment="Center"
                 HorizontalAlignment="Right" />
 
-            <!-- Rate ratio -->
+            <!-- Ahead target -->
             <TextBlock
                 Grid.Row="4" Grid.Column="0"
-                Text="Rate ratio"
+                Text="Ahead target"
                 Style="{ThemeResource BodyTextBlockStyle}"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 VerticalAlignment="Center" />
             <TextBlock
                 Grid.Row="4" Grid.Column="1"
-                x:Name="RateRatioText"
+                x:Name="AheadTargetText"
                 Style="{ThemeResource BodyTextBlockStyle}"
                 FontFamily="Consolas"
                 VerticalAlignment="Center"
                 HorizontalAlignment="Right" />
+
+            <!-- Rate ratio -->
+            <TextBlock
+                Grid.Row="5" Grid.Column="0"
+                Text="Rate ratio"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                x:Name="RateRatioText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right"
+                Grid.Row="5" Grid.Column="1" />
 
         </Grid>
 
