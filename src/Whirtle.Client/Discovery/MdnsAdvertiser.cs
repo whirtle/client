@@ -73,9 +73,6 @@ public sealed class MdnsAdvertiser : IDisposable
         var label     = friendlyName ?? hostname;
         _instanceName = $"{label}.{ServiceType}";
 
-        Log.Debug(
-            "mDNS advertiser configured: hostname={Hostname}, friendlyName={FriendlyName}, port={Port}, path={Path}, instance={Instance}",
-            _hostname, _friendlyName, _port, _path, _instanceName);
     }
 
     /// <summary>
@@ -93,19 +90,19 @@ public sealed class MdnsAdvertiser : IDisposable
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Log.Error(ex, "mDNS advertiser failed");
+            Log.Error(ex, "mDNS: advertiser failed");
         }
     }
 
     private async Task AdvertiseInternalAsync(CancellationToken cancellationToken)
     {
-        Log.Information("mDNS: building announcement for \"{Name}\"", _instanceName);
-
         var ip           = GetLocalIpAddress();
         var announcement = DnsMessage.BuildAdvertisement(
             _instanceName, _hostname, ip, _port, _path, _friendlyName);
 
-        Log.Information("mDNS: announcing on {IP}:{Port}{Path}", ip, _port, _path);
+        Log.Information(
+            "mDNS: announcing on {IP}:{Port}{Path}, hostname={Hostname}, friendlyName={FriendlyName}, instance={Instance}, reannounceInterval={ReannounceInterval}",
+            ip, _port, _path, _hostname, _friendlyName, _instanceName, ReannounceInterval);
 
         // Two back-to-back announcements per RFC 6762 §8.3 (survive packet loss).
         // No delay between them — periodic re-announce every 60 s provides robustness.
@@ -151,7 +148,7 @@ public sealed class MdnsAdvertiser : IDisposable
                 string.Equals(q.TrimEnd('.'), ServiceType.TrimEnd('.'), StringComparison.OrdinalIgnoreCase));
 
             Log.Debug(
-                "mDNS query received from {Remote}: questions=[{Questions}], asksForUs={AsksForUs}",
+                "mDNS: query received from {Remote}: questions=[{Questions}], asksForUs={AsksForUs}",
                 received.RemoteEndPoint,
                 string.Join(", ", parsed.Questions),
                 asksForUs);
