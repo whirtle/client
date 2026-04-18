@@ -250,13 +250,12 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
         if (Log.IsEnabled(LogEventLevel.Debug))
         {
-            long localNowUs  = _clock.UtcNowMicroseconds;
-            long serverNowUs = localNowUs + (long)_clockOffset.TotalMicroseconds;
+            long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
             Log.Debug(
                 "Playback render: buffer={BufferFrames} frames, drift={DriftMs:F1} ms " +
-                "(localNow={LocalNowMs:F3} ms, offset={OffsetMs:F3} ms, estServerNow={ServerNowMs:F3} ms, frameTs={FrameTs:F3} ms)",
+                "(frameTs={FrameTs:F3} ms, estServerNow={ServerNowMs:F3} ms)",
                 _buffer.Count, driftMs,
-                localNowUs / 1_000.0, _clockOffset.TotalMilliseconds, serverNowUs / 1_000.0, timestamp / 1_000.0);
+                timestamp / 1_000.0, serverNowUs / 1_000.0);
         }
 
         if (driftMs > MaxDriftMs)
