@@ -7,6 +7,7 @@ public class ArtworkReceiverTests
 {
     private static readonly byte[] JpegMagic = [0xFF, 0xD8, 0x00, 0x00];
     private static readonly byte[] PngMagic  = [0x89, 0x50, 0x4E, 0x47, 0x00];
+    private static readonly byte[] BmpMagic  = [0x42, 0x4D, 0x00, 0x00];
     private static readonly byte[] Unknown   = [0x00, 0x01, 0x02, 0x03];
 
     // 8-byte big-endian representation of timestamp 1000 (microseconds).
@@ -102,6 +103,13 @@ public class ArtworkReceiverTests
     {
         var frame = await ReceiveOneArtworkFrameAsync(PngMagic);
         Assert.Equal("image/png", frame.MimeType);
+    }
+
+    [Fact]
+    public async Task ProtocolClient_DetectsBmp_FromBinaryFrame()
+    {
+        var frame = await ReceiveOneArtworkFrameAsync(BmpMagic);
+        Assert.Equal("image/bmp", frame.MimeType);
     }
 
     [Fact]

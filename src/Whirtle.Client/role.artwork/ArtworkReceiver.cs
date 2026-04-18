@@ -20,6 +20,7 @@ public sealed class ArtworkReceiver
         {
             "image/jpeg",
             "image/png",
+            "image/bmp",
             "application/octet-stream",
             string.Empty,
         };

@@ -186,5 +186,7 @@ public sealed class ProtocolClient : IAsyncDisposable
             ? "image/jpeg"
             : data.Length >= 4 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47
                 ? "image/png"
-                : "application/octet-stream";
+                : data.Length >= 2 && data[0] == 0x42 && data[1] == 0x4D
+                    ? "image/bmp"
+                    : "application/octet-stream";
 }
