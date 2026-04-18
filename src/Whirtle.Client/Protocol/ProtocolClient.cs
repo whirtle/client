@@ -4,13 +4,14 @@
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using Serilog;
+using Whirtle.Client.Clock;
 using Whirtle.Client.Transport;
 
 namespace Whirtle.Client.Protocol;
 
 public sealed class ProtocolClient : IAsyncDisposable
 {
-    private readonly ITransport       _transport;
+    private readonly ITransport        _transport;
     private readonly MessageSerializer _serializer = new();
 
     public ProtocolClient(ITransport transport)
@@ -115,7 +116,12 @@ public sealed class ProtocolClient : IAsyncDisposable
             if (data[0] == (byte)'{')
             {
                 var msg = _serializer.Deserialize(data);
-                Log.Debug("Recv {Type:l} {Json:l}", _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
+                if (msg is ServerTimeMessage)
+                    Log.Debug("Recv {Type:l} {Json:l} client_now={ClientNow}",
+                        _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data),
+                        SystemClock.Instance.UtcNowMicroseconds);
+                else
+                    Log.Debug("Recv {Type:l} {Json:l}", _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
                 yield return new ProtocolFrame(msg);
             }
             else

@@ -273,13 +273,5 @@ internal sealed class KalmanClockFilter
         _pDD = pDDp - kDri * pODp;
         _pOD = pODp - kDri * pOOp;
 
-        var sig = DriftIsSignificant;
-        Log.Debug(
-            "Clock Kalman update: y={Y:+0.00;-0.00} µs, K=[{Ko:F6},{Kd:F6}], " +
-            "offset={Off:+0.00;-0.00} µs, drift={Drift:+0.0000;-0.0000} µs/s, " +
-            "σ_offset={SigOff:F3} µs, σ_drift={SigDri:F4} µs/s, " +
-            "drift_sig={DriftSig}",
-            innovation, kOff, kDri,
-            _offset, _drift, OffsetStdDevUs, DriftStdDevUsPerS, sig);
     }
 }
