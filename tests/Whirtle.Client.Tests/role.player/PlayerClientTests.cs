@@ -139,15 +139,15 @@ public class PlayerClientTests
     }
 
     [Fact]
-    public async Task ProcessFrameAsync_UnknownCommand_IsIgnored_AndStillSendsState()
+    public async Task ProcessFrameAsync_UnknownCommand_IsIgnored_NoStateEmitted()
     {
         var (player, transport, _) = Build();
 
         await player.ProcessFrameAsync(new ProtocolFrame(
             new ServerCommandMessage(Player: new ServerCommandPlayer("fly_to_moon"))));
 
-        // State should still be echoed even for unknown commands.
-        Assert.Single(transport.Sent);
+        // Nothing changed, so no client/state should be sent.
+        Assert.Empty(transport.Sent);
     }
 
     // ── stream/start ──────────────────────────────────────────────────────────
@@ -279,13 +279,10 @@ public class PlayerClientTests
 
         await player.ProcessFrameAsync(new ProtocolFrame(
             new ServerCommandMessage(Player: new ServerCommandPlayer("set_static_delay", StaticDelayMs: 200))));
-        await player.ProcessFrameAsync(new ProtocolFrame(
-            new StreamStartMessage(Player: new StreamStartPlayer("pcm", 48_000, 2, 16))));
 
-        int sentBefore = transport.Sent.Count;
-        await player.SendStateAsync();
-
-        var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[sentBefore]);
+        // Exactly one client/state should have been sent (set_static_delay changed the value).
+        Assert.Single(transport.Sent);
+        var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[0]);
         Assert.Equal(200, state.Player!.StaticDelayMs); // not 300 (200 + 100 renderer latency)
     }
 
