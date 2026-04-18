@@ -8,6 +8,8 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
+            <FontFamily x:Key="PlusJakartaSans">ms-appx:///Assets/Fonts/PlusJakartaSans-VariableFont_wght.ttf#Plus Jakarta Sans</FontFamily>
+            <FontFamily x:Key="PlusJakartaSansItalic">ms-appx:///Assets/Fonts/PlusJakartaSans-Italic-VariableFont_wght.ttf#Plus Jakarta Sans</FontFamily>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
