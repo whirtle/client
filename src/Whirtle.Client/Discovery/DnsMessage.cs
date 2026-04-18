@@ -131,8 +131,18 @@ internal static class DnsMessage
         catch { return null; }
     }
 
+    // DNS UDP packets are at most 512 bytes per RFC 1035 §2.3.4; 4096 with EDNS0.
+    private const int MaxPacketBytes = 4096;
+    // Generous per-section cap; real mDNS advertisements carry a handful of records.
+    private const int MaxRecordsPerSection = 50;
+
     private static ParsedResponse Parse(byte[] data)
     {
+        if (data.Length < 12)
+            throw new InvalidOperationException("DNS datagram too short.");
+        if (data.Length > MaxPacketBytes)
+            throw new InvalidOperationException("DNS datagram too large.");
+
         int pos = 0;
 
         /* ushort id  = */ ReadUInt16(data, ref pos);
@@ -142,12 +152,18 @@ internal static class DnsMessage
         ushort nsCount = ReadUInt16(data, ref pos);
         ushort arCount = ReadUInt16(data, ref pos);
 
-        var result   = new ParsedResponse { IsQuery = (flags & 0x8000) == 0 };
+        if (qdCount > MaxRecordsPerSection || anCount > MaxRecordsPerSection ||
+            nsCount > MaxRecordsPerSection || arCount > MaxRecordsPerSection)
+            throw new InvalidOperationException("DNS record count exceeds limit.");
+
+        var result = new ParsedResponse { IsQuery = (flags & 0x8000) == 0 };
 
         // Parse questions (record names for query detection)
         for (int i = 0; i < qdCount; i++)
         {
             result.Questions.Add(ReadName(data, ref pos));
+            if (pos + 4 > data.Length)
+                throw new InvalidOperationException("DNS question entry truncated.");
             pos += 4; // TYPE + CLASS
         }
 
@@ -161,6 +177,8 @@ internal static class DnsMessage
             /* uint   ttl = */ ReadUInt32(data, ref pos);
             ushort rdLen = ReadUInt16(data, ref pos);
             int    rdEnd = pos + rdLen;
+            if (rdEnd > data.Length)
+                throw new InvalidOperationException("DNS RDATA extends past end of buffer.");
 
             switch (type)
             {
@@ -190,11 +208,13 @@ internal static class DnsMessage
 
                 case TypeTXT:
                     var entries = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    int txtEnd  = pos + rdLen;
+                    int txtEnd  = rdEnd;
                     while (pos < txtEnd)
                     {
                         byte sLen = data[pos++];
                         if (sLen == 0) continue;
+                        if (pos + sLen > txtEnd)
+                            throw new InvalidOperationException("DNS TXT string extends past RDATA boundary.");
                         var entry  = Encoding.ASCII.GetString(data, pos, sLen);
                         pos       += sLen;
                         int eq     = entry.IndexOf('=');
@@ -239,10 +259,14 @@ internal static class DnsMessage
 
     private static string ReadName(byte[] data, ref int pos)
     {
-        var  parts   = new List<string>();
-        bool jumped  = false;
-        int  saved   = 0;
-        var  visited = new HashSet<int>();
+        var  parts    = new List<string>();
+        bool jumped   = false;
+        int  saved    = 0;
+        var  visited  = new HashSet<int>();
+        int  ptrHops  = 0;
+        int  totalLen = 0;
+        const int MaxPtrHops  = 10;
+        const int MaxNameLen  = 255;
 
         while (true)
         {
@@ -257,15 +281,27 @@ internal static class DnsMessage
                 if (pos >= data.Length)
                     throw new InvalidOperationException("DNS compression pointer truncated.");
                 int ptr = ((len & 0x3F) << 8) | data[pos++];
+                if (ptr >= data.Length)
+                    throw new InvalidOperationException("DNS compression pointer out of bounds.");
                 if (!visited.Add(ptr))
                     throw new InvalidOperationException("Circular DNS compression pointer.");
+                if (++ptrHops > MaxPtrHops)
+                    throw new InvalidOperationException("DNS compression pointer chain too long.");
                 if (!jumped) { saved = pos; jumped = true; }
                 pos = ptr;
                 continue;
             }
 
+            // Reject reserved label types (RFC 1035: top 2 bits must be 00 for a length).
+            if ((len & 0xC0) != 0)
+                throw new InvalidOperationException("DNS reserved label type.");
+
             if (pos + len > data.Length)
                 throw new InvalidOperationException("DNS label extends past end of buffer.");
+
+            totalLen += 1 + len; // 1 for the length octet, len for content
+            if (totalLen > MaxNameLen)
+                throw new InvalidOperationException("DNS name exceeds 255-byte limit.");
 
             parts.Add(Encoding.ASCII.GetString(data, pos, len));
             pos += len;
@@ -273,17 +309,6 @@ internal static class DnsMessage
 
         if (jumped) pos = saved;
         return string.Join('.', parts);
-    }
-
-    private static void SkipName(byte[] data, ref int pos)
-    {
-        while (true)
-        {
-            byte len = data[pos++];
-            if (len == 0) return;
-            if ((len & 0xC0) == 0xC0) { pos++; return; }
-            pos += len;
-        }
     }
 
     private static ushort ReadUInt16(byte[] data, ref int pos)
