@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 using System.Buffers.Binary;
+using System.Text.Json;
 using System.Runtime.CompilerServices;
 using Serilog;
 using Whirtle.Client.Clock;
@@ -68,7 +69,7 @@ public sealed class ProtocolClient : IAsyncDisposable
     public async Task SendAsync(Message message, CancellationToken cancellationToken = default)
     {
         var data = _serializer.Serialize(message);
-        Log.Debug("{Tag:l}Send {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(message), System.Text.Encoding.UTF8.GetString(data));
+        Log.Debug("{Tag:l}> {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(message), ExtractPayloadJson(data));
         await _transport.SendAsync(data, cancellationToken);
     }
 
@@ -118,11 +119,11 @@ public sealed class ProtocolClient : IAsyncDisposable
             {
                 var msg = _serializer.Deserialize(data);
                 if (msg is ServerTimeMessage)
-                    Log.Debug("{Tag:l}Recv {Type:l} {Json:l} client_now={ClientNow:F3} ms",
-                        _serverTag, _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data),
+                    Log.Debug("{Tag:l}< {Type:l} {Json:l} client_now={ClientNow:F3} ms",
+                        _serverTag, _serializer.GetWireType(msg), ExtractPayloadJson(data),
                         SystemClock.Instance.UtcNowMicroseconds / 1_000.0);
                 else
-                    Log.Debug("{Tag:l}Recv {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
+                    Log.Debug("{Tag:l}< {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), ExtractPayloadJson(data));
                 yield return new ProtocolFrame(msg);
             }
             else
@@ -169,7 +170,7 @@ public sealed class ProtocolClient : IAsyncDisposable
         {
             if (data.Length == 0 || data[0] != (byte)'{') continue;
             var msg = _serializer.Deserialize(data);
-            Log.Debug("{Tag:l}Recv {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
+            Log.Debug("{Tag:l}< {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), ExtractPayloadJson(data));
             yield return msg;
         }
     }
@@ -185,6 +186,14 @@ public sealed class ProtocolClient : IAsyncDisposable
             : hello.ServerId;
         _serverTag = $"{hello.Name}_{suffix}: ";
         return hello;
+    }
+
+    private static string ExtractPayloadJson(byte[] data)
+    {
+        using var doc = JsonDocument.Parse(data);
+        return doc.RootElement.TryGetProperty("payload", out var payload)
+            ? payload.GetRawText()
+            : System.Text.Encoding.UTF8.GetString(data);
     }
 
     private static string DetectMimeType(byte[] data) =>
