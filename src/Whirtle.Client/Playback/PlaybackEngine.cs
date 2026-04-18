@@ -268,10 +268,13 @@ public sealed class PlaybackEngine : IAsyncDisposable
         }
 
         // Compute a rate ratio to gently correct residual drift.
-        // A 1 ms drift on a 20 ms frame → ratio = 20/21 ≈ 0.952 (speed up).
+        // Drift is measured at dequeue time; the frame won't play until _aheadTargetMs
+        // ms later, so target dequeue drift is -_aheadTargetMs (not zero).
+        // A +1 ms adjusted drift on a 20 ms frame → ratio = 19/20 = 0.95 (speed up).
         double frameDurationMs = frame!.Duration.TotalMilliseconds;
+        double adjustedDriftMs = driftMs + _aheadTargetMs;
         double rateRatio = frameDurationMs > 0
-            ? frameDurationMs / (frameDurationMs + driftMs)
+            ? (frameDurationMs - adjustedDriftMs) / frameDurationMs
             : 1.0;
 
         rateRatio = Math.Clamp(rateRatio, 0.9, 1.1);
