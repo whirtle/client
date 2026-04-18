@@ -79,6 +79,9 @@ public sealed partial class StatsPage : Page
             case nameof(NowPlayingViewModel.StatMinBufferFloorHits):
                 MinBufferFloorHitsText.Text = PlaybackStats.StatMinBufferFloorHits.ToString("N0");
                 break;
+            case nameof(NowPlayingViewModel.StatRateRatio):
+                RateRatioText.Text = FormatRateRatio(PlaybackStats.StatRateRatio);
+                break;
             case nameof(NowPlayingViewModel.IsClockConverged):
                 ConvergedText.Text = FormatBool(PlaybackStats.IsClockConverged);
                 break;
@@ -101,6 +104,7 @@ public sealed partial class StatsPage : Page
         CodecDetailText.Text     = PlaybackStats.StatCodecDetails;
         BufferUnderrunsText.Text    = PlaybackStats.StatBufferUnderruns.ToString("N0");
         MinBufferFloorHitsText.Text = PlaybackStats.StatMinBufferFloorHits.ToString("N0");
+        RateRatioText.Text          = FormatRateRatio(PlaybackStats.StatRateRatio);
         ConvergedText.Text          = FormatBool(PlaybackStats.IsClockConverged);
         ClockReadyText.Text      = FormatBool(PlaybackStats.IsClockReady);
     }
@@ -118,6 +122,9 @@ public sealed partial class StatsPage : Page
     }
 
     private static string FormatBool(bool value) => value ? "Yes" : "No";
+
+    private static string FormatRateRatio(double ratio)
+        => $"{ratio:0.0000}× ({(ratio - 1.0) * 100.0:+0.00;-0.00;0.00}%)";
 
     private static string FormatDrift(double driftUsPerSec, bool isSignificant)
     {

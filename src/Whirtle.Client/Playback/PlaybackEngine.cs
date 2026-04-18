@@ -44,8 +44,12 @@ public sealed class PlaybackEngine : IAsyncDisposable
     private  const int MaxAheadMs         = 200; // ceiling when falling behind
     internal const int LowWaterMs         = 10;  // buffer level (ms) that signals we're falling behind
     private  const int BehindThreshold    = 5;   // consecutive low-water events before doubling target
-    private  const int RecoveryStepMs     = 10;  // ms stepped down per recovery interval
-    internal const int RecoveryFrameCount = 50;  // healthy-buffer frames between recovery steps
+    // Recovery is amortized: small step × short interval, rather than a big step × long
+    // interval. A 10 ms jump in the target flowed directly into adjustedOffset (scheduleOffset
+    // + aheadTarget) and produced a rateRatio of ~1.025 for several frames. A 1 ms step keeps
+    // the correction below ~1.003. Same average recovery rate (0.2 ms/frame) as before.
+    private  const int RecoveryStepMs     = 1;   // ms stepped down per recovery interval
+    internal const int RecoveryFrameCount = 5;   // healthy-buffer frames between recovery steps
 
     // Rate correction amortization: spread the correction for a residual offset across N frames
     // instead of absorbing it all in one frame. A 7 ms miss on a 96 ms frame at N=1 would produce
@@ -75,11 +79,14 @@ public sealed class PlaybackEngine : IAsyncDisposable
     private volatile bool           _clockOffsetReady;
     private volatile bool           _paused;
     private CancellationTokenSource _cts  = new();
-    private Task                    _renderTask = Task.CompletedTask;
+    private Thread?                 _renderThread;
     private bool                    _userMuted   = false;
     private bool                    _engineMuted = false;
     private int                     _bufferUnderrunCount;
     private int                     _minBufferFloorHitCount;
+    // Stored as raw bits so cross-thread reads are atomic without needing a lock
+    // (plain double reads are not guaranteed atomic on all runtimes).
+    private long                    _lastRateRatioBits = BitConverter.DoubleToInt64Bits(1.0);
 
     // Adaptive ahead-buffer state (render-loop-only; no volatile needed)
     private int _aheadTargetMs   = TargetAheadMs;
@@ -106,6 +113,14 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     /// <summary>Current ahead-of-volume buffer target in milliseconds. Normally <see cref="TargetAheadMs"/>; increases temporarily under CPU pressure.</summary>
     internal int AheadTargetMs => _aheadTargetMs;
+
+    /// <summary>
+    /// The rate ratio most recently applied by the resampler. 1.0 when playback
+    /// is on-schedule; &gt;1 speeds audio up (we're behind); &lt;1 slows it down
+    /// (we're ahead). Clamped to [0.9, 1.1].
+    /// </summary>
+    public double LastRateRatio =>
+        BitConverter.Int64BitsToDouble(Interlocked.Read(ref _lastRateRatioBits));
 
     /// <summary>
     /// Raised when the playback state or buffer occupancy changes meaningfully.
@@ -147,7 +162,20 @@ public sealed class PlaybackEngine : IAsyncDisposable
             if (timeBeginPeriod(TimerResolutionMs) == 0) // TIMERR_NOERROR
                 _timerResolutionRaised = true;
         }
-        _renderTask = RenderLoopAsync(_cts.Token);
+
+        // Run on a dedicated thread rather than the thread pool so the loop is
+        // immune to pool starvation (e.g. large bursts of UI/WinRT work on Ctrl+S
+        // opening the stats window). AboveNormal priority keeps Windows from
+        // preempting the loop for routine background work. GC pauses will still
+        // stall the loop — that's what the Verbose GC log in RenderLoop reports.
+        var ct = _cts.Token;
+        _renderThread = new Thread(() => RenderLoop(ct))
+        {
+            IsBackground = true,
+            Name         = "Whirtle.PlaybackEngine.Render",
+            Priority     = ThreadPriority.AboveNormal,
+        };
+        _renderThread.Start();
         _renderer.Start();
         Log.Debug("PlaybackEngine: engine started; ahead target = {AheadTargetMs} ms", _aheadTargetMs);
     }
@@ -215,8 +243,14 @@ public sealed class PlaybackEngine : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _cts.Cancel();
-        try { await _renderTask.ConfigureAwait(false); }
-        catch { }   // Render task may fault (e.g. WASAPI session invalidated); swallow all
+        if (_renderThread is { } thread)
+        {
+            // Offload the blocking Join so the caller's task doesn't block its
+            // scheduler thread (shutdown runs on the UI dispatcher).
+            try { await Task.Run(thread.Join).ConfigureAwait(false); }
+            catch { }
+            _renderThread = null;
+        }
 
         try { _renderer.Stop(); }    catch { }
         try { _renderer.Dispose(); } catch { }
@@ -230,34 +264,68 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     // ── Render loop ───────────────────────────────────────────────────────────
 
-    private async Task RenderLoopAsync(CancellationToken cancellationToken)
+    private void RenderLoop(CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        int prevGen0 = GC.CollectionCount(0);
+        int prevGen1 = GC.CollectionCount(1);
+        int prevGen2 = GC.CollectionCount(2);
+        try
         {
-            switch (_state)
+            while (!cancellationToken.IsCancellationRequested)
             {
-                case PlaybackState.Buffering:
-                    await HandleBufferingAsync(cancellationToken);
-                    break;
+                if (Log.IsEnabled(LogEventLevel.Verbose))
+                {
+                    int g0 = GC.CollectionCount(0);
+                    int g1 = GC.CollectionCount(1);
+                    int g2 = GC.CollectionCount(2);
+                    if (g0 != prevGen0 || g1 != prevGen1 || g2 != prevGen2)
+                    {
+                        Log.Verbose(
+                            "PlaybackEngine: GC collections since last iteration — gen0={G0} gen1={G1} gen2={G2}",
+                            g0 - prevGen0, g1 - prevGen1, g2 - prevGen2);
+                        prevGen0 = g0; prevGen1 = g1; prevGen2 = g2;
+                    }
+                }
 
-                case PlaybackState.Synchronized:
-                    await HandleSynchronizedAsync(cancellationToken);
-                    break;
+                switch (_state)
+                {
+                    case PlaybackState.Buffering:
+                        HandleBuffering(cancellationToken);
+                        break;
 
-                case PlaybackState.Error:
-                    await HandleErrorAsync(cancellationToken);
-                    break;
+                    case PlaybackState.Synchronized:
+                        HandleSynchronized(cancellationToken);
+                        break;
+
+                    case PlaybackState.Error:
+                        HandleError(cancellationToken);
+                        break;
+                }
             }
+        }
+        catch (OperationCanceledException) { /* expected during shutdown */ }
+        catch (Exception ex)
+        {
+            // Render thread has no task-faulted observer; log so the failure
+            // surfaces instead of silently killing the process.
+            Log.Error(ex, "PlaybackEngine: render loop faulted");
         }
     }
 
-    private async Task HandleBufferingAsync(CancellationToken ct)
+    /// <summary>
+    /// Sleeps for <paramref name="ms"/> or until the token is canceled.
+    /// Returns <c>true</c> if cancellation was signaled and the caller should exit.
+    /// </summary>
+    private static bool CancelableWait(CancellationToken ct, int ms)
+        => ms > 0 && ct.WaitHandle.WaitOne(ms);
+
+    private void HandleBuffering(CancellationToken ct)
     {
         if (_paused || !_clockOffsetReady)
         {
             if (!_clockOffsetReady)
                 Log.Debug("PlaybackEngine: buffering — waiting for first clock sync");
-            await Task.Delay(5, ct).ConfigureAwait(false);
+            CancelableWait(ct, 5);
             return;
         }
 
@@ -299,22 +367,22 @@ public sealed class PlaybackEngine : IAsyncDisposable
             PlaybackStateChanged?.Invoke("synchronized");
             return;
         }
-        await Task.Delay(5, ct).ConfigureAwait(false);
+        CancelableWait(ct, 5);
     }
 
-    private async Task HandleSynchronizedAsync(CancellationToken ct)
+    private void HandleSynchronized(CancellationToken ct)
     {
         if (!_buffer.TryDequeue(out long timestamp, out var frame))
         {
             if (_renderer.BufferedBytes > 0)
             {
-                await Task.Delay(5, ct).ConfigureAwait(false);
+                CancelableWait(ct, 5);
                 return;
             }
             long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
             Log.Warning("PlaybackEngine: underrun — jitter buffer empty (estServerNow={ServerNowMs:F3} ms)", serverNowUs / 1_000.0);
             _bufferUnderrunCount++;
-            await EnterErrorAsync(ct);
+            EnterError();
             return;
         }
 
@@ -325,7 +393,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
             Log.Warning(
                 "PlaybackEngine: schedule offset {ScheduleOffsetMs:+0.0;-0.0} ms exceeds threshold ({MaxScheduleOffsetMs} ms); entering error state",
                 scheduleOffsetMs, MaxScheduleOffsetMs);
-            await EnterErrorAsync(ct);
+            EnterError();
             return;
         }
 
@@ -347,7 +415,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
         double waitMs          = Math.Min(-_aheadTargetMs - scheduleOffsetMs, frameDurationMs);
         if (waitMs > 1)
         {
-            await Task.Delay((int)waitMs, ct).ConfigureAwait(false);
+            if (CancelableWait(ct, (int)waitMs)) return;
             scheduleOffsetMs = ComputeScheduleOffsetMs(timestamp);
         }
 
@@ -381,6 +449,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
             : 1.0;
 
         rateRatio = Math.Clamp(rateRatio, 0.9, 1.1);
+        Interlocked.Exchange(ref _lastRateRatioBits, BitConverter.DoubleToInt64Bits(rateRatio));
 
         short[]  resampled;
         if (Math.Abs(rateRatio - 1.0) > 0.001)
@@ -409,9 +478,11 @@ public sealed class PlaybackEngine : IAsyncDisposable
         int lowWaterBytes = LowWaterMs     * bytesPerMs;
 
         // Safety: the precise-pacing wait above normally keeps BufferedBytes near targetBytes
-        // at write time, but if Task.Delay returned early this prevents buffer overflow.
+        // at write time, but if it returned early this prevents buffer overflow.
         while (_renderer.BufferedBytes > targetBytes && !ct.IsCancellationRequested)
-            await Task.Delay(5, ct).ConfigureAwait(false);
+        {
+            if (CancelableWait(ct, 5)) return;
+        }
 
         if (_renderer.BufferedBytes < lowWaterBytes)
         {
@@ -437,7 +508,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
         _renderer.Write(samples);
     }
 
-    private async Task HandleErrorAsync(CancellationToken ct)
+    private void HandleError(CancellationToken ct)
     {
         _engineMuted = true;
         ApplyMuteState();
@@ -451,19 +522,18 @@ public sealed class PlaybackEngine : IAsyncDisposable
             return;
         }
 
-        await Task.Delay(10, ct).ConfigureAwait(false);
+        CancelableWait(ct, 10);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private Task EnterErrorAsync(CancellationToken ct)
+    private void EnterError()
     {
         TransitionTo(PlaybackState.Error);
         _engineMuted = true;
         ApplyMuteState();
         _buffer.Clear();
         PlaybackStateChanged?.Invoke("error");
-        return Task.CompletedTask;
     }
 
     private void TransitionTo(PlaybackState next)

@@ -18,6 +18,7 @@ namespace Whirtle.Client.UI;
 public partial class App : Application
 {
     private MainWindow?          _mainWindow;
+    private StatsWindow?         _statsWindow;
     private NowPlayingViewModel? _nowPlayingViewModel;
     private SettingsViewModel?   _settingsViewModel;
     private LogsViewModel?       _logsViewModel;
@@ -34,6 +35,14 @@ public partial class App : Application
     public SettingsViewModel   SettingsViewModel   => _settingsViewModel!;
     public LogsViewModel       LogsViewModel       => _logsViewModel!;
     public AppUiStateService   UiStateService      => _uiStateService!;
+
+    /// <summary>
+    /// The shared stats window. Lazily constructed but eagerly warmed up during
+    /// startup so that the first Ctrl+S keystroke doesn't trigger the window's
+    /// XAML tree / Mica / WinRT init (which, on a cold open, had been producing
+    /// a ~200–300 ms GC pause that stalled the render loop).
+    /// </summary>
+    public StatsWindow StatsWindow => _statsWindow ??= new StatsWindow();
 
     public App()
     {
@@ -128,6 +137,13 @@ public partial class App : Application
             _ = CheckFirewallAsync();
         }
         _mainWindow.Activated += OnFirstActivated;
+
+        // Pre-create the stats window at low dispatcher priority so its XAML
+        // tree + Mica setup happens after the main window paints but before
+        // playback stabilizes. This avoids a ~200–300 ms GC pause the first
+        // time the user presses Ctrl+S, which had been stalling the render
+        // loop long enough to force max-rate resampling on several frames.
+        _dispatcher.TryEnqueue(DispatcherQueuePriority.Low, () => _ = StatsWindow);
     }
 
     private void MaybeStartServerInitiatedMode()

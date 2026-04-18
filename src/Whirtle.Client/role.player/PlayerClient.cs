@@ -75,6 +75,9 @@ public sealed class PlayerClient : IAsyncDisposable
     /// <summary>Number of times the minimum-buffer floor held back late-frame drops at startup, forcing rate correction.</summary>
     public int MinBufferFloorHitCount => _playbackEngine?.MinBufferFloorHitCount ?? 0;
 
+    /// <summary>Rate ratio most recently applied by the resampler (1.0 = on-schedule).</summary>
+    public double LastRateRatio => _playbackEngine?.LastRateRatio ?? 1.0;
+
     /// <summary>
     /// Returns a snapshot of per-codec statistics accumulated since the current stream started.
     /// </summary>
