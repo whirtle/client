@@ -75,6 +75,9 @@ Title="Whirtle">
                     Click="ServerPickerButton_Click">
                     <TextBlock
                         Style="{ThemeResource CaptionTextBlockStyle}"
+                        FontFamily="{StaticResource PlusJakartaSans}"
+                        FontSize="11"
+                        FontWeight="Normal"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         Text="{x:Bind NowPlayingViewModel.ServerPickerLabel, Mode=OneWay}"
                         TextTrimming="CharacterEllipsis" />
@@ -85,6 +88,9 @@ Title="Whirtle">
                     Grid.Column="1"
                     VerticalAlignment="Center"
                     Style="{ThemeResource CaptionTextBlockStyle}"
+                    FontFamily="{StaticResource PlusJakartaSans}"
+                    FontSize="11"
+                    FontWeight="Normal"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Text="{x:Bind NowPlayingViewModel.CodecDisplay, Mode=OneWay}" />
 

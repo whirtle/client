@@ -54,7 +54,7 @@
                                 Grid.Column="0"
                                 Width="112" Height="112"
                                 CornerRadius="8"
-                                Background="#FF404040">
+                                Background="#FF1A1040">
                                 <Image
                                     x:Name="AlbumArtImage"
                                     Stretch="UniformToFill" />
@@ -67,16 +67,24 @@
                                 Spacing="6">
                                 <TextBlock
                                     Text="{x:Bind ViewModel.Title, Mode=OneWay, FallbackValue='Nothing playing'}"
-                                    Style="{ThemeResource TitleTextBlockStyle}"
+                                    FontFamily="{StaticResource PlusJakartaSans}"
+                                    FontSize="20"
+                                    FontWeight="SemiBold"
                                     TextTrimming="CharacterEllipsis"
                                     MaxLines="2" />
                                 <TextBlock
                                     Text="{x:Bind ViewModel.Artist, Mode=OneWay}"
                                     Style="{ThemeResource SubtitleTextBlockStyle}"
+                                    FontFamily="{StaticResource PlusJakartaSans}"
+                                    FontSize="13"
+                                    FontWeight="Normal"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 <TextBlock
                                     Text="{x:Bind ViewModel.Album, Mode=OneWay}"
                                     Style="{ThemeResource BodyTextBlockStyle}"
+                                    FontFamily="{StaticResource PlusJakartaSans}"
+                                    FontSize="13"
+                                    FontWeight="Normal"
                                     Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
                             </StackPanel>
                         </Grid>
@@ -141,6 +149,9 @@
                                     Grid.Column="0"
                                     VerticalAlignment="Center"
                                     Style="{ThemeResource CaptionTextBlockStyle}"
+                                    FontFamily="{StaticResource PlusJakartaSans}"
+                                    FontSize="11"
+                                    FontWeight="Normal"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                     ToolTipService.ToolTip="Current position"
                                     Text="{x:Bind ViewModel.PositionSeconds,
@@ -158,12 +169,16 @@
                                     Grid.Column="1"
                                     x:Name="SeekBar"
                                     Minimum="0"
+                                    Foreground="#FF5B2EFF"
                                     VerticalAlignment="Center" />
 
                                 <TextBlock
                                     Grid.Column="2"
                                     VerticalAlignment="Center"
                                     Style="{ThemeResource CaptionTextBlockStyle}"
+                                    FontFamily="{StaticResource PlusJakartaSans}"
+                                    FontSize="11"
+                                    FontWeight="Normal"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                     ToolTipService.ToolTip="Track duration"
                                     Text="{x:Bind ViewModel.DurationSeconds,
@@ -231,7 +246,16 @@
                         Minimum="0" Maximum="100"
                         Value="{x:Bind ViewModel.VolumePercent, Mode=OneWay}"
                         VerticalAlignment="Center"
-                        PointerCaptureLost="VolumeSlider_PointerCaptureLost" />
+                        PointerCaptureLost="VolumeSlider_PointerCaptureLost">
+                        <Slider.Resources>
+                            <SolidColorBrush x:Key="SliderTrackValueFill" Color="#FF5B2EFF" />
+                            <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="#FF5B2EFF" />
+                            <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="#FF5B2EFF" />
+                            <SolidColorBrush x:Key="SliderThumbBackground" Color="#FF9B72FF" />
+                            <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#FF9B72FF" />
+                            <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#FF9B72FF" />
+                        </Slider.Resources>
+                    </Slider>
                 </Grid>
             </Border>
 

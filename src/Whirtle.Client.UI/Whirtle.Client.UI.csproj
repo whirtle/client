@@ -33,4 +33,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Whirtle.Client\Whirtle.Client.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\Fonts\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>
