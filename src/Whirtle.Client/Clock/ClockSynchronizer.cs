@@ -231,7 +231,7 @@ public sealed class ClockSynchronizer
     private const int RapidSyncCount = 3;
 
     // Interval between rapid syncs.
-    private static readonly TimeSpan RapidSyncInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan RapidSyncInterval = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
     /// Calls <paramref name="onSync"/> with the latest filter snapshot and, if a
