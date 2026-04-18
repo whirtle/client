@@ -10,6 +10,10 @@
             </ResourceDictionary.MergedDictionaries>
             <FontFamily x:Key="PlusJakartaSans">ms-appx:///Assets/Fonts/PlusJakartaSans-VariableFont_wght.ttf#Plus Jakarta Sans</FontFamily>
             <FontFamily x:Key="PlusJakartaSansItalic">ms-appx:///Assets/Fonts/PlusJakartaSans-Italic-VariableFont_wght.ttf#Plus Jakarta Sans</FontFamily>
+
+            <SolidColorBrush x:Key="AccentButtonBackground"              Color="#5B2EFF" />
+            <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver"   Color="#6E47FF" />
+            <SolidColorBrush x:Key="AccentButtonBackgroundPressed"       Color="#4A25CC" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>
