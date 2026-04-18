@@ -82,6 +82,37 @@ public class JitterBufferTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new JitterBuffer(0));
     }
 
+    // ── TryPeekFirstTimestamp ─────────────────────────────────────────────────
+
+    [Fact]
+    public void TryPeekFirstTimestamp_Empty_ReturnsFalse()
+    {
+        Assert.False(new JitterBuffer().TryPeekFirstTimestamp(out _));
+    }
+
+    [Fact]
+    public void TryPeekFirstTimestamp_ReturnsLowestTimestamp()
+    {
+        var buf = new JitterBuffer();
+        buf.Enqueue(20, Frame());
+        buf.Enqueue(10, Frame());
+
+        buf.TryPeekFirstTimestamp(out long ts);
+
+        Assert.Equal(10, ts);
+    }
+
+    [Fact]
+    public void TryPeekFirstTimestamp_DoesNotConsumeFrame()
+    {
+        var buf = new JitterBuffer();
+        buf.Enqueue(1, Frame());
+
+        buf.TryPeekFirstTimestamp(out _);
+
+        Assert.Equal(1, buf.Count);
+    }
+
     // ── TotalDuration ─────────────────────────────────────────────────────────
 
     [Fact]

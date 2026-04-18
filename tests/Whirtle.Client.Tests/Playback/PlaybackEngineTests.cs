@@ -36,7 +36,7 @@ public class PlaybackEngineTests
 
         engine.Start();
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
 
         await PollUntil(() => reachedSynchronized, TimeSpan.FromSeconds(2));
@@ -53,7 +53,7 @@ public class PlaybackEngineTests
         engine.Start();
 
         // Provide just enough to reach Synchronized…
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
 
         await PollUntil(() => engine.State == PlaybackState.Synchronized, TimeSpan.FromSeconds(2));
@@ -72,7 +72,7 @@ public class PlaybackEngineTests
         engine.UpdateClockOffset(TimeSpan.Zero); // mark clock as ready
         engine.Start();
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
 
         await PollUntil(() => engine.State == PlaybackState.Synchronized, TimeSpan.FromSeconds(2));
@@ -89,7 +89,7 @@ public class PlaybackEngineTests
         // Deliberately do NOT call UpdateClockOffset.
         engine.Start();
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
 
         // Give the render loop plenty of time to advance if the gate were absent.
@@ -109,7 +109,7 @@ public class PlaybackEngineTests
 
         engine.Start();
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * (long)TimeSpan.FromMilliseconds(20).TotalMicroseconds, Frame());
 
         // Engine is stuck in Buffering without a clock offset.
@@ -131,7 +131,7 @@ public class PlaybackEngineTests
         engine.UpdateClockOffset(TimeSpan.Zero);
         engine.Start();
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
 
         await PollUntil(() => renderer.Written.Count > 0, TimeSpan.FromSeconds(2));
@@ -143,14 +143,16 @@ public class PlaybackEngineTests
     [Fact]
     public async Task Drift_BelowThreshold_RendersNormally()
     {
-        // 100 ms drift is below MaxDriftMs (200 ms): engine should render all frames.
+        // 100 ms clock offset is below MaxScheduleOffsetMs (200 ms): engine should render all frames.
+        // Frame timestamps start 200 ms into the future relative to localNow so they clear
+        // the late-drop threshold (serverNow + 50 ms = localNow + 150 ms) on startup.
         var (engine, renderer, clock) = Build();
         engine.UpdateClockOffset(TimeSpan.FromMilliseconds(100));
         engine.Start();
 
-        const int frameCount = 4;
+        const int frameCount = 8;
         for (int i = 0; i < frameCount; i++)
-            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+            engine.Enqueue(clock.UtcNowMicroseconds + 200_000L + i * 20_000L, Frame());
 
         await PollUntil(() => renderer.Written.Count >= frameCount, TimeSpan.FromSeconds(2));
 
@@ -169,7 +171,7 @@ public class PlaybackEngineTests
         engine.Start();
 
         // Provide just enough frames to reach Synchronized, then let it underrun.
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
 
         await PollUntil(() => receivedState == "error", TimeSpan.FromSeconds(3));
@@ -187,7 +189,7 @@ public class PlaybackEngineTests
         engine.UpdateClockOffset(TimeSpan.FromMilliseconds(250));
         engine.Start();
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
 
         await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(2));
@@ -213,13 +215,13 @@ public class PlaybackEngineTests
 
         engine.Start();
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
 
         await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(3));
 
-        // Refill to trigger recovery.
-        for (int i = 4; i < 8; i++)
+        // Refill to trigger recovery — needs StartupBufferFrames to reach Synchronized again.
+        for (int i = 8; i < 16; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
 
         await PollUntil(() => synchronizedCount >= 2, TimeSpan.FromSeconds(3));
@@ -254,13 +256,13 @@ public class PlaybackEngineTests
         engine.Start();
 
         // Initial fill → Buffering → Synchronized.
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 8; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
 
         await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(3));
 
-        // Refill → Buffering → Synchronized again.
-        for (int i = 4; i < 8; i++)
+        // Refill → Buffering → Synchronized again — needs StartupBufferFrames.
+        for (int i = 8; i < 16; i++)
             engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
 
         await tcs.Task.WaitAsync(TimeSpan.FromSeconds(3));
@@ -281,6 +283,32 @@ public class PlaybackEngineTests
             Assert.Equal("synchronized", states[0]);
             Assert.Contains("error",        states);
         }
+    }
+
+    [Fact]
+    public async Task LateFrames_DroppedBeforePlaybackStart()
+    {
+        // Enqueue 8 frames whose timestamps start well in the past.
+        // serverNow = 0 (FakeClock=0, clockOffset=0).
+        // aheadTargetUs = TargetAheadMs * 1000 = 50_000 µs.
+        // Transition fires at StartupBufferFrames=8.
+        // Frames with ts < 50_000 are "past their dequeue window":
+        //   i=0: ts=0, i=1: ts=20_000, i=2: ts=40_000  → dropped (3 frames)
+        //   i=3: ts=60_000 … i=7: ts=140_000           → kept   (5 frames)
+        // Guard keeps at least MinBufferFrames=4, so all 3 can be dropped (8-3=5≥4).
+        var (engine, renderer, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero);
+        engine.Start();
+
+        for (int i = 0; i < 8; i++)
+            engine.Enqueue(i * 20_000L, Frame());
+
+        // Wait until the engine drains the kept frames and underruns.
+        await PollUntil(() => engine.State == PlaybackState.Error, TimeSpan.FromSeconds(3));
+
+        // 5 frames should have been rendered (3 were silently dropped).
+        Assert.Equal(5, renderer.Written.Count);
+        await engine.DisposeAsync();
     }
 
     [Fact]
