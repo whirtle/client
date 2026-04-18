@@ -10,6 +10,15 @@
     <Page.Resources>
         <converters:SecondsToTimeConverter x:Key="SecondsToTime" />
 
+        <Storyboard x:Name="LogoSpinStoryboard">
+            <DoubleAnimation
+                Storyboard.TargetName="LogoRotate"
+                Storyboard.TargetProperty="Angle"
+                From="0" To="360"
+                Duration="0:0:4"
+                RepeatBehavior="Forever" />
+        </Storyboard>
+
         <!-- Card appearance shared by every section -->
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background"     Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
@@ -192,10 +201,19 @@
                         Padding="24,20"
                         MinWidth="220">
                         <StackPanel Spacing="10" HorizontalAlignment="Center">
-                            <ProgressRing
-                                IsActive="True"
-                                Width="28" Height="28"
-                                HorizontalAlignment="Center" />
+                            <Viewbox Width="28" Height="28" HorizontalAlignment="Center">
+                                <Canvas Width="140" Height="140">
+                                    <Canvas.RenderTransform>
+                                        <RotateTransform x:Name="LogoRotate" CenterX="70" CenterY="70" />
+                                    </Canvas.RenderTransform>
+                                    <Path Fill="#5B2EFF" Data="M 70 70 C 62 50, 56 28, 62 16 C 65 10, 68 8, 70 8 C 72 8, 75 10, 78 16 C 84 28, 78 50, 70 70 Z" />
+                                    <Path Fill="#FFB020" Data="M 70 70 C 88 76, 108 84, 118 100 C 122 107, 122 114, 120 117 C 117 120, 110 121, 104 119 C 88 113, 80 92, 70 70 Z" />
+                                    <Path Fill="#FF5FA0" Data="M 70 70 C 52 76, 32 84, 22 100 C 18 107, 18 114, 20 117 C 23 120, 30 121, 36 119 C 52 113, 60 92, 70 70 Z" />
+                                    <Ellipse Canvas.Left="57" Canvas.Top="57" Width="26" Height="26" Fill="#1A1040" />
+                                    <Ellipse Canvas.Left="62" Canvas.Top="62" Width="16" Height="16" Fill="#FFFFFF" />
+                                    <Ellipse Canvas.Left="66" Canvas.Top="66" Width="8"  Height="8"  Fill="#5B2EFF" />
+                                </Canvas>
+                            </Viewbox>
                             <TextBlock
                                 Text="{x:Bind ViewModel.ConnectionStatus, Mode=OneWay}"
                                 HorizontalAlignment="Center"

@@ -62,6 +62,7 @@ public sealed partial class NowPlayingPage : Page
     // highlighted when the page first loads.
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
+        LogoSpinStoryboard.Begin();
         DispatcherQueue.TryEnqueue(
             Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
             () => FocusSink.Focus(FocusState.Programmatic));
