@@ -240,7 +240,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
                 return;
             }
             long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
-            Log.Warning("Playback underrun — jitter buffer empty (estServerNow={ServerNowUs} μs)", serverNowUs);
+            Log.Warning("Playback underrun — jitter buffer empty (estServerNow={ServerNowMs:F3} ms)", serverNowUs / 1_000.0);
             _bufferUnderrunCount++;
             await EnterErrorAsync(ct);
             return;
@@ -254,9 +254,9 @@ public sealed class PlaybackEngine : IAsyncDisposable
             long serverNowUs = localNowUs + (long)_clockOffset.TotalMicroseconds;
             Log.Debug(
                 "Playback render: buffer={BufferFrames} frames, drift={DriftMs:F1} ms " +
-                "(localNow={LocalNowUs} μs, offset={OffsetUs} μs, estServerNow={ServerNowUs} μs, frameTs={FrameTs} μs)",
+                "(localNow={LocalNowMs:F3} ms, offset={OffsetMs:F3} ms, estServerNow={ServerNowMs:F3} ms, frameTs={FrameTs:F3} ms)",
                 _buffer.Count, driftMs,
-                localNowUs, (long)_clockOffset.TotalMicroseconds, serverNowUs, timestamp);
+                localNowUs / 1_000.0, _clockOffset.TotalMilliseconds, serverNowUs / 1_000.0, timestamp / 1_000.0);
         }
 
         if (driftMs > MaxDriftMs)

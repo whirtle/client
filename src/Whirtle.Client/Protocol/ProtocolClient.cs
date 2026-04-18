@@ -4,6 +4,7 @@
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using Serilog;
+using Whirtle.Client.Clock;
 using Whirtle.Client.Transport;
 
 namespace Whirtle.Client.Protocol;
@@ -116,7 +117,12 @@ public sealed class ProtocolClient : IAsyncDisposable
             if (data[0] == (byte)'{')
             {
                 var msg = _serializer.Deserialize(data);
-                Log.Debug("{Tag:l}Recv {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
+                if (msg is ServerTimeMessage)
+                    Log.Debug("{Tag:l}Recv {Type:l} {Json:l} client_now={ClientNow:F3} ms",
+                        _serverTag, _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data),
+                        SystemClock.Instance.UtcNowMicroseconds / 1_000.0);
+                else
+                    Log.Debug("{Tag:l}Recv {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), System.Text.Encoding.UTF8.GetString(data));
                 yield return new ProtocolFrame(msg);
             }
             else
@@ -137,8 +143,8 @@ public sealed class ProtocolClient : IAsyncDisposable
                     }
                     else
                     {
-                        Log.Verbose("{Tag:l}Recv artwork channel={Channel} timestamp={Timestamp} bytes={Bytes}",
-                            _serverTag, typeId - 8, timestamp, imageData.Length);
+                        Log.Verbose("{Tag:l}Recv artwork channel={Channel} timestamp={Timestamp:F3} ms bytes={Bytes}",
+                            _serverTag, typeId - 8, timestamp / 1_000.0, imageData.Length);
                         yield return new ArtworkFrame(
                             timestamp, imageData, DetectMimeType(imageData), Channel: typeId - 8);
                     }
@@ -147,7 +153,7 @@ public sealed class ProtocolClient : IAsyncDisposable
                 {
                     long timestamp   = BinaryPrimitives.ReadInt64BigEndian(payload);
                     var  encodedData = payload[8..];
-                    Log.Verbose("{Tag:l}Recv audio-chunk timestamp={Timestamp} bytes={Bytes}", _serverTag, timestamp, encodedData.Length);
+                    Log.Verbose("{Tag:l}Recv audio-chunk timestamp={Timestamp:F3} ms bytes={Bytes}", _serverTag, timestamp / 1_000.0, encodedData.Length);
                     yield return new AudioChunkFrame(timestamp, encodedData);
                 }
             }

@@ -122,8 +122,8 @@ internal sealed class KalmanClockFilter
         var (pOOp, pODp, pDDp) = PredictCovariance(_pOO, _pOD, _pDD, dtS);
 
         Log.Debug(
-            "KalmanClockFilter: predict: dt={Dt:F3} s, pred_offset={PredOffset:+0.00;-0.00} µs, pOO={Poo:F6}",
-            dtS, predOffset, pOOp);
+            "KalmanClockFilter: predict: dt={Dt:F3} s, pred_offset={PredOffset:+0.000;-0.000} ms, pOO={Poo:F6}",
+            dtS, predOffset / 1_000.0, pOOp);
 
         if (_count == 1)
         {
@@ -186,9 +186,9 @@ internal sealed class KalmanClockFilter
         _count        = 1;
 
         Log.Debug(
-            "KalmanClockFilter: init (count=1): offset={Offset:+0.00;-0.00} µs, " +
-            "σ_offset={Sigma:F2} µs",
-            _offset, OffsetStdDevUs);
+            "KalmanClockFilter: init (count=1): offset={Offset:+0.000;-0.000} ms, " +
+            "σ_offset={Sigma:F3} ms",
+            _offset / 1_000.0, OffsetStdDevUs / 1_000.0);
     }
 
     private void SecondUpdateInit(
@@ -204,9 +204,9 @@ internal sealed class KalmanClockFilter
         pDDp   = (_pOO + r) / (dtS * dtS);
 
         Log.Debug(
-            "KalmanClockFilter: init (count=2): drift={Drift:+0.0000;-0.0000} µs/s, " +
-            "σ_drift={Sigma:F4} µs/s",
-            _drift, Math.Sqrt(pDDp));
+            "KalmanClockFilter: init (count=2): drift={Drift:+0.0000;-0.0000} ms/s, " +
+            "σ_drift={Sigma:F4} ms/s",
+            _drift / 1_000.0, Math.Sqrt(pDDp) / 1_000.0);
     }
 
     // ── Prediction ────────────────────────────────────────────────────────────
@@ -243,15 +243,15 @@ internal sealed class KalmanClockFilter
             _forgetCount++;
 
             Log.Verbose(
-                "KalmanClockFilter: forget: |y|={Y:F2} µs > threshold={T:F2} µs, " +
+                "KalmanClockFilter: forget: |y|={Y:F3} ms > threshold={T:F3} ms, " +
                 "λ²={L:F4}, forget_count={Fc}",
-                Math.Abs(innovation), threshold, ForgetFactor, _forgetCount);
+                Math.Abs(innovation) / 1_000.0, threshold / 1_000.0, ForgetFactor, _forgetCount);
         }
         else
         {
             Log.Verbose(
-                "KalmanClockFilter: forget: |y|={Y:F2} µs ≤ threshold={T:F2} µs, no forgetting",
-                Math.Abs(innovation), threshold);
+                "KalmanClockFilter: forget: |y|={Y:F3} ms ≤ threshold={T:F3} ms, no forgetting",
+                Math.Abs(innovation) / 1_000.0, threshold / 1_000.0);
         }
     }
 
@@ -275,11 +275,11 @@ internal sealed class KalmanClockFilter
 
         var sig = DriftIsSignificant;
         Log.Debug(
-            "KalmanClockFilter: update: y={Y:+0.00;-0.00} µs, K=[{Ko:F6},{Kd:F6}], " +
-            "offset={Off:+0.00;-0.00} µs, drift={Drift:+0.0000;-0.0000} µs/s, " +
-            "σ_offset={SigOff:F3} µs, σ_drift={SigDri:F4} µs/s, " +
+            "KalmanClockFilter: update: y={Y:+0.000;-0.000} ms, K=[{Ko:F6},{Kd:F6}], " +
+            "offset={Off:+0.000;-0.000} ms, drift={Drift:+0.0000;-0.0000} ms/s, " +
+            "σ_offset={SigOff:F3} ms, σ_drift={SigDri:F4} ms/s, " +
             "drift_sig={DriftSig}",
-            innovation, kOff, kDri,
-            _offset, _drift, OffsetStdDevUs, DriftStdDevUsPerS, sig);
+            innovation / 1_000.0, kOff, kDri,
+            _offset / 1_000.0, _drift / 1_000.0, OffsetStdDevUs / 1_000.0, DriftStdDevUsPerS / 1_000.0, sig);
     }
 }

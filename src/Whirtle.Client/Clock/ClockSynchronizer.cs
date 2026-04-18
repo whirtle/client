@@ -262,15 +262,15 @@ public sealed class ClockSynchronizer
         _filter.Update(offsetUs, maxErrorUs, result.ClientReceivedUs);
 
         Log.Debug(
-            "ClockSynchronizer: raw_offset={RawOff:+0.0;-0.0} µs, " +
-            "filtered_offset={FiltOff:+0.0;-0.0} µs ±{Sigma:F2} µs, " +
-            "drift={Drift:+0.000;-0.000} µs/s {DriftSig}, " +
-            "RTT={Rtt} µs, max_err={MaxErr} µs",
-            offsetUs,
-            _filter.OffsetUs, _filter.OffsetStdDevUs,
-            _filter.DriftUsPerS, _filter.DriftIsSignificant ? "(applied)" : "(suppressed)",
-            (long)result.RoundTripTime.TotalMicroseconds,
-            (long)maxErrorUs);
+            "ClockSynchronizer: raw_offset={RawOff:+0.000;-0.000} ms, " +
+            "filtered_offset={FiltOff:+0.000;-0.000} ms ±{Sigma:F3} ms, " +
+            "drift={Drift:+0.000;-0.000} ms/s {DriftSig}, " +
+            "RTT={Rtt:F3} ms, max_err={MaxErr:F3} ms",
+            offsetUs / 1_000.0,
+            _filter.OffsetUs / 1_000.0, _filter.OffsetStdDevUs / 1_000.0,
+            _filter.DriftUsPerS / 1_000.0, _filter.DriftIsSignificant ? "(applied)" : "(suppressed)",
+            result.RoundTripTime.TotalMilliseconds,
+            maxErrorUs / 1_000.0);
     }
 
     /// <summary>
