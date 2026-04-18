@@ -381,7 +381,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                     bool converged = t.Result;
                     if (converged)
                         Log.Information(
-                            "Clock synchronised to <{TargetMs} ms in {ElapsedMs:F0} ms",
+                            "Clock synchronized to <{TargetMs} ms in {ElapsedMs:F0} ms",
                             ClockConvergenceTargetStdDevUs / 1_000, convergenceSw.Elapsed.TotalMilliseconds);
                     else
                         Log.Warning(
@@ -849,7 +849,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 bool converged = t.Result;
                 if (converged)
                     Log.Information(
-                        "Clock synchronised to <{TargetMs} ms in {ElapsedMs:F0} ms",
+                        "Clock synchronized to <{TargetMs} ms in {ElapsedMs:F0} ms",
                         ClockConvergenceTargetStdDevUs / 1_000, convergenceSw.Elapsed.TotalMilliseconds);
                 else
                     Log.Warning(
