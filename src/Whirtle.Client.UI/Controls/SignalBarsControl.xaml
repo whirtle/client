@@ -9,16 +9,34 @@
         Matches the 0–4 Level range: Level 1 = one bar lit, …, 4 = all four.
         Bar fill is updated from code-behind when the Level dependency property changes.
     -->
-    <StackPanel
-        Orientation="Horizontal"
-        Spacing="2"
-        VerticalAlignment="Bottom"
-        Height="16">
+    <Grid Height="16">
 
-        <Rectangle x:Name="Bar1" Width="3" Height="4"  VerticalAlignment="Bottom" RadiusX="1" RadiusY="1" />
-        <Rectangle x:Name="Bar2" Width="3" Height="8"  VerticalAlignment="Bottom" RadiusX="1" RadiusY="1" />
-        <Rectangle x:Name="Bar3" Width="3" Height="12" VerticalAlignment="Bottom" RadiusX="1" RadiusY="1" />
-        <Rectangle x:Name="Bar4" Width="3" Height="16" VerticalAlignment="Bottom" RadiusX="1" RadiusY="1" />
+        <StackPanel
+            x:Name="BarsPanel"
+            Orientation="Horizontal"
+            Spacing="2"
+            VerticalAlignment="Bottom">
 
-    </StackPanel>
+            <Rectangle x:Name="Bar1" Width="3" Height="4"  VerticalAlignment="Bottom" RadiusX="1" RadiusY="1" />
+            <Rectangle x:Name="Bar2" Width="3" Height="8"  VerticalAlignment="Bottom" RadiusX="1" RadiusY="1" />
+            <Rectangle x:Name="Bar3" Width="3" Height="12" VerticalAlignment="Bottom" RadiusX="1" RadiusY="1" />
+            <Rectangle x:Name="Bar4" Width="3" Height="16" VerticalAlignment="Bottom" RadiusX="1" RadiusY="1" />
+
+        </StackPanel>
+
+        <StackPanel
+            x:Name="DotsPanel"
+            Orientation="Horizontal"
+            Spacing="2"
+            VerticalAlignment="Bottom"
+            Visibility="Collapsed">
+
+            <Ellipse Width="3" Height="3" Fill="#9B72FF" />
+            <Ellipse Width="3" Height="3" Fill="#9B72FF" />
+            <Ellipse Width="3" Height="3" Fill="#9B72FF" />
+            <Ellipse Width="3" Height="3" Fill="#9B72FF" />
+
+        </StackPanel>
+
+    </Grid>
 </UserControl>

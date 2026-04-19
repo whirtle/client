@@ -38,7 +38,17 @@ public sealed partial class SignalBarsControl : UserControl
 
     private void UpdateBars()
     {
-        var active   = ActiveBrush();
+        if (Level == 0)
+        {
+            BarsPanel.Visibility = Visibility.Collapsed;
+            DotsPanel.Visibility = Visibility.Visible;
+            return;
+        }
+
+        BarsPanel.Visibility = Visibility.Visible;
+        DotsPanel.Visibility = Visibility.Collapsed;
+
+        var active   = Level == 1 ? LowSignalBrush() : NormalSignalBrush();
         var inactive = InactiveBrush();
 
         Bar1.Fill = Level >= 1 ? active : inactive;
@@ -47,17 +57,11 @@ public sealed partial class SignalBarsControl : UserControl
         Bar4.Fill = Level >= 4 ? active : inactive;
     }
 
-    private SolidColorBrush ActiveBrush()
-    {
-        // Prefer the theme accent brush; fall back to a hardcoded blue if the
-        // resource is not available (e.g. during design-time rendering).
-        if (Application.Current?.Resources.TryGetValue(
-                "SystemAccentColorBrush", out var obj) == true &&
-            obj is SolidColorBrush themeBrush)
-            return themeBrush;
+    private static SolidColorBrush NormalSignalBrush()
+        => new(Color.FromArgb(0xFF, 0x9B, 0x72, 0xFF));
 
-        return new SolidColorBrush(Color.FromArgb(0xFF, 0x00, 0x78, 0xD4));
-    }
+    private static SolidColorBrush LowSignalBrush()
+        => new(Color.FromArgb(0xFF, 0xFF, 0xB0, 0x20));
 
     private SolidColorBrush InactiveBrush()
     {
