@@ -55,3 +55,4 @@ nunit-*.xml
 /.vs/
 /.claude/worktrees/
 /UIClientPackaging/AppPackages
+/.claude/settings.local.json
