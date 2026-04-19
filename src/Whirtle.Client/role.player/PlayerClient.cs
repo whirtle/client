@@ -66,6 +66,9 @@ public sealed class PlayerClient : IAsyncDisposable
     private bool            _streamActive;
     private TimeSpan        _clockOffset;
     private bool            _clockSynced;
+    private double          _driftUsPerS;
+    private double          _offsetStdDevUs    = double.PositiveInfinity;
+    private double          _driftStdDevUsPerS = double.PositiveInfinity;
     private int             _rendererLatencyMs;
 
     private int    _volume;
@@ -99,6 +102,9 @@ public sealed class PlayerClient : IAsyncDisposable
 
     /// <summary>Rate ratio most recently applied by the resampler (1.0 = on-schedule).</summary>
     public double LastRateRatio => _playbackEngine?.LastRateRatio ?? 1.0;
+
+    /// <summary>Number of times the resampler ratio saturated against the ±200 ppm clamp.</summary>
+    public int RateRatioClampHitCount => _playbackEngine?.RateRatioClampHitCount ?? 0;
 
     /// <summary>Current playback engine state. <see cref="PlaybackState.Buffering"/> when no engine is active.</summary>
     public PlaybackState EngineState => _playbackEngine?.State ?? PlaybackState.Buffering;
@@ -249,13 +255,33 @@ public sealed class PlayerClient : IAsyncDisposable
     /// <summary>
     /// Updates the clock offset used to translate server audio timestamps to
     /// local time. Call this whenever the <see cref="Clock.ClockSynchronizer"/>
-    /// produces a new measurement.
+    /// produces a new measurement. Equivalent to <see cref="UpdateClockState"/>
+    /// with no drift information.
     /// </summary>
     public void UpdateClockOffset(TimeSpan offset)
     {
         _clockOffset = offset;
         _clockSynced = true;
         _playbackEngine?.UpdateClockOffset(offset);
+    }
+
+    /// <summary>
+    /// Updates the full Kalman-filter snapshot from <see cref="Clock.ClockSynchronizer"/>.
+    /// Call this in preference to <see cref="UpdateClockOffset"/> so the playback engine
+    /// can drive the resampler from the drift estimate and gate on filter health.
+    /// </summary>
+    public void UpdateClockState(
+        TimeSpan offset,
+        double   driftUsPerS,
+        double   offsetStdDevUs,
+        double   driftStdDevUsPerS)
+    {
+        _clockOffset       = offset;
+        _clockSynced       = true;
+        _driftUsPerS       = driftUsPerS;
+        _offsetStdDevUs    = offsetStdDevUs;
+        _driftStdDevUsPerS = driftStdDevUsPerS;
+        _playbackEngine?.UpdateClockState(offset, driftUsPerS, offsetStdDevUs, driftStdDevUsPerS);
     }
 
     /// <summary>
@@ -334,7 +360,7 @@ public sealed class PlayerClient : IAsyncDisposable
             catch { }
         };
         if (_clockSynced)
-            _playbackEngine.UpdateClockOffset(_clockOffset);
+            _playbackEngine.UpdateClockState(_clockOffset, _driftUsPerS, _offsetStdDevUs, _driftStdDevUsPerS);
         _playbackEngine.SetVolume(_volume / 100f);
         _playbackEngine.SetUserMuted(_muted);
         _playbackEngine.Start();

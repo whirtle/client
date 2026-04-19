@@ -65,9 +65,37 @@ public sealed class PlaybackEngine : IAsyncDisposable
     internal const int RecoveryFrameCount = 5;   // healthy-buffer frames between recovery steps
 
     // Rate correction amortization: spread the correction for a residual offset across N frames
-    // instead of absorbing it all in one frame. A 7 ms miss on a 96 ms frame at N=1 would produce
-    // a 7% rate change (audible pitch wobble); at N=4 it's a 1.8% change accumulating over 4 frames.
-    private const int RateCorrectionFrames = 4;
+    // instead of absorbing it all in one frame. The trim is added to a baseline ratio derived
+    // from the Kalman-filtered clock drift, so this only needs to absorb measurement noise on
+    // the per-frame schedule offset — N is large to keep that trim tiny per frame.
+    private const int RateCorrectionFrames = 16;
+
+    // Resampler control-loop tuning. Resampling here exists only to compensate for crystal
+    // drift between the server and client clocks; real drift is on the order of 5–50 ppm, so
+    // anything beyond a few hundred ppm is a sign that some other layer (jitter buffer, clock
+    // sync) should be handling the situation instead.
+    //
+    // MaxRatioDeviation: hard ceiling on |ratio − 1|. ±200 ppm is well above any physical
+    // crystal drift and well below any audible pitch shift (~1000 ppm). Saturating it is a
+    // diagnostic signal, not a routine occurrence.
+    //
+    // MaxRatioDeltaPerFrame: caps the per-frame change in the smoothed ratio so a sudden
+    // target swing can't produce a step discontinuity at a chunk boundary (the kind that
+    // pops or clicks even when the absolute ratio is small).
+    //
+    // RatioEwmaAlpha: low-pass on the target ratio. α=0.05 gives a time constant of ~20
+    // frames; clock drift evolves over seconds, so the loop has plenty of bandwidth.
+    private const double MaxRatioDeviation     = 0.0002;   // ±200 ppm
+    private const double MaxRatioDeltaPerFrame = 50e-6;    // ±50 ppm per frame
+    private const double RatioEwmaAlpha        = 0.05;
+
+    // Filter-health gating. The resampler trusts the Kalman drift estimate as its baseline
+    // only when σ_drift is below this threshold; otherwise it falls back to ratio = 1.0 and
+    // lets the jitter buffer absorb timing noise. Likewise, when σ_offset is above the
+    // schedule-offset gate the resampler is skipped entirely for that frame — typical of the
+    // first 1–2 frames after a reconnect, when filter state is recovering.
+    private const double DriftTrustedStdDevUsPerS = 50.0;   // 50 ppm = 0.05 ms/s
+    private const double OffsetGateStdDevUs       = 5_000;  // 5 ms
 
     // Windows multimedia timer: raises system timer resolution from default ~15.6 ms to 1 ms so
     // Task.Delay in the precise-pacing wait doesn't overshoot by a full tick (which was producing
@@ -99,9 +127,20 @@ public sealed class PlaybackEngine : IAsyncDisposable
     private bool                    _engineMuted;
     private int                     _bufferUnderrunCount;
     private int                     _minBufferFloorHitCount;
+    private int                     _rateRatioClampHitCount;
     // Stored as raw bits so cross-thread reads are atomic without needing a lock
     // (plain double reads are not guaranteed atomic on all runtimes).
     private long                    _lastRateRatioBits = BitConverter.DoubleToInt64Bits(1.0);
+
+    // Filter snapshot from the most recent ClockSynchronizer update. Read on the render
+    // thread; written via UpdateClockState (UI / sync callback). Stored as raw bits for
+    // atomic cross-thread reads of the doubles.
+    private long _driftUsPerSBits        = BitConverter.DoubleToInt64Bits(0.0);
+    private long _offsetStdDevUsBits     = BitConverter.DoubleToInt64Bits(double.PositiveInfinity);
+    private long _driftStdDevUsPerSBits  = BitConverter.DoubleToInt64Bits(double.PositiveInfinity);
+
+    // EWMA-smoothed rate ratio, render-loop-only.
+    private double _smoothedRatio = 1.0;
 
     // Adaptive ahead-buffer state (render-loop-only; no volatile needed)
     private int _aheadTargetMs   = TargetAheadMs;
@@ -131,11 +170,18 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     /// <summary>
     /// The rate ratio most recently applied by the resampler. 1.0 when playback
-    /// is on-schedule; &gt;1 speeds audio up (we're behind); &lt;1 slows it down
-    /// (we're ahead). Clamped to [0.9, 1.1].
+    /// is on-schedule; &gt;1 slows audio down (we're ahead); &lt;1 speeds it up
+    /// (we're behind). Clamped to [1 − <see cref="MaxRatioDeviation"/>, 1 + <see cref="MaxRatioDeviation"/>].
     /// </summary>
     public double LastRateRatio =>
         BitConverter.Int64BitsToDouble(Interlocked.Read(ref _lastRateRatioBits));
+
+    /// <summary>
+    /// Number of times the resampler ratio was clamped against
+    /// <see cref="MaxRatioDeviation"/>. A healthy stream should never increment this;
+    /// a non-zero value indicates either filter instability or a control-loop bug.
+    /// </summary>
+    public int RateRatioClampHitCount => _rateRatioClampHitCount;
 
     /// <summary>
     /// Raised when the playback state or buffer occupancy changes meaningfully.
@@ -206,11 +252,32 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// <summary>
     /// Updates the measured clock offset (from <see cref="ClockSynchronizer"/>).
     /// The render loop uses this to schedule frames relative to the server clock.
+    /// Equivalent to <see cref="UpdateClockState"/> with no drift information — the
+    /// resampler will fall back to ratio = 1.0 plus per-frame trim only.
     /// </summary>
     public void UpdateClockOffset(TimeSpan offset)
+        => UpdateClockState(offset, driftUsPerS: 0.0,
+                            offsetStdDevUs: double.PositiveInfinity,
+                            driftStdDevUsPerS: double.PositiveInfinity);
+
+    /// <summary>
+    /// Updates the full Kalman-filter snapshot from <see cref="ClockSynchronizer"/>.
+    /// The render loop uses <paramref name="offset"/> to schedule frames and uses
+    /// <paramref name="driftUsPerS"/> as the steady-state baseline for the resampler
+    /// ratio when σ_drift is below the trust threshold. The σ values gate filter use
+    /// during reconnect transients.
+    /// </summary>
+    public void UpdateClockState(
+        TimeSpan offset,
+        double   driftUsPerS,
+        double   offsetStdDevUs,
+        double   driftStdDevUsPerS)
     {
         _clockOffset      = offset;
         _clockOffsetReady = true;
+        Interlocked.Exchange(ref _driftUsPerSBits,       BitConverter.DoubleToInt64Bits(driftUsPerS));
+        Interlocked.Exchange(ref _offsetStdDevUsBits,    BitConverter.DoubleToInt64Bits(offsetStdDevUs));
+        Interlocked.Exchange(ref _driftStdDevUsPerSBits, BitConverter.DoubleToInt64Bits(driftStdDevUsPerS));
     }
 
     /// <summary>
@@ -456,27 +523,52 @@ public sealed class PlaybackEngine : IAsyncDisposable
                 timestamp / 1_000.0, serverNowUs / 1_000.0);
         }
 
-        // Compute a rate ratio to gently correct residual schedule offset, amortized over
-        // RateCorrectionFrames frames so a small miss doesn't produce an audible pitch wobble.
-        // scheduleOffsetMs is measured at write time (post precise-pacing wait), so the
-        // target is -_aheadTargetMs; any residual offset reflects clock drift the wait
-        // couldn't smooth out (e.g. Task.Delay imprecision, CPU pressure).
-        // Example: +7 ms adjusted offset on a 96 ms frame with N=4 → ratio = 1 - 7/(4*96) ≈ 0.982
-        // (1.8% speed up per frame; the full 7 ms is absorbed after ~4 frames).
-        double adjustedOffsetMs = scheduleOffsetMs + _aheadTargetMs;
-        double rateRatio = frameDurationMs > 0
-            ? 1.0 - adjustedOffsetMs / (RateCorrectionFrames * frameDurationMs)
-            : 1.0;
+        double driftUsPerS       = BitConverter.Int64BitsToDouble(Interlocked.Read(ref _driftUsPerSBits));
+        double offsetStdDevUs    = BitConverter.Int64BitsToDouble(Interlocked.Read(ref _offsetStdDevUsBits));
+        double driftStdDevUsPerS = BitConverter.Int64BitsToDouble(Interlocked.Read(ref _driftStdDevUsPerSBits));
 
-        rateRatio = Math.Clamp(rateRatio, 0.9, 1.1);
-        Interlocked.Exchange(ref _lastRateRatioBits, BitConverter.DoubleToInt64Bits(rateRatio));
-
-        short[]  resampled;
-        if (Math.Abs(rateRatio - 1.0) > 0.001)
+        double prevSmoothed = _smoothedRatio;
+        var    step         = ComputeRateRatio(
+            scheduleOffsetMs:  scheduleOffsetMs,
+            aheadTargetMs:     _aheadTargetMs,
+            frameDurationMs:   frameDurationMs,
+            driftUsPerS:       driftUsPerS,
+            offsetStdDevUs:    offsetStdDevUs,
+            driftStdDevUsPerS: driftStdDevUsPerS,
+            previousSmoothedRatio: prevSmoothed);
+        _smoothedRatio      = step.SmoothedRatio;
+        double rateRatio    = step.RateRatio;
+        bool   resamplerSkipped = step.ResamplerSkipped;
+        if (step.ClampSaturated)
+        {
+            _rateRatioClampHitCount++;
+            Log.Warning(
+                "PlaybackEngine: rate ratio clamp saturated (preClamp={PreClamp:F6}, clamped={Clamped:F6}); " +
+                "drift={DriftUsPerS:+0.0;-0.0} µs/s ±{DriftSigma:F1}, σ_offset={OffsetSigma:F1} µs",
+                step.PreClampRatio, rateRatio, driftUsPerS, driftStdDevUsPerS, offsetStdDevUs);
+        }
+        if (resamplerSkipped && Log.IsEnabled(LogEventLevel.Debug))
         {
             Log.Debug(
-                "PlaybackEngine: resampling rateRatio={RateRatio:F4} (scheduleOffset={ScheduleOffsetMs:F1} ms, adjustedOffset={AdjustedOffsetMs:F1} ms)",
-                rateRatio, scheduleOffsetMs, adjustedOffsetMs);
+                "PlaybackEngine: skipping resampler (σ_offset={OffsetSigmaUs:F1} µs > gate {GateUs:F0} µs)",
+                offsetStdDevUs, OffsetGateStdDevUs);
+        }
+
+        Interlocked.Exchange(ref _lastRateRatioBits, BitConverter.DoubleToInt64Bits(rateRatio));
+
+        short[] resampled;
+        if (!resamplerSkipped && Math.Abs(rateRatio - 1.0) > 1e-6)
+        {
+            if (Log.IsEnabled(LogEventLevel.Debug))
+            {
+                Log.Debug(
+                    "PlaybackEngine: resampling rateRatio={RateRatio:F6} " +
+                    "(baseline={Baseline:F6}, trim={Trim:+0.000000;-0.000000}, " +
+                    "scheduleOffset={ScheduleOffsetMs:F1} ms, adjustedOffset={AdjustedOffsetMs:F1} ms, " +
+                    "drift={DriftUsPerS:+0.0;-0.0} µs/s, driftTrusted={DriftTrusted})",
+                    rateRatio, step.BaselineRatio, step.Trim, scheduleOffsetMs, step.AdjustedOffsetMs,
+                    driftUsPerS, step.DriftTrusted);
+            }
             resampled = SampleInterpolator.Interpolate(frame.Samples, frame.Channels, rateRatio);
         }
         else
@@ -569,6 +661,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
         _aheadTargetMs  = TargetAheadMs;
         _behindCount    = 0;
         _recoveryFrames = 0;
+        _smoothedRatio  = 1.0;
     }
 
     /// <summary>
@@ -580,5 +673,91 @@ public sealed class PlaybackEngine : IAsyncDisposable
         long localNowUs  = _clock.UtcNowMicroseconds;
         long serverNowUs = localNowUs + (long)_clockOffset.TotalMicroseconds;
         return TimeSpan.FromMicroseconds(serverNowUs - serverTimestamp).TotalMilliseconds;
+    }
+
+    /// <summary>
+    /// Result of a single rate-ratio control-loop step.
+    /// </summary>
+    /// <param name="RateRatio">Final ratio to apply to the resampler (post-clamp).</param>
+    /// <param name="SmoothedRatio">EWMA state to carry into the next step.</param>
+    /// <param name="ResamplerSkipped">
+    /// <see langword="true"/> when σ_offset exceeds the gate; the caller should bypass
+    /// the resampler entirely and write the frame as-is.
+    /// </param>
+    /// <param name="ClampSaturated"><see langword="true"/> when the clamp pinned the ratio at the boundary.</param>
+    /// <param name="PreClampRatio">Smoothed ratio before the clamp was applied (for diagnostics).</param>
+    /// <param name="BaselineRatio">Drift-derived baseline (for diagnostics).</param>
+    /// <param name="Trim">Per-frame schedule-offset correction (for diagnostics).</param>
+    /// <param name="AdjustedOffsetMs">Schedule offset relative to the precise-pacing target (for diagnostics).</param>
+    /// <param name="DriftTrusted">Whether the drift estimate was used as the baseline (for diagnostics).</param>
+    internal readonly record struct RateRatioStep(
+        double RateRatio,
+        double SmoothedRatio,
+        bool   ResamplerSkipped,
+        bool   ClampSaturated,
+        double PreClampRatio,
+        double BaselineRatio,
+        double Trim,
+        double AdjustedOffsetMs,
+        bool   DriftTrusted);
+
+    /// <summary>
+    /// Pure computation of the next rate-ratio control step. Splits the ratio into a
+    /// baseline derived from clock drift, a trim derived from residual schedule offset,
+    /// then applies EWMA smoothing, a per-frame slew limit, and a tight clamp. When the
+    /// filter health gate trips (σ_offset above <see cref="OffsetGateStdDevUs"/>) the
+    /// resampler is signalled to be skipped entirely and the smoothed state is reset.
+    /// </summary>
+    internal static RateRatioStep ComputeRateRatio(
+        double scheduleOffsetMs,
+        int    aheadTargetMs,
+        double frameDurationMs,
+        double driftUsPerS,
+        double offsetStdDevUs,
+        double driftStdDevUsPerS,
+        double previousSmoothedRatio)
+    {
+        bool filterHealthy = offsetStdDevUs <= OffsetGateStdDevUs;
+        bool driftTrusted  = driftStdDevUsPerS <= DriftTrustedStdDevUsPerS;
+
+        double baselineRatio = driftTrusted
+            ? 1.0 - driftUsPerS / 1_000_000.0
+            : 1.0;
+
+        double adjustedOffsetMs = scheduleOffsetMs + aheadTargetMs;
+        double trim = frameDurationMs > 0
+            ? -adjustedOffsetMs / (RateCorrectionFrames * frameDurationMs)
+            : 0.0;
+
+        if (!filterHealthy)
+        {
+            return new RateRatioStep(
+                RateRatio:        1.0,
+                SmoothedRatio:    1.0,
+                ResamplerSkipped: true,
+                ClampSaturated:   false,
+                PreClampRatio:    1.0,
+                BaselineRatio:    baselineRatio,
+                Trim:             trim,
+                AdjustedOffsetMs: adjustedOffsetMs,
+                DriftTrusted:     driftTrusted);
+        }
+
+        double targetRatio = baselineRatio + trim;
+        double next        = RatioEwmaAlpha * targetRatio + (1.0 - RatioEwmaAlpha) * previousSmoothedRatio;
+        double delta       = Math.Clamp(next - previousSmoothedRatio, -MaxRatioDeltaPerFrame, MaxRatioDeltaPerFrame);
+        double smoothed    = previousSmoothedRatio + delta;
+        double clamped     = Math.Clamp(smoothed, 1.0 - MaxRatioDeviation, 1.0 + MaxRatioDeviation);
+
+        return new RateRatioStep(
+            RateRatio:        clamped,
+            SmoothedRatio:    clamped,             // pin smoothed state at the clamp boundary
+            ResamplerSkipped: false,
+            ClampSaturated:   clamped != smoothed,
+            PreClampRatio:    smoothed,
+            BaselineRatio:    baselineRatio,
+            Trim:             trim,
+            AdjustedOffsetMs: adjustedOffsetMs,
+            DriftTrusted:     driftTrusted);
     }
 }

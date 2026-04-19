@@ -173,6 +173,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
     [ObservableProperty] private double _statRateRatio = 1.0;
 
+    [ObservableProperty] private int _statRateRatioClampHits;
+
     // ── Audio devices ──────────────────────────────────────────────────────
 
     [ObservableProperty] private AudioDeviceInfo? _selectedDevice;
@@ -444,7 +446,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                     _clockReady = true;
                     if (_latestClockStats is { } s && _player is { } p)
                     {
-                        p.UpdateClockOffset(s.FilteredOffset);
+                        p.UpdateClockState(
+                            s.FilteredOffset, s.DriftUsPerS, s.OffsetStdDevUs, s.DriftStdDevUsPerS);
                         _ = Task.Run(async () => { try { await p.SendStateAsync(CancellationToken.None).ConfigureAwait(false); } catch { } });
                     }
                     _dispatcher.TryEnqueue(() =>
@@ -460,7 +463,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                     _serverClockOffset = stats.FilteredOffset;
                     _latestClockStats  = stats;
                     if (_clockReady)
-                        _player?.UpdateClockOffset(stats.FilteredOffset);
+                        _player?.UpdateClockState(
+                            stats.FilteredOffset, stats.DriftUsPerS,
+                            stats.OffsetStdDevUs, stats.DriftStdDevUsPerS);
                     ClockStats.Update(stats);
                     _dispatcher.TryEnqueue(
                         RefreshSignalStrength);
@@ -603,6 +608,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         StatMinBufferFloorHits = 0;
         StatAheadTargetMs    = 0;
         StatRateRatio        = 1.0;
+        StatRateRatioClampHits = 0;
         _serverClockOffset   = TimeSpan.Zero;
         _clockReady          = false;
         IsClockReady        = false;
@@ -648,6 +654,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         StatMinBufferFloorHits = _player.MinBufferFloorHitCount;
         StatAheadTargetMs    = _player.AheadTargetMs;
         StatRateRatio        = _player.LastRateRatio;
+        StatRateRatioClampHits = _player.RateRatioClampHitCount;
         RefreshSignalStrength();
     }
 
@@ -924,7 +931,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 _clockReady = true;
                 if (_latestClockStats is { } s && _player is { } p)
                 {
-                    p.UpdateClockOffset(s.FilteredOffset);
+                    p.UpdateClockState(
+                        s.FilteredOffset, s.DriftUsPerS, s.OffsetStdDevUs, s.DriftStdDevUsPerS);
                     _ = Task.Run(async () => { try { await p.SendStateAsync(CancellationToken.None).ConfigureAwait(false); } catch { } });
                 }
                 _dispatcher.TryEnqueue(() =>
@@ -940,7 +948,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 _serverClockOffset = stats.FilteredOffset;
                 _latestClockStats  = stats;
                 if (_clockReady)
-                    _player?.UpdateClockOffset(stats.FilteredOffset);
+                    _player?.UpdateClockState(
+                        stats.FilteredOffset, stats.DriftUsPerS,
+                        stats.OffsetStdDevUs, stats.DriftStdDevUsPerS);
                 ClockStats.Update(stats);
                 _dispatcher.TryEnqueue(
                     RefreshSignalStrength);
