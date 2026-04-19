@@ -96,9 +96,11 @@ Title="Whirtle">
 
                 <!-- Signal bars -->
                 <controls:SignalBarsControl
+                    x:Name="SignalBarsIndicator"
                     Grid.Column="2"
                     VerticalAlignment="Center"
-                    Level="{x:Bind NowPlayingViewModel.SignalStrength, Mode=OneWay}" />
+                    Level="{x:Bind NowPlayingViewModel.SignalStrength, Mode=OneWay}"
+                    TooltipLines="{x:Bind NowPlayingViewModel.SignalInputLines, Mode=OneWay}" />
 
                 <!-- Settings gear button -->
                 <Button

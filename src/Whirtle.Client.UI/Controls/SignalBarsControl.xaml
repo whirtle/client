@@ -9,7 +9,7 @@
         Matches the 0–4 Level range: Level 1 = one bar lit, …, 4 = all four.
         Bar fill is updated from code-behind when the Level dependency property changes.
     -->
-    <Grid Height="16">
+    <Grid Height="16" Background="Transparent">
 
         <StackPanel
             x:Name="BarsPanel"

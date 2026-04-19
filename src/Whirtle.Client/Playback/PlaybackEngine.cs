@@ -40,7 +40,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
     // Ahead-buffer tuning: keeps only a small window of samples ahead of where volume
     // is applied (WasapiRenderer.Write), so volume changes take effect quickly.
     // Under CPU pressure the window expands automatically to avoid underruns.
-    internal const int TargetAheadMs      = 50;  // nominal ms of samples ahead of volume application
+    public   const int TargetAheadMs      = 50;  // nominal ms of samples ahead of volume application
     private  const int MaxAheadMs         = 200; // ceiling when falling behind
     internal const int LowWaterMs         = 10;  // buffer level (ms) that signals we're falling behind
     private  const int BehindThreshold    = 5;   // consecutive low-water events before doubling target
