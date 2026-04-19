@@ -186,22 +186,13 @@ public sealed record PlaybackProgress(
 
 /// <summary>Controller portion of a <see cref="ServerStateMessage"/>.</summary>
 /// <remarks>
-/// <c>supported_commands</c> is a dictionary mapping command names to their parameter
-/// ranges. For the <c>volume</c> command the value is the server's maximum volume —
-/// the scale on which all volume commands and state reports are expressed.
+/// <c>supported_commands</c> is an array of command name strings.
+/// <c>volume</c> is always on a 0–100 scale per the Sendspin spec.
 /// </remarks>
 public sealed record ServerControllerState(
-    Dictionary<string, JsonElement> SupportedCommands,
-    int  Volume,
-    bool Muted)
-{
-    /// <summary>
-    /// Maximum volume value on the server's scale, taken from
-    /// <c>supported_commands["volume"]</c>. Falls back to 100 when absent.
-    /// </summary>
-    public int VolumeMax =>
-        SupportedCommands.TryGetValue("volume", out var v) && v.TryGetInt32(out var n) ? n : 100;
-}
+    string[] SupportedCommands,
+    int      Volume,
+    bool     Muted);
 
 /// <summary>
 /// Sent by the server when group playback state changes.

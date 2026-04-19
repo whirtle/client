@@ -73,7 +73,7 @@ public class ControllerClientTests
     }
 
     [Fact]
-    public async Task SetVolumeAsync_SendsVolumeCommand_ScaledToServerMax()
+    public async Task SetVolumeAsync_SendsVolumeCommand_ScaledTo100()
     {
         var (controller, transport) = Build();
 
@@ -81,20 +81,7 @@ public class ControllerClientTests
 
         var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
         Assert.Equal("volume", msg.Controller!.Command);
-        Assert.Equal(75, msg.Controller.Volume); // default ServerVolumeMax = 100
-    }
-
-    [Fact]
-    public async Task SetVolumeAsync_ProportionsVolumeToServerMax()
-    {
-        var (controller, transport) = Build();
-        controller.ServerVolumeMax = 50;
-
-        await controller.SetVolumeAsync(0.75);
-
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
-        Assert.Equal("volume", msg.Controller!.Command);
-        Assert.Equal(38, msg.Controller.Volume); // round(0.75 * 50) = 38
+        Assert.Equal(75, msg.Controller.Volume);
     }
 
     [Fact]
@@ -106,18 +93,6 @@ public class ControllerClientTests
 
         var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
         Assert.Equal(100, msg.Controller!.Volume);
-    }
-
-    [Fact]
-    public async Task SetVolumeAsync_ClampsAbove1_WithCustomMax()
-    {
-        var (controller, transport) = Build();
-        controller.ServerVolumeMax = 50;
-
-        await controller.SetVolumeAsync(1.5);
-
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
-        Assert.Equal(50, msg.Controller!.Volume);
     }
 
     [Fact]

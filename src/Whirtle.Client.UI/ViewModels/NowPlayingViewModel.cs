@@ -9,6 +9,7 @@ using Whirtle.Client.Audio;
 using Whirtle.Client.Clock;
 using Whirtle.Client.Codec;
 using Whirtle.Client.Discovery;
+using Whirtle.Client.Playback;
 using Whirtle.Client.Protocol;
 using Whirtle.Client.Role;
 using Whirtle.Client.Transport;
@@ -81,9 +82,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             supportedCommands: ["volume", "mute"]);
     }
 
-    // Signal-strength inputs — updated by clock sync and PlaybackEngine events.
-    private TimeSpan _lastRtt        = TimeSpan.MaxValue; // unknown until first sync
-    private int      _lastBufferCount = -1;               // -1 = engine not running
+    // Signal-strength input — updated by the clock sync loop.
+    private TimeSpan _lastRtt = TimeSpan.MaxValue; // unknown until first sync
 
     // ── Clock statistics ───────────────────────────────────────────────────
 
@@ -466,7 +466,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                         _player?.UpdateClockOffset(stats.FilteredOffset);
                     ClockStats.Update(stats);
                     _dispatcher.TryEnqueue(
-                        () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
+                        RefreshSignalStrength);
                 },
                 cancellationToken: token);
         }
@@ -607,7 +607,6 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         StatAheadTargetMs    = 0;
         StatRateRatio        = 1.0;
         _lastRtt             = TimeSpan.MaxValue;
-        _lastBufferCount     = -1;
         _serverClockOffset   = TimeSpan.Zero;
         _clockReady          = false;
         IsClockReady        = false;
@@ -653,6 +652,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         StatMinBufferFloorHits = _player.MinBufferFloorHitCount;
         StatAheadTargetMs    = _player.AheadTargetMs;
         StatRateRatio        = _player.LastRateRatio;
+        RefreshSignalStrength();
     }
 
     private static string BuildCodecDetails(IReadOnlyList<Whirtle.Client.Role.CodecStats> stats)
@@ -948,7 +948,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                     _player?.UpdateClockOffset(stats.FilteredOffset);
                 ClockStats.Update(stats);
                 _dispatcher.TryEnqueue(
-                    () => SignalStrength = ComputeSignalStrength(_lastRtt, _lastBufferCount));
+                    RefreshSignalStrength);
             },
             cancellationToken: _connectionCts.Token);
 
@@ -1120,12 +1120,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                         }
                         if (msg.Controller is { } ctrl)
                         {
-                            int serverMax = ctrl.VolumeMax;
                             _dispatcher.TryEnqueue(() =>
                             {
-                                if (_controller is not null)
-                                    _controller.ServerVolumeMax = serverMax;
-                                Volume  = ctrl.Volume / (double)serverMax;
+                                Volume  = ctrl.Volume / 100.0;
                                 IsMuted = ctrl.Muted;
                                 _settings.SaveVolume(Volume, IsMuted);
 
@@ -1210,25 +1207,23 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     // ── Signal strength ────────────────────────────────────────────────────
 
     /// <summary>
-    /// Updates signal strength from the latest clock sync result.
-    /// Call from the UI thread or marshal via the dispatcher.
+    /// Recomputes and applies the current signal-strength level.
+    /// Must be called on the UI thread.
     /// </summary>
-    internal void UpdateSignalStrength(TimeSpan rtt, int bufferCount)
-    {
-        _lastRtt         = rtt;
-        _lastBufferCount = bufferCount;
-        SignalStrength   = ComputeSignalStrength(rtt, bufferCount);
-    }
+    private void RefreshSignalStrength() => SignalStrength = ComputeSignalStrength();
 
     /// <summary>
-    /// Maps RTT and buffer count onto a 0–3 signal level.
-    /// Both metrics are scored independently; the lower score wins (worst-case).
-    /// When the playback engine is not running (<paramref name="bufferCount"/> == -1),
-    /// only the sync score is used.
+    /// Maps five independent dimensions onto a 0–3 signal level; worst-case wins.
     /// </summary>
-    private static int ComputeSignalStrength(TimeSpan rtt, int bufferCount)
+    private int ComputeSignalStrength()
     {
-        int syncScore = rtt.TotalMilliseconds switch
+        // Clock must be ready before anything else means anything.
+        if (!_isClockReady)
+            return 0;
+
+        int clockScore = _isClockConverged ? 4 : 2;
+
+        int rttScore = _lastRtt.TotalMilliseconds switch
         {
             <= 5  => 4,
             <= 15 => 3,
@@ -1237,10 +1232,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _     => 0,
         };
 
-        if (bufferCount < 0)
-            return syncScore;
+        if (_player is null)
+            return Math.Min(clockScore, rttScore);
 
-        int bufferScore = bufferCount switch
+        int bufferScore = _player.BufferedFrameCount switch
         {
             >= 12 => 4,
             >= 8  => 3,
@@ -1249,6 +1244,21 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _     => 0,
         };
 
-        return Math.Min(syncScore, bufferScore);
+        // AheadTargetMs doubles under CPU pressure (50 → 100 → 200).
+        int aheadScore = _player.AheadTargetMs switch
+        {
+            <= PlaybackEngine.TargetAheadMs => 4,
+            <= 100                          => 2,
+            _                              => 0,
+        };
+
+        int stateScore = _player.EngineState switch
+        {
+            PlaybackState.Synchronized => 4,
+            PlaybackState.Buffering    => 2,
+            _                          => 0,
+        };
+
+        return Math.Min(clockScore, Math.Min(rttScore, Math.Min(bufferScore, Math.Min(aheadScore, stateScore))));
     }
 }

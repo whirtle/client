@@ -81,6 +81,9 @@ public sealed class PlayerClient : IAsyncDisposable
     /// <summary>Rate ratio most recently applied by the resampler (1.0 = on-schedule).</summary>
     public double LastRateRatio => _playbackEngine?.LastRateRatio ?? 1.0;
 
+    /// <summary>Current playback engine state. <see cref="PlaybackState.Buffering"/> when no engine is active.</summary>
+    public PlaybackState EngineState => _playbackEngine?.State ?? PlaybackState.Buffering;
+
     /// <summary>
     /// Returns a snapshot of per-codec statistics accumulated since the current stream started.
     /// </summary>
