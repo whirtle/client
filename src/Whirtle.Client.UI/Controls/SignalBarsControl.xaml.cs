@@ -138,7 +138,7 @@ public sealed partial class SignalBarsControl : UserControl
     private static SolidColorBrush LowSignalBrush()
         => new(Color.FromArgb(0xFF, 0xFF, 0xB0, 0x20));
 
-    private SolidColorBrush InactiveBrush()
+    private static SolidColorBrush InactiveBrush()
     {
         if (Application.Current?.Resources.TryGetValue(
                 "TextFillColorDisabledBrush", out var obj) == true &&

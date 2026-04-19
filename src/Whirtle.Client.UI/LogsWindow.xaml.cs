@@ -15,7 +15,7 @@ public sealed partial class LogsWindow : Window
     private MicaController?              _micaController;
     private SystemBackdropConfiguration? _backdropConfig;
 
-    private bool _allowClose = false;
+    private bool _allowClose;
 
     public LogsWindow()
     {
@@ -40,6 +40,12 @@ public sealed partial class LogsWindow : Window
             SaveWindowBounds();
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             NativeWindow.ShowWindow(hwnd, NativeWindow.SW_HIDE);
+        };
+
+        Closed += (_, _) =>
+        {
+            _micaController?.Dispose();
+            _micaController = null;
         };
     }
 
