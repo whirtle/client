@@ -45,6 +45,7 @@ public sealed class MdnsAdvertiser : IDisposable
     private readonly int              _port;
     private readonly string           _path;
     private readonly string?          _friendlyName;
+    private volatile bool             _paused;
 
     /// <param name="hostname">Local hostname used in SRV and A records.</param>
     /// <param name="friendlyName">Optional player display name (TXT <c>name</c> key).</param>
@@ -137,8 +138,11 @@ public sealed class MdnsAdvertiser : IDisposable
 
             if (timeout <= TimeSpan.Zero)
             {
-                Log.Debug("mDNS: re-announcing on {IP}:{Port}{Path}", ip, _port, _path);
-                await socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
+                if (!_paused)
+                {
+                    Log.Debug("mDNS: re-announcing on {IP}:{Port}{Path}", ip, _port, _path);
+                    await socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
+                }
                 reannounceAt = DateTimeOffset.UtcNow + ReannounceInterval;
                 continue;
             }
@@ -174,7 +178,7 @@ public sealed class MdnsAdvertiser : IDisposable
                 string.Join(", ", parsed.Questions),
                 asksForUs);
 
-            if (!asksForUs) continue;
+            if (!asksForUs || _paused) continue;
 
             await socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
         }
@@ -227,6 +231,12 @@ public sealed class MdnsAdvertiser : IDisposable
         if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return  0; // virtual (Docker/WSL/Hyper-V)
         return 1; // anything else
     }
+
+    /// <summary>Suppresses all outgoing announcements and query responses until <see cref="Resume"/> is called.</summary>
+    public void Pause()  => _paused = true;
+
+    /// <summary>Re-enables announcements and query responses after a prior <see cref="Pause"/> call.</summary>
+    public void Resume() => _paused = false;
 
     public void Dispose()
     {
