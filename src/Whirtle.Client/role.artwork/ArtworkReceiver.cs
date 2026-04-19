@@ -15,8 +15,8 @@ namespace Whirtle.Client.Role;
 /// </summary>
 public sealed class ArtworkReceiver
 {
-    private static readonly IReadOnlySet<string> AllowedMimeTypes =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> AllowedMimeTypes =
+        new(StringComparer.OrdinalIgnoreCase)
         {
             "image/jpeg",
             "image/png",

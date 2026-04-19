@@ -123,7 +123,7 @@ public sealed class WebSocketListener : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
-        _listener.Stop();
+        _listener.Dispose();
         return ValueTask.CompletedTask;
     }
 
@@ -162,7 +162,7 @@ public sealed class WebSocketListener : IAsyncDisposable
 
         foreach (var line in lines.Skip(1)) // skip the GET /path HTTP/1.1 request line
         {
-            var colon = line.IndexOf(':');
+            var colon = line.IndexOf(':', StringComparison.Ordinal);
             if (colon > 0)
                 headers[line[..colon].Trim()] = line[(colon + 1)..].Trim();
         }
@@ -173,10 +173,12 @@ public sealed class WebSocketListener : IAsyncDisposable
     /// <summary>
     /// Computes the <c>Sec-WebSocket-Accept</c> value per RFC 6455 §4.2.2.
     /// </summary>
+#pragma warning disable CA5350 // SHA1 is mandated by the WebSocket handshake spec (RFC 6455 §4.2.2)
     private static string ComputeAcceptKey(string clientKey)
     {
         const string magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
         var hash = SHA1.HashData(Encoding.ASCII.GetBytes(clientKey + magic));
         return Convert.ToBase64String(hash);
     }
+#pragma warning restore CA5350
 }

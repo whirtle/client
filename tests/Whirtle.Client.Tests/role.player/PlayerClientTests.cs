@@ -9,8 +9,6 @@ namespace Whirtle.Client.Tests.Role;
 
 public class PlayerClientTests
 {
-    private static readonly MessageSerializer Serializer = new();
-
     private static (PlayerClient player, FakeTransport transport, List<IWasapiRenderer> renderers) Build(
         FakeClock? clock = null)
     {
@@ -35,14 +33,14 @@ public class PlayerClientTests
     {
         var (player, transport, _) = Build();
         int? notified = null;
-        player.VolumeChanged += v => notified = v;
+        player.VolumeChanged += (_, e) => notified = e.Volume;
 
         await player.ProcessFrameAsync(new ProtocolFrame(
             new ServerCommandMessage(Player: new ServerCommandPlayer("volume", Volume: 75))));
 
         Assert.Equal(75, player.Volume);
         Assert.Equal(75, notified);
-        var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[0]);
+        var state = (ClientStateMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal(75, state.Player!.Volume);
     }
 
@@ -62,14 +60,14 @@ public class PlayerClientTests
     {
         var (player, transport, _) = Build();
         bool? notified = null;
-        player.MuteChanged += m => notified = m;
+        player.MuteChanged += (_, e) => notified = e.Muted;
 
         await player.ProcessFrameAsync(new ProtocolFrame(
             new ServerCommandMessage(Player: new ServerCommandPlayer("mute", Mute: true))));
 
         Assert.True(player.Muted);
         Assert.True(notified);
-        var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[0]);
+        var state = (ClientStateMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.True(state.Player!.Muted);
     }
 
@@ -78,14 +76,14 @@ public class PlayerClientTests
     {
         var (player, transport, _) = Build();
         int? notified = null;
-        player.StaticDelayChanged += d => notified = d;
+        player.StaticDelayChanged += (_, e) => notified = e.DelayMs;
 
         await player.ProcessFrameAsync(new ProtocolFrame(
             new ServerCommandMessage(Player: new ServerCommandPlayer("set_static_delay", StaticDelayMs: 200))));
 
         Assert.Equal(200, player.StaticDelayMs);
         Assert.Equal(200, notified);
-        var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[0]);
+        var state = (ClientStateMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal(200, state.Player!.StaticDelayMs);
     }
 
@@ -282,7 +280,7 @@ public class PlayerClientTests
 
         // Exactly one client/state should have been sent (set_static_delay changed the value).
         Assert.Single(transport.Sent);
-        var state = (ClientStateMessage)Serializer.Deserialize(transport.Sent[0]);
+        var state = (ClientStateMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal(200, state.Player!.StaticDelayMs); // not 300 (200 + 100 renderer latency)
     }
 
@@ -340,7 +338,7 @@ public class PlayerClientTests
         await player.SendInitialRequestsAsync();
 
         Assert.Single(transport.Sent);
-        Assert.IsType<StreamRequestFormatMessage>(Serializer.Deserialize(transport.Sent[0]));
+        Assert.IsType<StreamRequestFormatMessage>(MessageSerializer.Deserialize(transport.Sent[0]));
     }
 
     // ── stream/end ────────────────────────────────────────────────────────────

@@ -5,15 +5,13 @@ namespace Whirtle.Client.Tests.Protocol;
 
 public class MessageSerializerTests
 {
-    private readonly MessageSerializer _serializer = new();
-
     // ── Envelope structure ────────────────────────────────────────────────────
 
     [Fact]
     public void Serialize_ProducesTypeAndPayloadEnvelope()
     {
         var json = Encoding.UTF8.GetString(
-            _serializer.Serialize(new ClientHelloMessage("id-1", "Test", 1, [])));
+            MessageSerializer.Serialize(new ClientHelloMessage("id-1", "Test", 1, [])));
 
         Assert.Contains("\"type\":\"client/hello\"", json);
         Assert.Contains("\"payload\":", json);
@@ -23,7 +21,7 @@ public class MessageSerializerTests
     public void Serialize_PayloadUsesSnakeCase()
     {
         var json = Encoding.UTF8.GetString(
-            _serializer.Serialize(new ClientHelloMessage("id-1", "Test", 1, [])));
+            MessageSerializer.Serialize(new ClientHelloMessage("id-1", "Test", 1, [])));
 
         Assert.Contains("\"client_id\"", json);
         Assert.Contains("\"supported_roles\"", json);
@@ -125,7 +123,7 @@ public class MessageSerializerTests
              "type":"server/hello"}
             """u8.ToArray();
 
-        var msg = (ServerHelloMessage)_serializer.Deserialize(json);
+        var msg = (ServerHelloMessage)MessageSerializer.Deserialize(json);
 
         Assert.Equal("srv-abc",   msg.ServerId);
         Assert.Equal("discovery", msg.ConnectionReason);
@@ -135,7 +133,7 @@ public class MessageSerializerTests
     public void Deserialize_UnknownType_ReturnsUnknownMessage()
     {
         var json = """{"type":"future/extension","payload":{}}"""u8.ToArray();
-        var msg  = _serializer.Deserialize(json);
+        var msg  = MessageSerializer.Deserialize(json);
         var unknown = Assert.IsType<UnknownMessage>(msg);
         Assert.Equal("future/extension", unknown.Type);
     }
@@ -147,7 +145,7 @@ public class MessageSerializerTests
             {"type":"server/state","payload":{"controller":{"supported_commands":["volume","mute","play","pause"],"volume":42,"muted":true}}}
             """u8.ToArray();
 
-        var msg = (ServerStateMessage)_serializer.Deserialize(json);
+        var msg = (ServerStateMessage)MessageSerializer.Deserialize(json);
 
         Assert.Equal(42, msg.Controller!.Volume);
         Assert.True(msg.Controller.Muted);
@@ -158,7 +156,7 @@ public class MessageSerializerTests
     public void Deserialize_TypeCaseInsensitive()
     {
         var json = """{"type":"SERVER/HELLO","payload":{"server_id":"s","name":"n","version":1,"active_roles":[],"connection_reason":"discovery"}}"""u8.ToArray();
-        var msg  = _serializer.Deserialize(json);
+        var msg  = MessageSerializer.Deserialize(json);
         Assert.IsType<ServerHelloMessage>(msg);
     }
 
@@ -193,12 +191,12 @@ public class MessageSerializerTests
     {
         var msg  = new StreamStartMessage(
             new StreamStartPlayer("opus", SampleRate: 48_000, Channels: 2, BitDepth: 16));
-        var json = System.Text.Encoding.UTF8.GetString(_serializer.Serialize(msg));
+        var json = System.Text.Encoding.UTF8.GetString(MessageSerializer.Serialize(msg));
 
         Assert.Contains("\"stream/start\"", json);
         Assert.Contains("\"sample_rate\"",  json);
         Assert.Contains("\"bit_depth\"",    json);
     }
 
-    private Message Roundtrip(Message msg) => _serializer.Deserialize(_serializer.Serialize(msg));
+    private static Message Roundtrip(Message msg) => MessageSerializer.Deserialize(MessageSerializer.Serialize(msg));
 }

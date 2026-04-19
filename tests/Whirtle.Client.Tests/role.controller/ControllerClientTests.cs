@@ -6,8 +6,6 @@ namespace Whirtle.Client.Tests.Role;
 
 public class ControllerClientTests
 {
-    private static readonly MessageSerializer Serializer = new();
-
     private static (ControllerClient controller, FakeTransport transport) Build()
     {
         var transport  = new FakeTransport();
@@ -23,7 +21,7 @@ public class ControllerClientTests
 
         await controller.PlayAsync();
 
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        var msg = (ClientCommandMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal("play", msg.Controller!.Command);
         Assert.Null(msg.Controller.Volume);
     }
@@ -35,7 +33,7 @@ public class ControllerClientTests
 
         await controller.PauseAsync();
 
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        var msg = (ClientCommandMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal("pause", msg.Controller!.Command);
     }
 
@@ -46,7 +44,7 @@ public class ControllerClientTests
 
         await controller.NextAsync();
 
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        var msg = (ClientCommandMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal("next", msg.Controller!.Command);
     }
 
@@ -57,7 +55,7 @@ public class ControllerClientTests
 
         await controller.StopAsync();
 
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        var msg = (ClientCommandMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal("stop", msg.Controller!.Command);
     }
 
@@ -68,7 +66,7 @@ public class ControllerClientTests
 
         await controller.PreviousAsync();
 
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        var msg = (ClientCommandMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal("previous", msg.Controller!.Command);
     }
 
@@ -79,7 +77,7 @@ public class ControllerClientTests
 
         await controller.SetVolumeAsync(0.75);
 
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        var msg = (ClientCommandMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal("volume", msg.Controller!.Command);
         Assert.Equal(75, msg.Controller.Volume);
     }
@@ -91,7 +89,7 @@ public class ControllerClientTests
 
         await controller.SetVolumeAsync(1.5);
 
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        var msg = (ClientCommandMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal(100, msg.Controller!.Volume);
     }
 
@@ -102,7 +100,7 @@ public class ControllerClientTests
 
         await controller.SetVolumeAsync(-0.5);
 
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        var msg = (ClientCommandMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal(0, msg.Controller!.Volume);
     }
 
@@ -115,7 +113,7 @@ public class ControllerClientTests
 
         await controller.SetMuteAsync(muted);
 
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        var msg = (ClientCommandMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal("mute", msg.Controller!.Command);
         Assert.Equal(muted, msg.Controller.Mute);
     }
@@ -143,7 +141,7 @@ public class ControllerClientTests
         };
         await task;
 
-        var msg = (ClientCommandMessage)Serializer.Deserialize(transport.Sent[0]);
+        var msg = (ClientCommandMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal(command, msg.Controller!.Command);
     }
 }

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Steve Peterson
 // SPDX-License-Identifier: MIT
 
+using System.Runtime.Versioning;
 using Serilog;
 using Serilog.Events;
 using Whirtle.Client.Codec;
@@ -145,6 +146,7 @@ public sealed class PlayerClient : IAsyncDisposable
     /// <param name="deviceId">The WASAPI device ID, or <see langword="null"/> for the system default.</param>
     /// <param name="volume">Initial volume level (0–100). Defaults to 100.</param>
     /// <param name="muted">Initial mute state. Defaults to <see langword="false"/>.</param>
+    [SupportedOSPlatform("windows")]
     public PlayerClient(ProtocolClient protocol, string? deviceId = null, int volume = 100, bool muted = false)
         : this(protocol, (sampleRate, channels) => new WasapiRenderer(deviceId, sampleRate, channels), clock: null, volume, muted) { }
 

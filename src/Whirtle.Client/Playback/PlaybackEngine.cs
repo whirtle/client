@@ -73,10 +73,12 @@ public sealed class PlaybackEngine : IAsyncDisposable
     // Task.Delay in the precise-pacing wait doesn't overshoot by a full tick (which was producing
     // consistent 7 ms write-time misses and driving rate correction).
     [DllImport("winmm.dll", ExactSpelling = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [SupportedOSPlatform("windows")]
     private static extern uint timeBeginPeriod(uint uPeriod);
 
     [DllImport("winmm.dll", ExactSpelling = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [SupportedOSPlatform("windows")]
     private static extern uint timeEndPeriod(uint uPeriod);
 

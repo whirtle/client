@@ -10,9 +10,6 @@ public class ArtworkReceiverTests
     private static readonly byte[] BmpMagic  = [0x42, 0x4D, 0x00, 0x00];
     private static readonly byte[] Unknown   = [0x00, 0x01, 0x02, 0x03];
 
-    // 8-byte big-endian representation of timestamp 1000 (microseconds).
-    private static readonly byte[] Timestamp1000 = [0, 0, 0, 0, 0, 0, 0x03, 0xE8];
-
     [Fact]
     public void ProcessFrame_SetsDataAndMimeType()
     {

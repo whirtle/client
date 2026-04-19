@@ -12,7 +12,7 @@ internal sealed class FakeWasapiRenderer : IWasapiRenderer
     /// Simulated buffered-byte level. Defaults to 0 so the pacing loop never blocks.
     /// Set to a non-zero value in tests that exercise ahead-buffer adaptation.
     /// </summary>
-    public int  BufferedBytesValue  { get; set; } = 0;
+    public int  BufferedBytesValue  { get; set; }
     public int  BufferedBytes       => BufferedBytesValue;
     public bool IsRunning           { get; private set; }
     public bool  Muted  { get; private set; }

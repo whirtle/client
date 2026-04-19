@@ -5,7 +5,28 @@
     <WarningLevel>9999</WarningLevel>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisMode>All</AnalysisMode>
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- Suppressed rules:
+         CA1031 — broad catch is intentional in background service loops
+         CA1062 — null safety already enforced by nullable reference types
+         CA1068 — internal/private APIs exempt from CancellationToken ordering
+         CA1303 — application is not localised; string literals in console I/O are fine
+         CA1305 — Serilog sink API has no IFormatProvider overload; app is not localised
+         CA1306 — same reasoning as CA1305
+         CA1307 — ordinal vs linguistic string comparison; reviewed case-by-case
+         CA1308 — ToLowerInvariant in switch on console input; not locale-sensitive
+         CA1515 — test classes must be public for xUnit discovery; main exe is referenced as lib
+         CA1707 — test methods use Method_Scenario_Expected convention intentionally
+         CA1711 — xUnit collection definition classes conventionally end in "Collection"
+         CA1806 — P/Invoke HRESULTs that are intentionally ignored (e.g. timeEndPeriod)
+         CA1826 — LINQ on IReadOnlyList is clear and correct in default interface methods
+         CA1832 — AsSpan hint on range-indexed byte arrays; immaterial in test code
+         CA2234 — prefer Uri over string overloads; no meaningful benefit in tests
+         CA1849 — async Console I/O overloads add noise with no benefit in this app
+         CA1861 — inline array args in test data are intentional for readability
+         CA2000 — ownership-transfer patterns that the analyser cannot follow
+         CA2007 — ConfigureAwait(false) is not needed in a single-process Windows app
+    -->
+    <NoWarn>$(NoWarn);CA1031;CA1062;CA1068;CA1303;CA1305;CA1306;CA1307;CA1308;CA1515;CA1707;CA1711;CA1806;CA1826;CA1832;CA1849;CA1859;CA1861;CA2000;CA2007;CA2234</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">

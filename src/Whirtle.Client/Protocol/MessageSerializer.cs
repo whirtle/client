@@ -53,11 +53,11 @@ internal sealed class MessageSerializer
     // ── Public API ─────────────────────────────────────────────────────────
 
     /// <summary>Returns the wire type string for <paramref name="message"/>, or the CLR type name if unknown.</summary>
-    public string GetWireType(Message message) =>
+    public static string GetWireType(Message message) =>
         NameMap.TryGetValue(message.GetType(), out var name) ? name : message.GetType().Name;
 
     /// <summary>Serialises <paramref name="message"/> to UTF-8 JSON bytes.</summary>
-    public byte[] Serialize(Message message)
+    public static byte[] Serialize(Message message)
     {
         if (!NameMap.TryGetValue(message.GetType(), out var typeName))
             throw new InvalidOperationException(
@@ -81,7 +81,7 @@ internal sealed class MessageSerializer
     /// Returns <see cref="UnknownMessage"/> for unrecognised type values rather
     /// than throwing, so callers can ignore future protocol extensions gracefully.
     /// </summary>
-    public Message Deserialize(byte[] data)
+    public static Message Deserialize(byte[] data)
     {
         using var doc  = JsonDocument.Parse(data);
         var        root = doc.RootElement;
