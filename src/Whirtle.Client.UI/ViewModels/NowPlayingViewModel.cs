@@ -189,6 +189,55 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             BitDepth:   value.MaxBitDepth));
     }
 
+    // ── Supported commands ─────────────────────────────────────────────────
+
+    private HashSet<string> _supportedCommands = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PreviousVisibility))]
+    private bool _isPreviousSupported;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NextVisibility))]
+    private bool _isNextSupported;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PlayPauseVisibility))]
+    private bool _isPlayPauseSupported;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShuffleVisibility))]
+    private bool _isShuffleSupported;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RepeatVisibility))]
+    private bool _isRepeatSupported;
+
+    public Visibility PreviousVisibility  => IsPreviousSupported  ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility NextVisibility      => IsNextSupported      ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility PlayPauseVisibility => IsPlayPauseSupported ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ShuffleVisibility   => IsShuffleSupported   ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility RepeatVisibility    => IsRepeatSupported    ? Visibility.Visible : Visibility.Collapsed;
+
+    // ── Shuffle state ──────────────────────────────────────────────────────
+
+    [ObservableProperty] private bool _isShuffleActive;
+
+    // ── Repeat state ───────────────────────────────────────────────────────
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RepeatGlyph), nameof(RepeatTooltip), nameof(IsRepeatActive))]
+    private string _repeatMode = "repeat_off";
+
+    public bool   IsRepeatActive => RepeatMode != "repeat_off";
+    public string RepeatGlyph    => RepeatMode == "repeat_one" ? "\uE8ED" : "\uE8EE";
+    public string RepeatTooltip  => RepeatMode switch
+    {
+        "repeat_all" => "Repeat: All",
+        "repeat_one" => "Repeat: One",
+        _            => "Repeat: Off",
+    };
+
     // ── Computed / derived properties ──────────────────────────────────────
 
     public string CodecDisplay
@@ -564,6 +613,14 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         IsClockConverged     = false;
         _latestClockStats    = null;
         ClockStats.Reset();
+        _supportedCommands   = [];
+        IsPreviousSupported  = false;
+        IsNextSupported      = false;
+        IsPlayPauseSupported = false;
+        IsShuffleSupported   = false;
+        IsRepeatSupported    = false;
+        IsShuffleActive      = false;
+        RepeatMode           = "repeat_off";
     }
 
     /// <summary>
@@ -974,6 +1031,43 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         return Task.CompletedTask;
     }
 
+    [RelayCommand]
+    private async Task ToggleShuffleAsync()
+    {
+        if (_controller is null) return;
+        if (IsShuffleActive)
+        {
+            Log.Information("User pressed Unshuffle");
+            await _controller.UnshuffleAsync();
+        }
+        else
+        {
+            Log.Information("User pressed Shuffle");
+            await _controller.ShuffleAsync();
+        }
+        IsShuffleActive = !IsShuffleActive;
+    }
+
+    [RelayCommand]
+    private async Task ToggleRepeatAsync()
+    {
+        if (_controller is null) return;
+        var next = RepeatMode switch
+        {
+            "repeat_off" => "repeat_all",
+            "repeat_all" => "repeat_one",
+            _            => "repeat_off",
+        };
+        Log.Information("User set repeat to {Mode}", next);
+        RepeatMode = next;
+        if (next == "repeat_all")
+            await _controller.RepeatAllAsync();
+        else if (next == "repeat_one")
+            await _controller.RepeatOneAsync();
+        else
+            await _controller.RepeatOffAsync();
+    }
+
     // ── Receive loop ────────────────────────────────────────────────────────
 
     private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
@@ -1015,6 +1109,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                                     _positionTimer.Start();
                                 else if (!playing && _positionTimer.IsEnabled)
                                     _positionTimer.Stop();
+
+                                if (meta.Shuffle is { } shuffleActive) IsShuffleActive = shuffleActive;
+                                if (meta.Repeat  is { } repeatMode)   RepeatMode      = repeatMode;
                             });
                         }
                         if (msg.Controller is { } ctrl)
@@ -1024,6 +1121,15 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                                 Volume  = ctrl.Volume / 100.0;
                                 IsMuted = ctrl.Muted;
                                 _settings.SaveVolume(Volume, IsMuted);
+
+                                _supportedCommands   = new HashSet<string>(ctrl.SupportedCommands, StringComparer.OrdinalIgnoreCase);
+                                IsPreviousSupported  = _supportedCommands.Contains("previous");
+                                IsNextSupported      = _supportedCommands.Contains("next");
+                                IsPlayPauseSupported = _supportedCommands.Contains("play") || _supportedCommands.Contains("pause");
+                                IsShuffleSupported   = _supportedCommands.Contains("shuffle");
+                                IsRepeatSupported    = _supportedCommands.Contains("repeat_off") ||
+                                                       _supportedCommands.Contains("repeat_one") ||
+                                                       _supportedCommands.Contains("repeat_all");
                             });
                         }
                         break;

@@ -110,12 +110,26 @@
                                 Spacing="8"
                                 HorizontalAlignment="Center">
 
+                                <!-- Shuffle -->
+                                <ToggleButton
+                                    Width="26" Height="26"
+                                    Padding="0"
+                                    CornerRadius="13"
+                                    ToolTipService.ToolTip="Shuffle"
+                                    Visibility="{x:Bind ViewModel.ShuffleVisibility, Mode=OneWay}"
+                                    IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
+                                    IsChecked="{x:Bind ViewModel.IsShuffleActive, Mode=OneWay}"
+                                    Command="{x:Bind ViewModel.ToggleShuffleCommand}">
+                                    <FontIcon Glyph="&#xE8B1;" FontSize="10" />
+                                </ToggleButton>
+
                                 <!-- Previous -->
                                 <Button
                                     Width="26" Height="26"
                                     Padding="0"
                                     CornerRadius="13"
                                     ToolTipService.ToolTip="Previous track"
+                                    Visibility="{x:Bind ViewModel.PreviousVisibility, Mode=OneWay}"
                                     IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
                                     Command="{x:Bind ViewModel.PreviousCommand}">
                                     <FontIcon Glyph="&#xE892;" FontSize="10" />
@@ -128,6 +142,7 @@
                                     CornerRadius="17"
                                     Style="{ThemeResource AccentButtonStyle}"
                                     ToolTipService.ToolTip="{x:Bind ViewModel.PlayPauseTooltip, Mode=OneWay}"
+                                    Visibility="{x:Bind ViewModel.PlayPauseVisibility, Mode=OneWay}"
                                     IsEnabled="{x:Bind ViewModel.IsPlayEnabled, Mode=OneWay}"
                                     Command="{x:Bind ViewModel.PlayPauseCommand}">
                                     <FontIcon
@@ -141,10 +156,24 @@
                                     Padding="0"
                                     CornerRadius="13"
                                     ToolTipService.ToolTip="Next track"
+                                    Visibility="{x:Bind ViewModel.NextVisibility, Mode=OneWay}"
                                     IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
                                     Command="{x:Bind ViewModel.NextCommand}">
                                     <FontIcon Glyph="&#xE893;" FontSize="10" />
                                 </Button>
+
+                                <!-- Repeat -->
+                                <ToggleButton
+                                    Width="26" Height="26"
+                                    Padding="0"
+                                    CornerRadius="13"
+                                    ToolTipService.ToolTip="{x:Bind ViewModel.RepeatTooltip, Mode=OneWay}"
+                                    Visibility="{x:Bind ViewModel.RepeatVisibility, Mode=OneWay}"
+                                    IsEnabled="{x:Bind ViewModel.IsConnected, Mode=OneWay}"
+                                    IsChecked="{x:Bind ViewModel.IsRepeatActive, Mode=OneWay}"
+                                    Command="{x:Bind ViewModel.ToggleRepeatCommand}">
+                                    <FontIcon Glyph="{x:Bind ViewModel.RepeatGlyph, Mode=OneWay}" FontSize="10" />
+                                </ToggleButton>
                             </StackPanel>
 
                             <!-- Progress bar + time labels -->
