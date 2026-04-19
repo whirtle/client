@@ -82,9 +82,6 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             supportedCommands: ["volume", "mute"]);
     }
 
-    // Signal-strength input — updated by the clock sync loop.
-    private TimeSpan _lastRtt = TimeSpan.MaxValue; // unknown until first sync
-
     // ── Clock statistics ───────────────────────────────────────────────────
 
     public ClockStatsViewModel ClockStats { get; }
@@ -150,6 +147,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private int? _sampleRate;
 
     [ObservableProperty] private int _signalStrength; // 0–3
+    [ObservableProperty] private IReadOnlyList<SignalInputLine> _signalInputLines = [];
 
     // ── Buffer / codec statistics ──────────────────────────────────────────────
 
@@ -459,7 +457,6 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _syncTask = _syncer.RunAsync(
                 (r, stats) =>
                 {
-                    _lastRtt           = r.RoundTripTime;
                     _serverClockOffset = stats.FilteredOffset;
                     _latestClockStats  = stats;
                     if (_clockReady)
@@ -606,7 +603,6 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         StatMinBufferFloorHits = 0;
         StatAheadTargetMs    = 0;
         StatRateRatio        = 1.0;
-        _lastRtt             = TimeSpan.MaxValue;
         _serverClockOffset   = TimeSpan.Zero;
         _clockReady          = false;
         IsClockReady        = false;
@@ -941,7 +937,6 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _syncTask = _syncer.RunAsync(
             (r, stats) =>
             {
-                _lastRtt           = r.RoundTripTime;
                 _serverClockOffset = stats.FilteredOffset;
                 _latestClockStats  = stats;
                 if (_clockReady)
@@ -1210,10 +1205,14 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     /// Recomputes and applies the current signal-strength level.
     /// Must be called on the UI thread.
     /// </summary>
-    private void RefreshSignalStrength() => SignalStrength = ComputeSignalStrength();
+    private void RefreshSignalStrength()
+    {
+        SignalStrength   = ComputeSignalStrength();
+        SignalInputLines = ComputeSignalInputLines();
+    }
 
     /// <summary>
-    /// Maps five independent dimensions onto a 0–3 signal level; worst-case wins.
+    /// Maps four independent dimensions onto a 0–4 signal level; worst-case wins.
     /// </summary>
     private int ComputeSignalStrength()
     {
@@ -1223,27 +1222,27 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
         int clockScore = IsClockConverged ? 4 : 2;
 
-        int rttScore = _lastRtt.TotalMilliseconds switch
-        {
-            <= 5  => 4,
-            <= 15 => 3,
-            <= 30 => 2,
-            <= 50 => 1,
-            _     => 0,
-        };
-
         var player = _player;
         if (player is null)
-            return Math.Min(clockScore, rttScore);
+            return clockScore;
 
-        int bufferScore = player.BufferedFrameCount switch
-        {
-            >= 12 => 4,
-            >= 8  => 3,
-            >= 4  => 2,
-            >= 2  => 1,
-            _     => 0,
-        };
+        // When paused, the engine is idle by design — score all playback
+        // dimensions as good so the signal reflects connection quality only.
+        if (!IsPlaying)
+            return clockScore;
+
+        // Buffer score only matters once synchronized — during initial buffering the
+        // jitter buffer is intentionally empty and should not penalise signal strength.
+        int bufferScore = player.EngineState == PlaybackState.Synchronized
+            ? player.BufferedFrameCount switch
+            {
+                >= 12 => 4,
+                >= 8  => 3,
+                >= 4  => 2,
+                >= 2  => 1,
+                _     => 0,
+            }
+            : 4;
 
         // AheadTargetMs doubles under CPU pressure (50 → 100 → 200).
         int aheadScore = player.AheadTargetMs switch
@@ -1260,6 +1259,73 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _                          => 0,
         };
 
-        return Math.Min(clockScore, Math.Min(rttScore, Math.Min(bufferScore, Math.Min(aheadScore, stateScore))));
+        return Math.Min(clockScore, Math.Min(bufferScore, Math.Min(aheadScore, stateScore)));
+    }
+
+    private IReadOnlyList<SignalInputLine> ComputeSignalInputLines()
+    {
+        var lines = new List<SignalInputLine>(4);
+
+        if (!IsClockReady)
+        {
+            lines.Add(new SignalInputLine("Clock", "Not ready", true));
+            return lines;
+        }
+
+        int clockScore = IsClockConverged ? 4 : 2;
+        lines.Add(new SignalInputLine("Clock",
+            IsClockConverged ? "Converged" : "Syncing",
+            clockScore < 4));
+
+        if (_player is null)
+            return lines;
+
+        // When paused, the engine is idle by design — report state as Paused and
+        // skip the buffer/CPU/engine penalties.
+        if (!IsPlaying)
+        {
+            lines.Add(new SignalInputLine("Engine", "Paused", false));
+            return lines;
+        }
+
+        bool synchronized = _player.EngineState == PlaybackState.Synchronized;
+        int bufferScore = synchronized
+            ? _player.BufferedFrameCount switch
+            {
+                >= 12 => 4,
+                >= 8  => 3,
+                >= 4  => 2,
+                >= 2  => 1,
+                _     => 0,
+            }
+            : 4;
+        lines.Add(new SignalInputLine("Buffer",
+            $"{_player.BufferedFrameCount} frames",
+            synchronized && bufferScore < 4));
+
+        int aheadScore = _player.AheadTargetMs switch
+        {
+            <= PlaybackEngine.TargetAheadMs => 4,
+            <= 100                          => 2,
+            _                              => 0,
+        };
+        lines.Add(new SignalInputLine("CPU",
+            $"{_player.AheadTargetMs} ms target",
+            aheadScore < 4));
+
+        int stateScore = _player.EngineState switch
+        {
+            PlaybackState.Synchronized => 4,
+            PlaybackState.Buffering    => 2,
+            _                          => 0,
+        };
+        lines.Add(new SignalInputLine("Engine",
+            _player.EngineState.ToString(),
+            stateScore < 4));
+
+        return lines;
     }
 }
+
+/// <summary>One row in the signal-quality tooltip.</summary>
+public record SignalInputLine(string Label, string Value, bool IsImpairing);
