@@ -72,16 +72,16 @@ internal class Program
         using var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
+        // ── WebSocket listener ───────────────────────────────────────────────
+        await using var listener    = new WebSocketListener(port);
+        var             connManager = new ConnectionManager();
+
+        Console.WriteLine($"[WS]   Listening on :{port}{MdnsAdvertiser.DefaultPath}");
+
         // ── mDNS advertiser ─────────────────────────────────────────────────
         using var advertiser = new MdnsAdvertiser(hostname, friendlyName, port);
         _ = advertiser.AdvertiseAsync(cts.Token); // background loop
         Console.WriteLine("[mDNS] Advertising _sendspin._tcp.local. — waiting for server…");
-
-        // ── WebSocket listener ───────────────────────────────────────────────
-        await using var listener       = new WebSocketListener(port);
-        var             connManager    = new ConnectionManager();
-
-        Console.WriteLine($"[WS]   Listening on :{port}{MdnsAdvertiser.DefaultPath}");
 
         ITransport? transport = null;
 

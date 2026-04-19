@@ -712,6 +712,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             return;
         }
 
+        Log.Debug(
+            "Server-initiated mode: listening on :{Port}{Path}",
+            MdnsAdvertiser.DefaultPort, MdnsAdvertiser.DefaultPath);
+
         var hostname = Environment.MachineName;
         MdnsAdvertiser? advertiser = null;
         try
@@ -723,10 +727,6 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         {
             Log.Error(ex, "Failed to start mDNS advertiser — server will not discover this client");
         }
-
-        Log.Information(
-            "Server-initiated mode: listening on :{Port}{Path}, advertising as \"{Name}\"",
-            MdnsAdvertiser.DefaultPort, MdnsAdvertiser.DefaultPath, _settings.ClientName);
 
         try
         {
