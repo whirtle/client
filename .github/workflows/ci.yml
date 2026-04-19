@@ -18,14 +18,21 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
       - name: Restore
-        run: dotnet restore Whirtle.Client.slnx
+        run: |
+          dotnet restore src/Whirtle.Client/Whirtle.Client.csproj
+          dotnet restore src/Whirtle.Client.UI/Whirtle.Client.UI.csproj
+          dotnet restore tests/Whirtle.Client.Tests/Whirtle.Client.Tests.csproj
+          dotnet restore tests/Whirtle.Client.IntegrationTests/Whirtle.Client.IntegrationTests.csproj
 
       - name: Build core
         run: dotnet build src/Whirtle.Client/Whirtle.Client.csproj --no-restore --configuration Release
 
       - name: Build UI
-        run: dotnet build src/Whirtle.Client.UI/Whirtle.Client.UI.csproj --no-restore --configuration Release -p:Platform=x64
+        run: msbuild src/Whirtle.Client.UI/Whirtle.Client.UI.csproj -p:Configuration=Release -p:Platform=x64
 
       - name: Test
         run: dotnet test tests/Whirtle.Client.Tests/Whirtle.Client.Tests.csproj --no-restore --configuration Release
