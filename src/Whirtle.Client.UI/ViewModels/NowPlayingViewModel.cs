@@ -48,6 +48,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private CancellationTokenSource? _serverModeCts;
     private Task                      _serverModeTask = Task.CompletedTask;
     private readonly ConnectionManager _connectionManager = new();
+    private MdnsAdvertiser?           _advertiser;
 
     // ── Handshake capability declarations ─────────────────────────────────────
 
@@ -774,11 +775,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             MdnsAdvertiser.DefaultPort, MdnsAdvertiser.DefaultPath);
 
         var hostname = Environment.MachineName;
-        MdnsAdvertiser? advertiser = null;
         try
         {
-            advertiser = new MdnsAdvertiser(hostname, _settings.ClientName, MdnsAdvertiser.DefaultPort);
-            _ = advertiser.AdvertiseAsync(cancellationToken);
+            _advertiser = new MdnsAdvertiser(hostname, _settings.ClientName, MdnsAdvertiser.DefaultPort);
+            _ = _advertiser.AdvertiseAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -810,7 +810,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         finally
         {
             await listener.DisposeAsync();
-            advertiser?.Dispose();
+            _advertiser?.Dispose();
+            _advertiser = null;
         }
     }
 
@@ -955,6 +956,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         Log.Information(
             "Inbound connection accepted: server={ServerId} name={ServerName} reason={Reason}",
             hello.ServerId, hello.Name, hello.ConnectionReason);
+
+        Log.Debug("mDNS: pausing advertising while connected to {ServerId}", hello.ServerId);
+        _advertiser?.Pause();
 
         _dispatcher.TryEnqueue(() =>
         {
@@ -1191,6 +1195,15 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             // clears this during proper shutdown — nulling here is safe because
             // TearDownSessionAsync awaits this task before reassigning it.
             _controller = null;
+
+            // Resume advertising so the server can rediscover this client after
+            // a disconnect. Skip when server mode was intentionally stopped
+            // (_serverModeCts == null) since the advertiser will be disposed.
+            if (_serverModeCts is not null)
+            {
+                Log.Debug("mDNS: resuming advertising after connection ended");
+                _advertiser?.Resume();
+            }
         }
     }
 
