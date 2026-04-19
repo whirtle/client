@@ -174,7 +174,7 @@ public class ClockSynchronizerTests
         }
 
         cts.Cancel();
-        await Assert.ThrowsAsync<OperationCanceledException>(() => runTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runTask);
 
         Assert.Equal(2, results.Count);
     }
@@ -203,7 +203,7 @@ public class ClockSynchronizerTests
         Assert.Equal(3, results.Count);
 
         cts.Cancel();
-        await Assert.ThrowsAsync<OperationCanceledException>(() => runTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runTask);
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public class ClockSynchronizerTests
         var (syncer, _, _) = Build(syncTimeout: TimeSpan.FromMilliseconds(1));
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
 
-        await Assert.ThrowsAsync<OperationCanceledException>(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => syncer.RunAsync((_, _) => { }, interval: TimeSpan.Zero, cts.Token));
     }
 
@@ -254,7 +254,7 @@ public class ClockSynchronizerTests
         Assert.Equal(2, syncer.GetStats().UpdateCount);
 
         cts.Cancel();
-        await Assert.ThrowsAsync<OperationCanceledException>(() => runTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runTask);
     }
 
     // ── WaitForConvergenceAsync ───────────────────────────────────────────────
@@ -317,7 +317,7 @@ public class ClockSynchronizerTests
         Assert.True(converged);
 
         cts.Cancel();
-        await Assert.ThrowsAsync<OperationCanceledException>(() => runTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runTask);
     }
 
     [Fact]
@@ -344,7 +344,7 @@ public class ClockSynchronizerTests
         await Task.Delay(20);
 
         cts.Cancel();
-        await Assert.ThrowsAsync<OperationCanceledException>(() => runTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runTask);
 
         Assert.NotNull(lastStats);
         Assert.Equal(500.0, lastStats!.FilteredOffsetUs, precision: 1);
