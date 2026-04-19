@@ -117,6 +117,7 @@ public sealed class MdnsAdvertiser : IDisposable
 
             if (timeout <= TimeSpan.Zero)
             {
+                Log.Debug("mDNS: re-announcing on {IP}:{Port}{Path}", ip, _port, _path);
                 await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
                 reannounceAt = DateTimeOffset.UtcNow + ReannounceInterval;
                 continue;
