@@ -60,7 +60,7 @@ public sealed class WebSocketListener : IAsyncDisposable
         }
 
         tcp.NoDelay = true;
-        Log.Debug("Inbound TCP connection from {RemoteEndPoint}", tcp.Client.RemoteEndPoint);
+        Log.Debug("Inbound TCP connection from {RemoteEndPoint} on local interface {LocalEndPoint}", tcp.Client.RemoteEndPoint, tcp.Client.LocalEndPoint);
         var stream = tcp.GetStream();
 
         Dictionary<string, string> headers;
