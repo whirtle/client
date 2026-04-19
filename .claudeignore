@@ -1,0 +1,43 @@
+# .claudeignore
+
+node_modules/
+.next/
+dist/
+build/
+*.log
+*.lock
+coverage/
+.env*
+__pycache__/
+*.pyc
+.vs
+**/bin
+**/obj
+UIClientPackaging\AppPackages
+
+# Secrets
+.env
+.env.local
+.env.production
+*.pem
+*.key
+secrets.json
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+__snapshots__/
+.jest-cache/
+
+# Database files
+*.sqlite
+*.db
+dump.sql
+
+# Large data files
+data/
+datasets/
+*.csv
+*.json.gz
