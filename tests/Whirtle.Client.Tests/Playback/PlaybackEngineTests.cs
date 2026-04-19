@@ -542,6 +542,23 @@ public class PlaybackEngineTests
     }
 
     [Fact]
+    public void Enqueue_WhilePaused_DropsFrames()
+    {
+        // Server keeps streaming for ~1 RTT after the client sends pause. If the engine
+        // accepted those frames, the next Resume would see a buffer full of pre-pause
+        // far-future timestamps and transition to Synchronized with a ~1 s head offset
+        // that the resampler cannot close — leading to underrun.
+        var (engine, _, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero);
+
+        engine.Pause();
+        for (int i = 0; i < 8; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        Assert.Equal(0, engine.BufferedFrameCount);
+    }
+
+    [Fact]
     public async Task DisposeAsync_StopsEngine()
     {
         var (engine, renderer, _) = Build();
