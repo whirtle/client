@@ -1245,11 +1245,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         };
 
         // AheadTargetMs doubles under CPU pressure (50 → 100 → 200).
-        int aheadScore = _player.AheadTargetMs switch
+        int aheadScore = (_player?.AheadTargetMs ?? 0) switch
         {
-            <= PlaybackEngine.TargetAheadMs => 4,
-            <= 100                          => 2,
-            _                              => 0,
+            <= 50  => 4,
+            <= 100 => 2,
+            _      => 0,
         };
 
         int stateScore = _player.EngineState switch
