@@ -9,6 +9,19 @@ using Whirtle.Client.Codec;
 
 namespace Whirtle.Client.Playback;
 
+/// <summary>Event data for <see cref="PlaybackEngine.StatusChanged"/>.</summary>
+public sealed class PlaybackStatusEventArgs(PlaybackState state, int bufferCount) : EventArgs
+{
+    public PlaybackState State       { get; } = state;
+    public int           BufferCount { get; } = bufferCount;
+}
+
+/// <summary>Event data for <see cref="PlaybackEngine.PlaybackStateChanged"/>.</summary>
+public sealed class PlaybackStateChangedEventArgs(string state) : EventArgs
+{
+    public string State { get; } = state;
+}
+
 /// <summary>
 /// Buffered playback engine.
 ///
@@ -80,8 +93,8 @@ public sealed class PlaybackEngine : IAsyncDisposable
     private volatile bool           _paused;
     private CancellationTokenSource _cts  = new();
     private Thread?                 _renderThread;
-    private bool                    _userMuted   = false;
-    private bool                    _engineMuted = false;
+    private bool                    _userMuted;
+    private bool                    _engineMuted;
     private int                     _bufferUnderrunCount;
     private int                     _minBufferFloorHitCount;
     // Stored as raw bits so cross-thread reads are atomic without needing a lock
@@ -90,8 +103,8 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
     // Adaptive ahead-buffer state (render-loop-only; no volatile needed)
     private int _aheadTargetMs   = TargetAheadMs;
-    private int _behindCount     = 0;
-    private int _recoveryFrames  = 0;
+    private int _behindCount;
+    private int _recoveryFrames;
 
     public PlaybackState State => _state;
 
@@ -127,14 +140,14 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// Subscribers receive the current <see cref="PlaybackState"/> and the number
     /// of frames currently held in the jitter buffer.
     /// </summary>
-    public event Action<PlaybackState, int>? StatusChanged;
+    public event EventHandler<PlaybackStatusEventArgs>? StatusChanged;
 
     /// <summary>
     /// Raised when the engine enters or leaves a synchronized state.
     /// Carries the Sendspin state string: <c>"error"</c> or <c>"synchronized"</c>.
     /// Subscribers should send a complete <c>client/state</c> message to the server.
     /// </summary>
-    public event Action<string>? PlaybackStateChanged;
+    public event EventHandler<PlaybackStateChangedEventArgs>? PlaybackStateChanged;
 
     internal PlaybackEngine(
         IWasapiRenderer     renderer,
@@ -185,7 +198,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
     public void Enqueue(long serverTimestamp, AudioFrame frame)
     {
         _buffer.Enqueue(serverTimestamp, frame);
-        StatusChanged?.Invoke(_state, _buffer.Count);
+        StatusChanged?.Invoke(this, new PlaybackStatusEventArgs(_state, _buffer.Count));
     }
 
     /// <summary>
@@ -364,7 +377,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
                 "PlaybackEngine: buffering complete ({Count} frames, head scheduleOffset={HeadScheduleOffsetMs:F1} ms, target={Target} ms); starting playback",
                 _buffer.Count, headScheduleOffsetMs, -_aheadTargetMs);
             TransitionTo(PlaybackState.Synchronized);
-            PlaybackStateChanged?.Invoke("synchronized");
+            PlaybackStateChanged?.Invoke(this, new PlaybackStateChangedEventArgs("synchronized"));
             return;
         }
         CancelableWait(ct, 5);
@@ -533,13 +546,13 @@ public sealed class PlaybackEngine : IAsyncDisposable
         _engineMuted = true;
         ApplyMuteState();
         _buffer.Clear();
-        PlaybackStateChanged?.Invoke("error");
+        PlaybackStateChanged?.Invoke(this, new PlaybackStateChangedEventArgs("error"));
     }
 
     private void TransitionTo(PlaybackState next)
     {
         _state = next;
-        StatusChanged?.Invoke(next, _buffer.Count);
+        StatusChanged?.Invoke(this, new PlaybackStatusEventArgs(next, _buffer.Count));
     }
 
     private void ApplyMuteState() => _renderer.SetMuted(_engineMuted || _userMuted);

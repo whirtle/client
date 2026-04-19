@@ -12,7 +12,7 @@ public class NetworkMonitorTests
         using var monitor = new NetworkMonitor(source, () => ips.Dequeue());
 
         string? received = null;
-        monitor.PreferredAddressChanged += (_, ip) => received = ip;
+        monitor.PreferredAddressChanged += (_, e) => received = e.Address;
 
         source.TriggerAddressChanged();
 

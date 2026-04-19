@@ -24,7 +24,7 @@ public sealed class NowPlayingState
     public string? Artist      { get; private set; }
     public string? AlbumArtist { get; private set; }
     public string? Album       { get; private set; }
-    public string? ArtworkUrl  { get; private set; }
+    public Uri?    ArtworkUrl  { get; private set; }
     public int?    Year        { get; private set; }
     public int?    Track       { get; private set; }
 
@@ -44,7 +44,7 @@ public sealed class NowPlayingState
     public bool?   Shuffle { get; private set; }
 
     /// <summary>Raised whenever now-playing metadata changes.</summary>
-    public event Action? Changed;
+    public event EventHandler? Changed;
 
     /// <summary>
     /// Applies a <see cref="ServerMetadataState"/> snapshot, updating all
@@ -63,7 +63,7 @@ public sealed class NowPlayingState
         Progress    = state.Progress ?? Progress;
         Repeat      = state.Repeat;
         Shuffle     = state.Shuffle;
-        Changed?.Invoke();
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

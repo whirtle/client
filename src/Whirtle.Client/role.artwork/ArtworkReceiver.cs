@@ -38,7 +38,9 @@ public sealed class ArtworkReceiver
     /// The most recent raw image bytes, or <see langword="null"/> if none have been
     /// received yet or the channel was cleared.
     /// </summary>
+#pragma warning disable CA1819 // raw image binary data — callers need direct array access
     public byte[]? Data      { get { lock (_lock) return _data; } }
+#pragma warning restore CA1819
 
     /// <summary>
     /// MIME type of the current artwork: <c>image/jpeg</c>, <c>image/png</c>, or
@@ -52,7 +54,7 @@ public sealed class ArtworkReceiver
     public long    Timestamp { get { lock (_lock) return _timestamp; } }
 
     /// <summary>Raised whenever artwork changes or is cleared.</summary>
-    public event Action? Changed;
+    public event EventHandler? Changed;
 
     /// <summary>
     /// Applies <paramref name="frame"/> and fires <see cref="Changed"/>.
@@ -70,7 +72,7 @@ public sealed class ArtworkReceiver
         // callers always see Data, MimeType, and Timestamp in a consistent group.
         // Invoke the handler outside the lock to prevent deadlocks if a subscriber
         // calls back into ProcessFrame or reads the public properties.
-        Action? handler;
+        EventHandler? handler;
         lock (_lock)
         {
             _timestamp = frame.Timestamp;
@@ -89,6 +91,6 @@ public sealed class ArtworkReceiver
             }
             handler = Changed;
         }
-        handler?.Invoke();
+        handler?.Invoke(this, EventArgs.Empty);
     }
 }

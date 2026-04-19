@@ -9,6 +9,24 @@ using Whirtle.Client.Protocol;
 
 namespace Whirtle.Client.Role;
 
+/// <summary>Event data for <see cref="PlayerClient.VolumeChanged"/>.</summary>
+public sealed class VolumeChangedEventArgs(int volume) : EventArgs
+{
+    public int Volume { get; } = volume;
+}
+
+/// <summary>Event data for <see cref="PlayerClient.MuteChanged"/>.</summary>
+public sealed class MuteChangedEventArgs(bool muted) : EventArgs
+{
+    public bool Muted { get; } = muted;
+}
+
+/// <summary>Event data for <see cref="PlayerClient.StaticDelayChanged"/>.</summary>
+public sealed class StaticDelayChangedEventArgs(int delayMs) : EventArgs
+{
+    public int DelayMs { get; } = delayMs;
+}
+
 /// <summary>
 /// Implements the Sendspin player@v1 role.
 ///
@@ -51,7 +69,7 @@ public sealed class PlayerClient : IAsyncDisposable
 
     private int    _volume;
     private bool   _muted;
-    private int    _staticDelayMs = 0;
+    private int    _staticDelayMs;
     private string _playerState   = "synchronized";
 
     private (string PlayerState, int Volume, bool Muted, int StaticDelayMs)? _lastSentState;
@@ -111,13 +129,13 @@ public sealed class PlayerClient : IAsyncDisposable
     public int  StaticDelayMs => _staticDelayMs;
 
     /// <summary>Raised when the server sends a <c>volume</c> command.</summary>
-    public event Action<int>?  VolumeChanged;
+    public event EventHandler<VolumeChangedEventArgs>?      VolumeChanged;
 
     /// <summary>Raised when the server sends a <c>mute</c> command.</summary>
-    public event Action<bool>? MuteChanged;
+    public event EventHandler<MuteChangedEventArgs>?        MuteChanged;
 
     /// <summary>Raised when the server sends a <c>set_static_delay</c> command.</summary>
-    public event Action<int>?  StaticDelayChanged;
+    public event EventHandler<StaticDelayChangedEventArgs>? StaticDelayChanged;
 
     /// <summary>
     /// Creates a player client that drives the system WASAPI device identified by
@@ -307,9 +325,9 @@ public sealed class PlayerClient : IAsyncDisposable
         var renderer       = _rendererFactory(player.SampleRate, player.Channels);
         _rendererLatencyMs = renderer.LatencyMs;
         _playbackEngine    = new PlaybackEngine(renderer);
-        _playbackEngine.PlaybackStateChanged += async state =>
+        _playbackEngine.PlaybackStateChanged += async (_, e) =>
         {
-            _playerState = state;
+            _playerState = e.State;
             try { await SendStateAsync(CancellationToken.None).ConfigureAwait(false); }
             catch { }
         };
@@ -396,14 +414,14 @@ public sealed class PlayerClient : IAsyncDisposable
             case "volume" when cmd.Volume.HasValue:
                 _volume = Math.Clamp(cmd.Volume.Value, 0, 100);
                 _playbackEngine?.SetVolume(_volume / 100f);
-                VolumeChanged?.Invoke(_volume);
+                VolumeChanged?.Invoke(this, new VolumeChangedEventArgs(_volume));
                 notifyServer = true;
                 break;
 
             case "mute" when cmd.Mute.HasValue:
                 _muted = cmd.Mute.Value;
                 _playbackEngine?.SetUserMuted(_muted);
-                MuteChanged?.Invoke(_muted);
+                MuteChanged?.Invoke(this, new MuteChangedEventArgs(_muted));
                 notifyServer = true;
                 break;
 
@@ -413,7 +431,7 @@ public sealed class PlayerClient : IAsyncDisposable
                 // would produce a burst of incorrect drift readings. Flush them so the
                 // engine re-buffers with timestamps adjusted by the new delay value.
                 _playbackEngine?.ClearBuffer();
-                StaticDelayChanged?.Invoke(_staticDelayMs);
+                StaticDelayChanged?.Invoke(this, new StaticDelayChangedEventArgs(_staticDelayMs));
                 notifyServer = true;
                 break;
         }

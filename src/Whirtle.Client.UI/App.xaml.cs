@@ -227,13 +227,13 @@ public partial class App : Application
 
     // ── Network monitoring ────────────────────────────────────────────────────
 
-    private void OnPreferredAddressChanged(object? sender, string newIp)
+    private void OnPreferredAddressChanged(object? sender, NetworkAddressChangedEventArgs e)
     {
         if (_nowPlayingViewModel is null || _dispatcher is null) return;
 
         _dispatcher.TryEnqueue(async () =>
         {
-            try   { await _nowPlayingViewModel.OnNetworkChangedAsync(newIp); }
+            try   { await _nowPlayingViewModel.OnNetworkChangedAsync(e.Address); }
             catch (Exception ex) { Log.Warning(ex, "Error during network change handling"); }
         });
     }

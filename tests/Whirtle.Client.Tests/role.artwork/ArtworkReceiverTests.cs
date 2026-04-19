@@ -39,7 +39,7 @@ public class ArtworkReceiverTests
     {
         var receiver = new ArtworkReceiver();
         int raised   = 0;
-        receiver.Changed += () => raised++;
+        receiver.Changed += (_, _) => raised++;
 
         receiver.ProcessFrame(new ArtworkFrame(0L, JpegMagic, "image/jpeg"));
 
@@ -75,7 +75,7 @@ public class ArtworkReceiverTests
     {
         var receiver = new ArtworkReceiver();
         int raised   = 0;
-        receiver.Changed += () => raised++;
+        receiver.Changed += (_, _) => raised++;
 
         receiver.ProcessFrame(new ArtworkFrame(0L, [], string.Empty));
 
