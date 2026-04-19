@@ -144,6 +144,8 @@ public sealed partial class MainWindow : Window
             // be running when WinUI tears down, causing an access violation.
             await App.Current.NowPlayingViewModel.ShutdownAsync();
 
+            _logsWindow?.AllowClose();
+            _logsWindow?.Close();
             Application.Current.Exit();
         }
     }

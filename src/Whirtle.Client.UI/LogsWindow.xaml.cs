@@ -15,6 +15,8 @@ public sealed partial class LogsWindow : Window
     private MicaController?              _micaController;
     private SystemBackdropConfiguration? _backdropConfig;
 
+    private bool _allowClose = false;
+
     public LogsWindow()
     {
         InitializeComponent();
@@ -30,14 +32,18 @@ public sealed partial class LogsWindow : Window
         // Closing the logs window should hide it, not destroy it.
         // Destroying it when MainWindow is hidden to the tray would exit the app
         // because the runtime sees no remaining visible windows.
+        // Exception: during app shutdown _allowClose is set so Exit() can proceed.
         AppWindow.Closing += (_, args) =>
         {
+            if (_allowClose) return;
             args.Cancel = true;
             SaveWindowBounds();
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             NativeWindow.ShowWindow(hwnd, NativeWindow.SW_HIDE);
         };
     }
+
+    internal void AllowClose() => _allowClose = true;
 
     public void Show()
     {
