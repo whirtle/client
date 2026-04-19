@@ -14,9 +14,9 @@ namespace Whirtle.Client.Playback;
 [SupportedOSPlatform("windows")]
 internal sealed class WasapiRenderer : IWasapiRenderer
 {
-    private readonly WasapiOut            _wasapiOut;
-    private readonly BufferedWaveProvider _provider;
-    private readonly byte[]               _scratch;
+    private readonly WasapiOut           _wasapiOut;
+    private readonly FadingWaveProvider  _provider;
+    private readonly byte[]              _scratch;
     private volatile bool                 _muted;
     private volatile float                _volume = 1.0f;
 
@@ -43,7 +43,7 @@ internal sealed class WasapiRenderer : IWasapiRenderer
         LatencyMs  = latencyMs;
 
         var waveFormat = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, channels);
-        _provider = new BufferedWaveProvider(waveFormat) { DiscardOnBufferOverflow = true };
+        _provider = new FadingWaveProvider(waveFormat);
 
         var device = deviceId is not null
             ? GetDeviceById(deviceId)
@@ -71,7 +71,7 @@ internal sealed class WasapiRenderer : IWasapiRenderer
         IsRunning = false;
     }
 
-    public void ClearBuffer() => _provider.ClearBuffer();
+    public void ClearBuffer() => _provider.FadeOutAndClear();
 
     public void SetMuted(bool muted) => _muted = muted;
 
