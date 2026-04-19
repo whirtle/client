@@ -8,9 +8,11 @@ namespace Whirtle.Client.UI;
 internal static class NativeWindow
 {
     [DllImport("user32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     internal static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     [DllImport("user32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     internal static extern IntPtr GetForegroundWindow();
 
     internal const int SW_HIDE    = 0;

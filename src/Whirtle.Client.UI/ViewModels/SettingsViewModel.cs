@@ -8,6 +8,12 @@ using Whirtle.Client.Codec;
 
 namespace Whirtle.Client.UI.ViewModels;
 
+internal sealed class DeviceSettings
+{
+    public AudioFormat PreferredFormat { get; set; } = AudioFormat.Flac;
+    public int         StaticDelayMs   { get; set; }
+}
+
 public sealed partial class SettingsViewModel : ObservableObject
 {
     private static readonly string SettingsPath = Path.Combine(
@@ -28,7 +34,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     // Snapshot for OK/Cancel support (connection mode excluded: it changes via the
     // server picker, outside the Settings dialog lifecycle).
-    private record SettingsSnapshot(
+    private sealed record SettingsSnapshot(
         string ClientName, string ClientId, string PreferredAudioDeviceId,
         Dictionary<string, DeviceSettings> DeviceSettings,
         ConnectionMode ConnectionMode, string LogLevel,
@@ -99,7 +105,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     // ── Volume / mute (global, persisted) ─────────────────────────────────
     private double _volume  = 0.8;
-    private bool   _isMuted = false;
+    private bool   _isMuted;
 
     public double Volume  => _volume;
     public bool   IsMuted => _isMuted;
@@ -462,12 +468,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     // ── Settings data types (serialised to disk) ──────────────────────────
-
-    public sealed class DeviceSettings
-    {
-        public AudioFormat PreferredFormat { get; set; } = AudioFormat.Flac;
-        public int         StaticDelayMs   { get; set; } = 0;
-    }
 
     private sealed record SettingsData(
         string                             ClientName,

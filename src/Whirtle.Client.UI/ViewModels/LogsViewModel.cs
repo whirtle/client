@@ -17,7 +17,7 @@ public sealed partial class LogsViewModel : ObservableObject
 
     public ObservableCollection<LogEntry> Entries { get; } = new();
 
-    public LogsViewModel(InMemorySink sink, DispatcherQueue dispatcher)
+    internal LogsViewModel(InMemorySink sink, DispatcherQueue dispatcher)
     {
         _dispatcher = dispatcher;
         sink.NewEntry += OnNewEntry;
