@@ -14,7 +14,7 @@ namespace Whirtle.Client;
 public static class AppLogger
 {
     private const string OutputTemplate =
-        "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
+        "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:l}{NewLine}{Exception}";
 
     /// <summary>
     /// Initialises <see cref="Log.Logger"/> with a rolling file sink and an
