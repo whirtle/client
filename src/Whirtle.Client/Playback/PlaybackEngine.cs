@@ -245,6 +245,12 @@ public sealed class PlaybackEngine : IAsyncDisposable
     /// <param name="serverTimestamp">Server-assigned UTC ticks at the time the frame was captured.</param>
     public void Enqueue(long serverTimestamp, AudioFrame frame)
     {
+        // Drop frames that arrive while paused. The server keeps streaming for ~1 RTT
+        // after we send client/command pause, and those in-flight frames carry the
+        // pre-pause timeline. If we buffered them, the next Resume would transition to
+        // Synchronized with a head scheduleOffset of ~-1 s (server lookahead) and no
+        // way to catch up — the resampler would saturate and we'd underrun.
+        if (_paused) return;
         _buffer.Enqueue(serverTimestamp, frame);
         StatusChanged?.Invoke(this, new PlaybackStatusEventArgs(_state, _buffer.Count));
     }
@@ -487,14 +493,14 @@ public sealed class PlaybackEngine : IAsyncDisposable
         // first several frames of audio even though the wall-clock gate would then
         // delay the actual write by ~frameDuration.
         //
-        // Cap at frameDurationMs: in steady state the natural wait is exactly one frame
-        // duration (the time it takes the previous frame to play out), so a larger wait
-        // means we're further ahead than necessary — just write and let the next frame's
-        // pacing catch up. This also bounds per-frame wall-time in tests where the fake
-        // clock is frozen.
+        // No cap on waitMs: server lookahead is ~1.8 s, so the first frame on a fresh
+        // stream can legitimately need a wait close to that. A cap here caused the
+        // frame to be written ~1 s early, which the resampler then could not close
+        // (200 ppm can't absorb a 1 s offset inside the jitter-buffer lifetime) —
+        // resulting in a persistent negative scheduleOffset and eventual underrun.
         double frameDurationMs = frame!.Duration.TotalMilliseconds;
         double dequeueScheduleOffsetMs = scheduleOffsetMs;
-        double waitMs          = Math.Min(-_aheadTargetMs - scheduleOffsetMs, frameDurationMs);
+        double waitMs          = -_aheadTargetMs - scheduleOffsetMs;
         if (waitMs > 1)
         {
             if (CancelableWait(ct, (int)waitMs)) return;
