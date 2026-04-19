@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Serilog;
 using Whirtle.Client.UI.ViewModels;
 
 namespace Whirtle.Client.UI.Pages;
@@ -10,6 +11,9 @@ namespace Whirtle.Client.UI.Pages;
 public sealed partial class NowPlayingPage : Page
 {
     private NowPlayingViewModel ViewModel => App.Current.NowPlayingViewModel;
+
+    private DateTimeOffset _lastVolumeCommandSent = DateTimeOffset.MinValue;
+    private static readonly TimeSpan VolumeThrottle = TimeSpan.FromMilliseconds(200);
 
     public NowPlayingPage()
     {
@@ -68,10 +72,22 @@ public sealed partial class NowPlayingPage : Page
             () => FocusSink.Focus(FocusState.Programmatic));
     }
 
+    private async void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (sender is not Slider slider) return;
+        if (DateTimeOffset.UtcNow - _lastVolumeCommandSent < VolumeThrottle) return;
+        _lastVolumeCommandSent = DateTimeOffset.UtcNow;
+        await ViewModel.SetVolumeCommand.ExecuteAsync(slider.Value / 100.0);
+    }
+
     private async void VolumeSlider_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
     {
         if (sender is Slider slider)
+        {
+            _lastVolumeCommandSent = DateTimeOffset.UtcNow;
+            Log.Information("User set volume to {VolumePercent}%", (int)slider.Value);
             await ViewModel.SetVolumeCommand.ExecuteAsync(slider.Value / 100.0);
+        }
     }
 
     private Visibility WaitingVisibility(bool isNotConnected)

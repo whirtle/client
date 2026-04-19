@@ -915,6 +915,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task PlayAsync()
     {
         if (_controller is null) return;
+        Log.Information("User pressed Play");
         _player?.Resume();
         await _controller.PlayAsync();
         IsPlaying = true;
@@ -924,6 +925,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task PauseAsync()
     {
         if (_controller is null) return;
+        Log.Information("User pressed Pause");
         _player?.Pause();
         await _controller.PauseAsync();
         IsPlaying = false;
@@ -933,6 +935,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task PreviousAsync()
     {
         if (_controller is null) return;
+        Log.Information("User pressed Previous");
         await _controller.PreviousAsync();
     }
 
@@ -940,6 +943,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task NextAsync()
     {
         if (_controller is null) return;
+        Log.Information("User pressed Next");
         await _controller.NextAsync();
     }
 
@@ -956,6 +960,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private async Task ToggleMuteAsync()
     {
         IsMuted = !IsMuted;
+        Log.Information("User toggled mute: {Muted}", IsMuted);
         _settings.SaveVolume(Volume, IsMuted);
         if (_controller is null) return;
         await _controller.SetMuteAsync(IsMuted);
