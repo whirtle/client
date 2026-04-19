@@ -419,6 +419,11 @@ public sealed class PlaybackEngine : IAsyncDisposable
             scheduleOffsetMs = ComputeScheduleOffsetMs(timestamp);
         }
 
+        // Pause() may have fired during the pacing wait — if so, drop the
+        // already-dequeued frame rather than writing resampled audio into the
+        // freshly-cleared renderer buffer with a stale _aheadTargetMs.
+        if (_paused) return;
+
         if (Log.IsEnabled(LogEventLevel.Debug))
         {
             Log.Debug(
