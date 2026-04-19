@@ -117,7 +117,16 @@ public sealed class ProtocolClient : IAsyncDisposable
 
             if (data[0] == (byte)'{')
             {
-                var msg = _serializer.Deserialize(data);
+                Message msg;
+                try
+                {
+                    msg = _serializer.Deserialize(data);
+                }
+                catch (JsonException ex)
+                {
+                    Log.Warning(ex, "{Tag:l}Skipping malformed message", _serverTag);
+                    continue;
+                }
                 if (msg is ServerTimeMessage)
                     Log.Debug("{Tag:l}< {Type:l} {Json:l} client_now={ClientNow:F3} ms",
                         _serverTag, _serializer.GetWireType(msg), ExtractPayloadJson(data),
