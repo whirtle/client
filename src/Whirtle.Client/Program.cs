@@ -158,10 +158,10 @@ internal class Program
             var metadata   = new NowPlayingState();
             var artwork    = new ArtworkReceiver();
 
-            metadata.Changed += () =>
+            metadata.Changed += (_, _) =>
                 Console.WriteLine($"[Meta]  {metadata}");
 
-            artwork.Changed += () =>
+            artwork.Changed += (_, _) =>
                 Console.WriteLine(
                     $"[Art]   {artwork.MimeType}  {artwork.Data!.Length:N0} bytes");
 

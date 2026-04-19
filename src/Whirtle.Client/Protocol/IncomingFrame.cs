@@ -30,7 +30,9 @@ public sealed record ProtocolFrame(Message Message) : IncomingFrame;
 /// Empty string when <paramref name="Data"/> is empty (clear message).
 /// </param>
 /// <param name="Channel">Artwork channel index (0–3).</param>
+#pragma warning disable CA1819 // raw binary protocol data — callers need direct array access
 public sealed record ArtworkFrame(long Timestamp, byte[] Data, string MimeType, int Channel = 0) : IncomingFrame;
+#pragma warning restore CA1819
 
 /// <summary>
 /// A binary audio chunk received from the server (Player Role, message type 4).
@@ -39,4 +41,6 @@ public sealed record ArtworkFrame(long Timestamp, byte[] Data, string MimeType, 
 /// Server clock time in microseconds when the first sample should be output.
 /// </param>
 /// <param name="EncodedData">Encoded audio payload (codec determined by the active stream).</param>
+#pragma warning disable CA1819 // raw binary protocol data — callers need direct array access
 public sealed record AudioChunkFrame(long Timestamp, byte[] EncodedData) : IncomingFrame;
+#pragma warning restore CA1819

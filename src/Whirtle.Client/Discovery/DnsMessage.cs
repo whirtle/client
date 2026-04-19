@@ -217,7 +217,7 @@ internal static class DnsMessage
                             throw new InvalidOperationException("DNS TXT string extends past RDATA boundary.");
                         var entry  = Encoding.ASCII.GetString(data, pos, sLen);
                         pos       += sLen;
-                        int eq     = entry.IndexOf('=');
+                        int eq     = entry.IndexOf('=', StringComparison.Ordinal);
                         if (eq > 0) entries[entry[..eq]] = entry[(eq + 1)..];
                     }
                     result.TxtRecords.Add(new TxtRecord(entries));

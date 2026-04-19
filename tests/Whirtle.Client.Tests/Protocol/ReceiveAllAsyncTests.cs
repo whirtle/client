@@ -4,8 +4,6 @@ namespace Whirtle.Client.Tests.Protocol;
 
 public class ReceiveAllAsyncTests
 {
-    private static readonly MessageSerializer Serializer = new();
-
     private static (ProtocolClient client, FakeTransport transport) Build()
     {
         var transport = new FakeTransport();
@@ -16,8 +14,8 @@ public class ReceiveAllAsyncTests
     public async Task ReceiveAllAsync_YieldsProtocolFrames()
     {
         var (client, transport) = Build();
-        transport.EnqueueInbound(Serializer.Serialize(new ServerStateMessage()));
-        transport.EnqueueInbound(Serializer.Serialize(new GroupUpdateMessage("playing", "g1")));
+        transport.EnqueueInbound(MessageSerializer.Serialize(new ServerStateMessage()));
+        transport.EnqueueInbound(MessageSerializer.Serialize(new GroupUpdateMessage("playing", "g1")));
         transport.CloseInbound();
 
         var frames = new List<IncomingFrame>();
@@ -55,7 +53,7 @@ public class ReceiveAllAsyncTests
     {
         var (client, transport) = Build();
         transport.EnqueueInbound([]);
-        transport.EnqueueInbound(Serializer.Serialize(new ServerStateMessage()));
+        transport.EnqueueInbound(MessageSerializer.Serialize(new ServerStateMessage()));
         transport.CloseInbound();
 
         var frames = new List<IncomingFrame>();
@@ -70,7 +68,7 @@ public class ReceiveAllAsyncTests
     {
         var (client, transport) = Build();
         transport.EnqueueInbound([8, 0xFF, 0xD8, 0x00]); // binary — skipped
-        transport.EnqueueInbound(Serializer.Serialize(new ServerStateMessage()));
+        transport.EnqueueInbound(MessageSerializer.Serialize(new ServerStateMessage()));
         transport.CloseInbound();
 
         var messages = new List<Message>();
@@ -87,7 +85,7 @@ public class ReceiveAllAsyncTests
         var (client, transport) = Build();
         var msg = new ServerStateMessage(
             Metadata: new ServerMetadataState(Title: "Track", Artist: "Band"));
-        transport.EnqueueInbound(Serializer.Serialize(msg));
+        transport.EnqueueInbound(MessageSerializer.Serialize(msg));
         transport.CloseInbound();
 
         var frames = new List<IncomingFrame>();
@@ -104,7 +102,7 @@ public class ReceiveAllAsyncTests
     {
         var (client, transport) = Build();
         var cmd = new ClientCommandMessage(new ClientControllerCommand("volume", Volume: 50));
-        transport.EnqueueInbound(Serializer.Serialize(cmd));
+        transport.EnqueueInbound(MessageSerializer.Serialize(cmd));
         transport.CloseInbound();
 
         await foreach (var f in client.ReceiveAllAsync())
@@ -137,8 +135,8 @@ public class ReceiveAllAsyncTests
     public async Task ReceiveAllAsync_DeliversFramesBeforeTransportError()
     {
         var (client, transport) = Build();
-        transport.EnqueueInbound(Serializer.Serialize(new ServerStateMessage()));
-        transport.EnqueueInbound(Serializer.Serialize(new GroupUpdateMessage("playing", "g1")));
+        transport.EnqueueInbound(MessageSerializer.Serialize(new ServerStateMessage()));
+        transport.EnqueueInbound(MessageSerializer.Serialize(new GroupUpdateMessage("playing", "g1")));
         transport.CompleteWithError(new IOException("socket reset"));
 
         var received = new List<IncomingFrame>();

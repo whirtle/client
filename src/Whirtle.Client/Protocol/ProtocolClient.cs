@@ -12,9 +12,8 @@ namespace Whirtle.Client.Protocol;
 
 public sealed class ProtocolClient : IAsyncDisposable
 {
-    private readonly ITransport        _transport;
-    private readonly MessageSerializer _serializer = new();
-    private string                     _serverTag  = "";
+    private readonly ITransport _transport;
+    private string              _serverTag = "";
 
     public ProtocolClient(ITransport transport)
     {
@@ -68,8 +67,8 @@ public sealed class ProtocolClient : IAsyncDisposable
 
     public async Task SendAsync(Message message, CancellationToken cancellationToken = default)
     {
-        var data = _serializer.Serialize(message);
-        Log.Debug("{Tag:l}> {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(message), ExtractPayloadJson(data));
+        var data = MessageSerializer.Serialize(message);
+        Log.Debug("{Tag:l}> {Type:l} {Json:l}", _serverTag, MessageSerializer.GetWireType(message), ExtractPayloadJson(data));
         await _transport.SendAsync(data, cancellationToken);
     }
 
@@ -120,7 +119,7 @@ public sealed class ProtocolClient : IAsyncDisposable
                 Message msg;
                 try
                 {
-                    msg = _serializer.Deserialize(data);
+                    msg = MessageSerializer.Deserialize(data);
                 }
                 catch (JsonException ex)
                 {
@@ -129,10 +128,10 @@ public sealed class ProtocolClient : IAsyncDisposable
                 }
                 if (msg is ServerTimeMessage)
                     Log.Debug("{Tag:l}< {Type:l} {Json:l} client_now={ClientNow:F3} ms",
-                        _serverTag, _serializer.GetWireType(msg), ExtractPayloadJson(data),
+                        _serverTag, MessageSerializer.GetWireType(msg), ExtractPayloadJson(data),
                         SystemClock.Instance.UtcNowMicroseconds / 1_000.0);
                 else
-                    Log.Debug("{Tag:l}< {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), ExtractPayloadJson(data));
+                    Log.Debug("{Tag:l}< {Type:l} {Json:l}", _serverTag, MessageSerializer.GetWireType(msg), ExtractPayloadJson(data));
                 yield return new ProtocolFrame(msg);
             }
             else
@@ -178,8 +177,8 @@ public sealed class ProtocolClient : IAsyncDisposable
         await foreach (var data in _transport.ReceiveAsync(cancellationToken))
         {
             if (data.Length == 0 || data[0] != (byte)'{') continue;
-            var msg = _serializer.Deserialize(data);
-            Log.Debug("{Tag:l}< {Type:l} {Json:l}", _serverTag, _serializer.GetWireType(msg), ExtractPayloadJson(data));
+            var msg = MessageSerializer.Deserialize(data);
+            Log.Debug("{Tag:l}< {Type:l} {Json:l}", _serverTag, MessageSerializer.GetWireType(msg), ExtractPayloadJson(data));
             yield return msg;
         }
     }

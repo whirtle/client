@@ -10,7 +10,9 @@ namespace Whirtle.Client.Codec;
 /// <param name="Samples">Interleaved 16-bit PCM samples.</param>
 /// <param name="SampleRate">Samples per second per channel (e.g. 48000).</param>
 /// <param name="Channels">Number of channels (1 = mono, 2 = stereo).</param>
+#pragma warning disable CA1819 // hot-path audio buffer — callers need direct array access
 public sealed record AudioFrame(short[] Samples, int SampleRate, int Channels)
+#pragma warning restore CA1819
 {
     /// <summary>Number of samples per channel.</summary>
     public int SamplesPerChannel => Samples.Length / Channels;

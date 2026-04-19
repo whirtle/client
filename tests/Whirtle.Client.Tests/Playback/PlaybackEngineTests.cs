@@ -32,7 +32,7 @@ public class PlaybackEngineTests
         engine.UpdateClockOffset(TimeSpan.Zero); // mark clock as ready
 
         bool reachedSynchronized = false;
-        engine.StatusChanged += (state, _) => { if (state == PlaybackState.Synchronized) reachedSynchronized = true; };
+        engine.StatusChanged += (_, e) => { if (e.State == PlaybackState.Synchronized) reachedSynchronized = true; };
 
         engine.Start();
 
@@ -105,7 +105,7 @@ public class PlaybackEngineTests
         var (engine, _, clock) = Build();
 
         bool reachedSynchronized = false;
-        engine.StatusChanged += (state, _) => { if (state == PlaybackState.Synchronized) reachedSynchronized = true; };
+        engine.StatusChanged += (_, e) => { if (e.State == PlaybackState.Synchronized) reachedSynchronized = true; };
 
         engine.Start();
 
@@ -167,7 +167,7 @@ public class PlaybackEngineTests
         engine.UpdateClockOffset(TimeSpan.Zero);
 
         string? receivedState = null;
-        engine.PlaybackStateChanged += s => receivedState = s;
+        engine.PlaybackStateChanged += (_, e) => receivedState = e.State;
         engine.Start();
 
         // Provide just enough frames to reach Synchronized, then let it underrun.
@@ -207,9 +207,9 @@ public class PlaybackEngineTests
         engine.UpdateClockOffset(TimeSpan.Zero);
 
         int synchronizedCount = 0;
-        engine.StatusChanged += (state, _) =>
+        engine.StatusChanged += (_, e) =>
         {
-            if (state == PlaybackState.Synchronized)
+            if (e.State == PlaybackState.Synchronized)
                 synchronizedCount++;
         };
 
@@ -243,11 +243,11 @@ public class PlaybackEngineTests
 
         var states = new List<string>();
         var tcs    = new TaskCompletionSource<bool>();
-        engine.PlaybackStateChanged += s =>
+        engine.PlaybackStateChanged += (_, e) =>
         {
             lock (states)
             {
-                states.Add(s);
+                states.Add(e.State);
                 // Stop collecting once we have our error + second synchronized.
                 if (states.Count(x => x == "synchronized") >= 2)
                     tcs.TrySetResult(true);

@@ -4,8 +4,6 @@ namespace Whirtle.Client.Tests.Protocol;
 
 public class ProtocolClientTests
 {
-    private static readonly MessageSerializer Serializer = new();
-
     private static (ProtocolClient client, FakeTransport transport) Build()
     {
         var transport = new FakeTransport();
@@ -17,7 +15,7 @@ public class ProtocolClientTests
     {
         var (client, transport) = Build();
         await client.ConnectAsync(new Uri("ws://localhost"));
-        transport.EnqueueInbound(Serializer.Serialize(
+        transport.EnqueueInbound(MessageSerializer.Serialize(
             new ServerHelloMessage("srv-1", "Server", 1, ["metadata@v1"], "discovery")));
 
         var welcome = await client.HandshakeAsync("client-id", "Test Client");
@@ -25,7 +23,7 @@ public class ProtocolClientTests
         Assert.Equal("srv-1",     welcome.ServerId);
         Assert.Equal("discovery", welcome.ConnectionReason);
 
-        var sent = (ClientHelloMessage)Serializer.Deserialize(transport.Sent[0]);
+        var sent = (ClientHelloMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal("client-id",   sent.ClientId);
         Assert.Equal("Test Client", sent.Name);
         Assert.Equal(1,             sent.Version);
@@ -49,7 +47,7 @@ public class ProtocolClientTests
     {
         var (client, transport) = Build();
         await client.ConnectAsync(new Uri("ws://localhost"));
-        transport.EnqueueInbound(Serializer.Serialize(new GroupUpdateMessage("playing", "g-1")));
+        transport.EnqueueInbound(MessageSerializer.Serialize(new GroupUpdateMessage("playing", "g-1")));
 
         var ex = await Assert.ThrowsAsync<HandshakeException>(
             () => client.HandshakeAsync("id", "name"));
@@ -62,8 +60,8 @@ public class ProtocolClientTests
     {
         var (client, transport) = Build();
         await client.ConnectAsync(new Uri("ws://localhost"));
-        transport.EnqueueInbound(Serializer.Serialize(new ServerStateMessage()));
-        transport.EnqueueInbound(Serializer.Serialize(new GroupUpdateMessage("playing", "g1")));
+        transport.EnqueueInbound(MessageSerializer.Serialize(new ServerStateMessage()));
+        transport.EnqueueInbound(MessageSerializer.Serialize(new GroupUpdateMessage("playing", "g1")));
         transport.CloseInbound();
 
         var received = new List<Message>();
@@ -84,7 +82,7 @@ public class ProtocolClientTests
         await client.SendAsync(new ClientTimeMessage(12345L));
 
         Assert.Single(transport.Sent);
-        var msg = (ClientTimeMessage)Serializer.Deserialize(transport.Sent[0]);
+        var msg = (ClientTimeMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal(12345L, msg.ClientTransmitted);
     }
 
@@ -97,7 +95,7 @@ public class ProtocolClientTests
         await client.DisconnectAsync("shutdown");
 
         Assert.False(transport.IsConnected);
-        var sent = (ClientGoodbyeMessage)Serializer.Deserialize(transport.Sent[0]);
+        var sent = (ClientGoodbyeMessage)MessageSerializer.Deserialize(transport.Sent[0]);
         Assert.Equal("shutdown", sent.Reason);
     }
 }

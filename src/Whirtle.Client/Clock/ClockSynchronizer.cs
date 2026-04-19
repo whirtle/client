@@ -29,7 +29,7 @@ namespace Whirtle.Client.Clock;
 /// Use <see cref="ClientToServerUs"/> / <see cref="ServerToClientUs"/> to convert
 /// timestamps between the two time domains using the Kalman-filtered state.
 /// </summary>
-public sealed class ClockSynchronizer
+public sealed class ClockSynchronizer : IDisposable
 {
     private static readonly TimeSpan DefaultSyncTimeout = TimeSpan.FromSeconds(10);
 
@@ -212,6 +212,8 @@ public sealed class ClockSynchronizer
             catch { /* transient failure — retry after interval */ }
         }
     }
+
+    public void Dispose() => _syncLock.Dispose();
 
     /// <summary>
     /// Converts a client-domain timestamp (Unix µs) to the server domain using

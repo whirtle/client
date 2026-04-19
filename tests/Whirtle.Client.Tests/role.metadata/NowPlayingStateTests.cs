@@ -17,7 +17,7 @@ public class NowPlayingStateTests
         string? artist      = "Artist",
         string? albumArtist = "Various",
         string? album       = "Album",
-        string? artworkUrl  = null,
+        Uri?    artworkUrl  = null,
         int?    year        = 2024,
         int?    track       = 3,
         PlaybackProgress? progress = null,
@@ -59,7 +59,7 @@ public class NowPlayingStateTests
     {
         var state  = new NowPlayingState();
         int raised = 0;
-        state.Changed += () => raised++;
+        state.Changed += (_, _) => raised++;
 
         state.Update(SampleState());
 

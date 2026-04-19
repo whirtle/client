@@ -17,10 +17,10 @@ public abstract record Message;
 /// Wire type: <c>client/hello</c>
 /// </summary>
 public sealed record ClientHelloMessage(
-    string           ClientId,
-    string           Name,
-    int              Version,
-    string[]         SupportedRoles,
+    string                   ClientId,
+    string                   Name,
+    int                      Version,
+    IReadOnlyList<string>    SupportedRoles,
     [property: JsonPropertyName("player@v1_support")]
     PlayerV1Support?  PlayerV1Support  = null,
     [property: JsonPropertyName("artwork@v1_support")]
@@ -43,7 +43,7 @@ public sealed record ArtworkV1SupportChannel(
 /// Wire name: <c>artwork@v1_support</c>
 /// </summary>
 public sealed record ArtworkV1Support(
-    ArtworkV1SupportChannel[] Channels);
+    IReadOnlyList<ArtworkV1SupportChannel> Channels);
 
 /// <summary>One supported audio format advertised in <see cref="PlayerV1Support"/>.</summary>
 public sealed record PlayerV1SupportFormat(
@@ -58,9 +58,9 @@ public sealed record PlayerV1SupportFormat(
 /// Wire name: <c>player@v1_support</c>
 /// </summary>
 public sealed record PlayerV1Support(
-    PlayerV1SupportFormat[] SupportedFormats,
-    int                     BufferCapacity,
-    string[]                SupportedCommands);
+    IReadOnlyList<PlayerV1SupportFormat> SupportedFormats,
+    int                                  BufferCapacity,
+    IReadOnlyList<string>                SupportedCommands);
 
 /// <summary>
 /// Sent periodically by the client for clock synchronisation.
@@ -89,10 +89,10 @@ public sealed record ClientStateMessage(
 /// Compensates for external speakers, amplifiers, etc.
 /// </param>
 public sealed record ClientPlayerState(
-    int?      Volume            = null,
-    bool?     Muted             = null,
-    int       StaticDelayMs     = 0,
-    string[]? SupportedCommands = null);
+    int?                   Volume            = null,
+    bool?                  Muted             = null,
+    int                    StaticDelayMs     = 0,
+    IReadOnlyList<string>? SupportedCommands = null);
 
 /// <summary>
 /// Sent by the client to issue playback commands (Controller Role).
@@ -127,11 +127,11 @@ public sealed record ClientGoodbyeMessage(string Reason) : Message;
 /// Wire type: <c>server/hello</c>
 /// </summary>
 public sealed record ServerHelloMessage(
-    string   ServerId,
-    string   Name,
-    int      Version,
-    string[] ActiveRoles,
-    string   ConnectionReason) : Message;
+    string                ServerId,
+    string                Name,
+    int                   Version,
+    IReadOnlyList<string> ActiveRoles,
+    string                ConnectionReason) : Message;
 
 /// <summary>
 /// Sent by the server as the clock-sync reply.
@@ -161,7 +161,7 @@ public sealed record ServerMetadataState(
     string?          Artist      = null,
     string?          AlbumArtist = null,
     string?          Album       = null,
-    string?          ArtworkUrl  = null,
+    Uri?             ArtworkUrl  = null,
     int?             Year        = null,
     int?             Track       = null,
     PlaybackProgress? Progress   = null,
@@ -190,9 +190,9 @@ public sealed record PlaybackProgress(
 /// <c>volume</c> is always on a 0–100 scale per the Sendspin spec.
 /// </remarks>
 public sealed record ServerControllerState(
-    string[] SupportedCommands,
-    int      Volume,
-    bool     Muted);
+    IReadOnlyList<string> SupportedCommands,
+    int                   Volume,
+    bool                  Muted);
 
 /// <summary>
 /// Sent by the server when group playback state changes.
@@ -265,7 +265,7 @@ public sealed record StreamStartPlayer(
 
 /// <summary>Active artwork channel configuration inside <see cref="StreamStartMessage"/>.</summary>
 public sealed record ArtworkStreamStart(
-    ArtworkStreamStartChannel[] Channels);
+    IReadOnlyList<ArtworkStreamStartChannel> Channels);
 
 /// <summary>Per-channel artwork format reported in <see cref="ArtworkStreamStart"/>.</summary>
 /// <param name="Source"><c>"album"</c> | <c>"artist"</c> | <c>"none"</c></param>

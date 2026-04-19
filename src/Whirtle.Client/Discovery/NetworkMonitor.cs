@@ -6,6 +6,12 @@ using Serilog;
 
 namespace Whirtle.Client.Discovery;
 
+/// <summary>Event data for <see cref="NetworkMonitor.PreferredAddressChanged"/>.</summary>
+public sealed class NetworkAddressChangedEventArgs(string address) : EventArgs
+{
+    public string Address { get; } = address;
+}
+
 /// <summary>
 /// Watches for network address changes and raises
 /// <see cref="PreferredAddressChanged"/> only when the preferred LAN IP
@@ -24,7 +30,7 @@ public sealed class NetworkMonitor : IDisposable
     /// Raised on a thread-pool thread when the preferred local IP address
     /// changes. The argument is the new IP address string.
     /// </summary>
-    public event EventHandler<string>? PreferredAddressChanged;
+    public event EventHandler<NetworkAddressChangedEventArgs>? PreferredAddressChanged;
 
     private readonly INetworkChangeSource _source;
     private readonly Func<string>         _getLocalIp;
@@ -74,7 +80,7 @@ public sealed class NetworkMonitor : IDisposable
         }
 
         Log.Information("Preferred network address changed: {OldIp} → {NewIp}", previous, current);
-        PreferredAddressChanged?.Invoke(this, current);
+        PreferredAddressChanged?.Invoke(this, new NetworkAddressChangedEventArgs(current));
     }
 
     public void Dispose()
