@@ -181,23 +181,17 @@ public sealed class ClockSynchronizer : IDisposable
                 FeedFilter(result);
                 NotifySync(result, onSync);
             }
-            catch (OperationCanceledException) { cancellationToken.ThrowIfCancellationRequested(); }
-            catch { /* transient failure — continue */ }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch { /* transient failure (incl. sync timeout) — continue */ }
 
             if (i < RapidSyncCount - 1)
-            {
-                try { await Task.Delay(_rapidSyncInterval, cancellationToken).ConfigureAwait(false); }
-                catch (OperationCanceledException) { cancellationToken.ThrowIfCancellationRequested(); }
-            }
+                await Task.Delay(_rapidSyncInterval, cancellationToken).ConfigureAwait(false);
         }
 
         // Phase 2: steady-state.
         while (true)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            try { await Task.Delay(period, cancellationToken).ConfigureAwait(false); }
-            catch (OperationCanceledException) { cancellationToken.ThrowIfCancellationRequested(); }
+            await Task.Delay(period, cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -205,10 +199,7 @@ public sealed class ClockSynchronizer : IDisposable
                 FeedFilter(result);
                 NotifySync(result, onSync);
             }
-            catch (OperationCanceledException)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch { /* transient failure — retry after interval */ }
         }
     }
