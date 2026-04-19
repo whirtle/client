@@ -1126,7 +1126,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                                 IsMuted = ctrl.Muted;
                                 _settings.SaveVolume(Volume, IsMuted);
 
-                                _supportedCommands   = new HashSet<string>(ctrl.SupportedCommands.Keys, StringComparer.OrdinalIgnoreCase);
+                                _supportedCommands   = new HashSet<string>(ctrl.SupportedCommands, StringComparer.OrdinalIgnoreCase);
                                 IsPreviousSupported  = _supportedCommands.Contains("previous");
                                 IsNextSupported      = _supportedCommands.Contains("next");
                                 IsPlayPauseSupported = _supportedCommands.Contains("play") || _supportedCommands.Contains("pause");
