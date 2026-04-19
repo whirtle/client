@@ -6,7 +6,7 @@
     xmlns:pages="using:Whirtle.Client.UI.Pages"
     Title="Whirtle — Settings">
 
-    <Grid>
+    <Grid Background="#1C0D3E">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="Escape" Invoked="OnEscapeKey" />
         </Grid.KeyboardAccelerators>

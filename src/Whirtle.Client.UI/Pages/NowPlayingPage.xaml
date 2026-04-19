@@ -79,6 +79,7 @@
                                     FontFamily="{StaticResource PlusJakartaSans}"
                                     FontSize="20"
                                     FontWeight="SemiBold"
+                                    Foreground="#F0ECFF"
                                     TextTrimming="CharacterEllipsis"
                                     MaxLines="2" />
                                 <TextBlock
@@ -87,14 +88,14 @@
                                     FontFamily="{StaticResource PlusJakartaSans}"
                                     FontSize="13"
                                     FontWeight="Normal"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    Foreground="#B8AADD" />
                                 <TextBlock
                                     Text="{x:Bind ViewModel.Album, Mode=OneWay}"
                                     Style="{ThemeResource BodyTextBlockStyle}"
                                     FontFamily="{StaticResource PlusJakartaSans}"
                                     FontSize="13"
                                     FontWeight="Normal"
-                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                    Foreground="#B8AADD" />
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -169,7 +170,7 @@
                                         FontFamily="{StaticResource PlusJakartaSans}"
                                         FontSize="11"
                                         FontWeight="Normal"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Foreground="#B8AADD"
                                         ToolTipService.ToolTip="Current position"
                                         Text="{x:Bind ViewModel.PositionSeconds,
                                                       Converter={StaticResource SecondsToTime},
@@ -180,7 +181,7 @@
                                         FontFamily="{StaticResource PlusJakartaSans}"
                                         FontSize="11"
                                         FontWeight="Normal"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Foreground="#B8AADD"
                                         ToolTipService.ToolTip="Track duration"
                                         Text="{x:Bind ViewModel.DurationSeconds,
                                                       Converter={StaticResource SecondsToTime},
@@ -203,7 +204,7 @@
                     <Border
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        Background="#1A1040"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="12"
