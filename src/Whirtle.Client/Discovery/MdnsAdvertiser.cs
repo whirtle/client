@@ -39,7 +39,7 @@ public sealed class MdnsAdvertiser : IDisposable
     // never expire on the server while we're running.
     private static readonly TimeSpan ReannounceInterval = TimeSpan.FromSeconds(60);
 
-    private readonly IMulticastSocket _socket;
+    private readonly List<(IMulticastSocket Socket, string Ip)> _interfaces;
     private readonly string           _instanceName;
     private readonly string           _hostname;
     private readonly int              _port;
@@ -56,24 +56,33 @@ public sealed class MdnsAdvertiser : IDisposable
         string? friendlyName = null,
         int     port         = DefaultPort,
         string  path         = DefaultPath)
-        : this(new SystemMulticastSocket(GetLocalIpAddress()), hostname, friendlyName, port, path) { }
+    {
+        _interfaces = GetUsefulLocalIpAddresses()
+            .Select(ip => ((IMulticastSocket)new SystemMulticastSocket(ip), ip))
+            .ToList();
+        _hostname     = hostname;
+        _friendlyName = friendlyName;
+        _port         = port;
+        _path         = path;
+        var label     = friendlyName ?? hostname;
+        _instanceName = $"{label}.{ServiceType}";
+    }
 
     internal MdnsAdvertiser(
         IMulticastSocket socket,
         string           hostname,
         string?          friendlyName = null,
         int              port         = DefaultPort,
-        string           path         = DefaultPath)
+        string           path         = DefaultPath,
+        string           localIp      = "127.0.0.1")
     {
-        _socket       = socket;
+        _interfaces   = [(socket, localIp)];
         _hostname     = hostname;
         _friendlyName = friendlyName;
         _port         = port;
         _path         = path;
-
         var label     = friendlyName ?? hostname;
         _instanceName = $"{label}.{ServiceType}";
-
     }
 
     /// <summary>
@@ -84,20 +93,31 @@ public sealed class MdnsAdvertiser : IDisposable
     /// </summary>
     public async Task AdvertiseAsync(CancellationToken cancellationToken = default)
     {
+        var tasks = _interfaces.Select(i => AdvertiseInternalAsync(i.Socket, i.Ip, cancellationToken));
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task AdvertiseInternalAsync(
+        IMulticastSocket  socket,
+        string            ip,
+        CancellationToken cancellationToken)
+    {
         try
         {
-            await AdvertiseInternalAsync(cancellationToken);
+            await AdvertiseCoreAsync(socket, ip, cancellationToken);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Log.Error(ex, "mDNS: advertiser failed");
+            Log.Error(ex, "mDNS: advertiser failed on {IP}", ip);
         }
     }
 
-    private async Task AdvertiseInternalAsync(CancellationToken cancellationToken)
+    private async Task AdvertiseCoreAsync(
+        IMulticastSocket  socket,
+        string            ip,
+        CancellationToken cancellationToken)
     {
-        var ip           = GetLocalIpAddress();
         var announcement = DnsMessage.BuildAdvertisement(
             _instanceName, _hostname, ip, _port, _path, _friendlyName);
 
@@ -107,8 +127,8 @@ public sealed class MdnsAdvertiser : IDisposable
 
         // Two back-to-back announcements per RFC 6762 §8.3 (survive packet loss).
         // No delay between them — periodic re-announce every 60 s provides robustness.
-        await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
-        await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
+        await socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
+        await socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
 
         var reannounceAt = DateTimeOffset.UtcNow + ReannounceInterval;
 
@@ -121,7 +141,7 @@ public sealed class MdnsAdvertiser : IDisposable
                 if (!_paused)
                 {
                     Log.Debug("mDNS: re-announcing on {IP}:{Port}{Path}", ip, _port, _path);
-                    await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
+                    await socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
                 }
                 reannounceAt = DateTimeOffset.UtcNow + ReannounceInterval;
                 continue;
@@ -134,7 +154,7 @@ public sealed class MdnsAdvertiser : IDisposable
             UdpReceiveResult received;
             try
             {
-                received = await _socket.ReceiveAsync(timeoutCts.Token);
+                received = await socket.ReceiveAsync(timeoutCts.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -160,16 +180,13 @@ public sealed class MdnsAdvertiser : IDisposable
 
             if (!asksForUs || _paused) continue;
 
-            await _socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
+            await socket.SendAsync(announcement, MdnsEndpoint, cancellationToken);
         }
     }
 
-    internal static string GetLocalIpAddress()
+    internal static IReadOnlyList<string> GetUsefulLocalIpAddresses()
     {
-        // Score candidates so that a real LAN address is preferred over
-        // virtual adapters (WSL, Hyper-V, Docker) which occupy 172.16–31.x.x.
-        string? best = null;
-        int     bestScore = -1;
+        var candidates = new List<(int Score, string Ip)>();
 
         foreach (var iface in NetworkInterface.GetAllNetworkInterfaces())
         {
@@ -183,11 +200,22 @@ public sealed class MdnsAdvertiser : IDisposable
                 if (IPAddress.IsLoopback(addr.Address)) continue;
 
                 int score = ScoreAddress(addr.Address);
-                if (score > bestScore) { bestScore = score; best = addr.Address.ToString(); }
+                if (score < 0) continue; // exclude APIPA
+
+                candidates.Add((score, addr.Address.ToString()));
             }
         }
 
-        return best ?? "127.0.0.1";
+        return candidates
+            .OrderByDescending(x => x.Score)
+            .Select(x => x.Ip)
+            .ToList();
+    }
+
+    internal static string GetLocalIpAddress()
+    {
+        var addresses = GetUsefulLocalIpAddresses();
+        return addresses.Count > 0 ? addresses[0] : "127.0.0.1";
     }
 
     /// <summary>
@@ -210,5 +238,9 @@ public sealed class MdnsAdvertiser : IDisposable
     /// <summary>Re-enables announcements and query responses after a prior <see cref="Pause"/> call.</summary>
     public void Resume() => _paused = false;
 
-    public void Dispose() => _socket.Dispose();
+    public void Dispose()
+    {
+        foreach (var (socket, _) in _interfaces)
+            socket.Dispose();
+    }
 }
