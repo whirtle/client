@@ -10,7 +10,7 @@ namespace Whirtle.Client.UI.Logging;
 /// Serilog sink that forwards log events to the in-app log viewer.
 /// Register this with <see cref="AppLogger.Configure"/> before showing the UI.
 /// </summary>
-public sealed class InMemorySink : ILogEventSink
+internal sealed class InMemorySink : ILogEventSink
 {
     /// <summary>
     /// Raised on the thread that emitted the log event whenever a new entry arrives.

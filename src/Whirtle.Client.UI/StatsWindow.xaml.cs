@@ -40,6 +40,12 @@ public sealed partial class StatsWindow : Window
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             NativeWindow.ShowWindow(hwnd, NativeWindow.SW_HIDE);
         };
+
+        Closed += (_, _) =>
+        {
+            _micaController?.Dispose();
+            _micaController = null;
+        };
     }
 
     public void Show()

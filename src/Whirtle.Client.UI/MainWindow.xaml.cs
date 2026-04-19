@@ -20,8 +20,8 @@ namespace Whirtle.Client.UI;
 
 public sealed partial class MainWindow : Window
 {
-    private bool _hideOnClose    = false;
-    private bool _isShuttingDown = false;
+    private bool _hideOnClose;
+    private bool _isShuttingDown;
 
     // Kept alive for the lifetime of the window (MicaController requires it).
     private MicaController?              _micaController;
