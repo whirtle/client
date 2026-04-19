@@ -61,6 +61,8 @@ public partial class App : Application
 
         Log.Information("Whirtle starting up");
 
+        LogAudioOutputDevices();
+
         // ── Command line ─────────────────────────────────────────────────────
         if (Environment.GetCommandLineArgs().Contains("--clean-start"))
         {
@@ -144,6 +146,27 @@ public partial class App : Application
         // time the user presses Ctrl+S, which had been stalling the render
         // loop long enough to force max-rate resampling on several frames.
         _dispatcher.TryEnqueue(DispatcherQueuePriority.Low, () => _ = StatsWindow);
+    }
+
+    private static void LogAudioOutputDevices()
+    {
+        try
+        {
+            var enumerator = AudioDeviceEnumerator.Create();
+            var outputs    = enumerator.GetDevices(AudioDeviceKind.Output);
+            Log.Debug("Audio output devices ({Count}):", outputs.Count);
+            foreach (var d in outputs)
+            {
+                Log.Debug(
+                    "  {Default}{Name} — {SampleRate} Hz, {BitDepth}-bit, {Channels}ch (id={Id})",
+                    d.IsDefault ? "[default] " : string.Empty,
+                    d.Name, d.MaxSampleRate, d.MaxBitDepth, d.MaxChannels, d.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to enumerate audio output devices");
+        }
     }
 
     private void MaybeStartServerInitiatedMode()
