@@ -161,6 +161,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- Queued frames -->
@@ -252,6 +253,21 @@
                 VerticalAlignment="Center"
                 HorizontalAlignment="Right"
                 Grid.Row="5" Grid.Column="1" />
+
+            <!-- Rate ratio clamp hits (control-loop saturation; healthy = 0) -->
+            <TextBlock
+                Grid.Row="6" Grid.Column="0"
+                Text="Rate ratio clamp hits"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                Grid.Row="6" Grid.Column="1"
+                x:Name="RateRatioClampHitsText"
+                Style="{ThemeResource BodyTextBlockStyle}"
+                FontFamily="Consolas"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Right" />
 
         </Grid>
 
