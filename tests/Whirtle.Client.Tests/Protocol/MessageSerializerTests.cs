@@ -141,29 +141,17 @@ public class MessageSerializerTests
     }
 
     [Fact]
-    public void Deserialize_ServerState_WithControllerSupportedCommandsDict()
+    public void Deserialize_ServerState_Controller()
     {
         var json = """
-            {"type":"server/state","payload":{"controller":{"supported_commands":{"volume":50,"mute":1},"volume":30,"muted":false}}}
+            {"type":"server/state","payload":{"controller":{"supported_commands":["volume","mute","play","pause"],"volume":42,"muted":true}}}
             """u8.ToArray();
 
         var msg = (ServerStateMessage)_serializer.Deserialize(json);
 
-        Assert.Equal(30, msg.Controller!.Volume);
-        Assert.Equal(50, msg.Controller.VolumeMax);
-        Assert.False(msg.Controller.Muted);
-    }
-
-    [Fact]
-    public void Deserialize_ServerState_Controller_VolumeMax_DefaultsTo100_WhenAbsent()
-    {
-        var json = """
-            {"type":"server/state","payload":{"controller":{"supported_commands":{"mute":1},"volume":75,"muted":false}}}
-            """u8.ToArray();
-
-        var msg = (ServerStateMessage)_serializer.Deserialize(json);
-
-        Assert.Equal(100, msg.Controller!.VolumeMax);
+        Assert.Equal(42, msg.Controller!.Volume);
+        Assert.True(msg.Controller.Muted);
+        Assert.Equal(new[] { "volume", "mute", "play", "pause" }, msg.Controller.SupportedCommands);
     }
 
     [Fact]
