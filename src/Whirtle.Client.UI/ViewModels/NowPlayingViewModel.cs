@@ -1218,10 +1218,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private int ComputeSignalStrength()
     {
         // Clock must be ready before anything else means anything.
-        if (!_isClockReady)
+        if (!IsClockReady)
             return 0;
 
-        int clockScore = _isClockConverged ? 4 : 2;
+        int clockScore = IsClockConverged ? 4 : 2;
 
         int rttScore = _lastRtt.TotalMilliseconds switch
         {
@@ -1232,10 +1232,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _     => 0,
         };
 
-        if (_player is null)
+        var player = _player;
+        if (player is null)
             return Math.Min(clockScore, rttScore);
 
-        int bufferScore = _player.BufferedFrameCount switch
+        int bufferScore = player.BufferedFrameCount switch
         {
             >= 12 => 4,
             >= 8  => 3,
@@ -1245,14 +1246,14 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         };
 
         // AheadTargetMs doubles under CPU pressure (50 → 100 → 200).
-        int aheadScore = (_player?.AheadTargetMs ?? 0) switch
+        int aheadScore = player.AheadTargetMs switch
         {
             <= 50  => 4,
             <= 100 => 2,
             _      => 0,
         };
 
-        int stateScore = _player.EngineState switch
+        int stateScore = player.EngineState switch
         {
             PlaybackState.Synchronized => 4,
             PlaybackState.Buffering    => 2,
