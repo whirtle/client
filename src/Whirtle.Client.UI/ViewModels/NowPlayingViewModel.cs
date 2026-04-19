@@ -1116,9 +1116,12 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                         }
                         if (msg.Controller is { } ctrl)
                         {
+                            int serverMax = ctrl.VolumeMax;
                             _dispatcher.TryEnqueue(() =>
                             {
-                                Volume  = ctrl.Volume / 100.0;
+                                if (_controller is not null)
+                                    _controller.ServerVolumeMax = serverMax;
+                                Volume  = ctrl.Volume / (double)serverMax;
                                 IsMuted = ctrl.Muted;
                                 _settings.SaveVolume(Volume, IsMuted);
 

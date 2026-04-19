@@ -14,8 +14,20 @@ namespace Whirtle.Client.Role;
 public sealed class ControllerClient
 {
     private readonly ProtocolClient _protocol;
+    private int _serverVolumeMax = 100;
 
     public ControllerClient(ProtocolClient protocol) => _protocol = protocol;
+
+    /// <summary>
+    /// Maximum volume on the server's scale, sourced from
+    /// <c>supported_commands["volume"]</c> in the most recent <c>server/state</c>.
+    /// Outgoing volume commands are proportioned to this range.
+    /// </summary>
+    public int ServerVolumeMax
+    {
+        get => _serverVolumeMax;
+        set => _serverVolumeMax = Math.Max(1, value);
+    }
 
     /// <summary>Sends a <c>play</c> command.</summary>
     public Task PlayAsync(CancellationToken cancellationToken = default)
@@ -40,12 +52,14 @@ public sealed class ControllerClient
     /// <summary>
     /// Sends a <c>volume</c> command.
     /// </summary>
-    /// <param name="volume">Normalised 0.0–1.0; clamped and converted to 0–100.</param>
+    /// <param name="volume">
+    /// Normalised 0.0–1.0; clamped and proportioned to <see cref="ServerVolumeMax"/>.
+    /// </param>
     public Task SetVolumeAsync(double volume, CancellationToken cancellationToken = default)
     {
-        var vol100 = (int)Math.Round(Math.Clamp(volume, 0.0, 1.0) * 100);
+        var vol = (int)Math.Round(Math.Clamp(volume, 0.0, 1.0) * _serverVolumeMax);
         return _protocol.SendAsync(
-            new ClientCommandMessage(new ClientControllerCommand("volume", Volume: vol100)),
+            new ClientCommandMessage(new ClientControllerCommand("volume", Volume: vol)),
             cancellationToken);
     }
 

@@ -141,6 +141,32 @@ public class MessageSerializerTests
     }
 
     [Fact]
+    public void Deserialize_ServerState_WithControllerSupportedCommandsDict()
+    {
+        var json = """
+            {"type":"server/state","payload":{"controller":{"supported_commands":{"volume":50,"mute":1},"volume":30,"muted":false}}}
+            """u8.ToArray();
+
+        var msg = (ServerStateMessage)_serializer.Deserialize(json);
+
+        Assert.Equal(30, msg.Controller!.Volume);
+        Assert.Equal(50, msg.Controller.VolumeMax);
+        Assert.False(msg.Controller.Muted);
+    }
+
+    [Fact]
+    public void Deserialize_ServerState_Controller_VolumeMax_DefaultsTo100_WhenAbsent()
+    {
+        var json = """
+            {"type":"server/state","payload":{"controller":{"supported_commands":{"mute":1},"volume":75,"muted":false}}}
+            """u8.ToArray();
+
+        var msg = (ServerStateMessage)_serializer.Deserialize(json);
+
+        Assert.Equal(100, msg.Controller!.VolumeMax);
+    }
+
+    [Fact]
     public void Deserialize_TypeCaseInsensitive()
     {
         var json = """{"type":"SERVER/HELLO","payload":{"server_id":"s","name":"n","version":1,"active_roles":[],"connection_reason":"discovery"}}"""u8.ToArray();
