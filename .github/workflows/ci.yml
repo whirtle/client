@@ -18,8 +18,15 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+      - name: Copy AppxPackage tasks into .NET SDK
+        shell: pwsh
+        run: |
+          $vsInstallPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $src = "$vsInstallPath\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage"
+          $sdkVer = (dotnet --version).Trim()
+          $dst = "C:\Program Files\dotnet\sdk\$sdkVer\Microsoft\VisualStudio\v18.0\AppxPackage"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Path "$src\*" -Destination $dst -Recurse
 
       - name: Restore
         run: |
@@ -32,7 +39,7 @@ jobs:
         run: dotnet build src/Whirtle.Client/Whirtle.Client.csproj --no-restore --configuration Release
 
       - name: Build UI
-        run: msbuild src/Whirtle.Client.UI/Whirtle.Client.UI.csproj -p:Configuration=Release -p:Platform=x64
+        run: dotnet build src/Whirtle.Client.UI/Whirtle.Client.UI.csproj --no-restore --configuration Release -p:Platform=x64
 
       - name: Test
         run: dotnet test tests/Whirtle.Client.Tests/Whirtle.Client.Tests.csproj --no-restore --configuration Release
