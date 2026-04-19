@@ -386,6 +386,162 @@ public class PlaybackEngineTests
     }
 
     [Fact]
+    public async Task Resampler_Skipped_WhenFilterUnhealthy()
+    {
+        // UpdateClockOffset (the legacy entrypoint) sets σ_offset = +∞, which trips the
+        // OffsetGateStdDevUs gate. The render loop must skip resampling entirely in that
+        // mode, leaving LastRateRatio at exactly 1.0.
+        var (engine, renderer, clock) = Build();
+        engine.UpdateClockOffset(TimeSpan.Zero);
+        engine.Start();
+
+        for (int i = 0; i < 8; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => renderer.Written.Count > 0, TimeSpan.FromSeconds(2));
+
+        Assert.Equal(1.0, engine.LastRateRatio);
+        Assert.Equal(0,   engine.RateRatioClampHitCount);
+        await engine.DisposeAsync();
+    }
+
+    // ── ComputeRateRatio (pure control-loop) ──────────────────────────────────
+    //
+    // These tests exercise the rate-ratio control loop directly. The end-to-end
+    // engine tests above can't reliably observe the loop because FakeClock doesn't
+    // advance during the precise-pacing wait, which makes per-frame trim swamp the
+    // baseline; a pure unit test gives deterministic inputs.
+
+    private const double GoodOffsetSigmaUs = 100.0;   // « OffsetGateStdDevUs (5000)
+    private const double GoodDriftSigma    = 1.0;     // « DriftTrustedStdDevUsPerS (50)
+
+    [Fact]
+    public void ComputeRateRatio_PositiveDrift_ProducesRatioBelowOne()
+    {
+        // Server clock pulling ahead → client must speed up → ratio < 1.
+        // Steady-state schedule offset = -aheadTarget so trim is zero and baseline drives.
+        var step = PlaybackEngine.ComputeRateRatio(
+            scheduleOffsetMs:  -50.0,    // exactly at precise-pacing target
+            aheadTargetMs:     50,
+            frameDurationMs:   20.0,
+            driftUsPerS:       100.0,    // +100 ppm
+            offsetStdDevUs:    GoodOffsetSigmaUs,
+            driftStdDevUsPerS: GoodDriftSigma,
+            previousSmoothedRatio: 1.0);
+
+        Assert.False(step.ResamplerSkipped);
+        Assert.True(step.DriftTrusted);
+        Assert.Equal(0.999_900, step.BaselineRatio, precision: 6);
+        Assert.True(step.RateRatio < 1.0, $"got {step.RateRatio:F6}");
+    }
+
+    [Fact]
+    public void ComputeRateRatio_NegativeDrift_ProducesRatioAboveOne()
+    {
+        var step = PlaybackEngine.ComputeRateRatio(
+            scheduleOffsetMs:  -50.0,
+            aheadTargetMs:     50,
+            frameDurationMs:   20.0,
+            driftUsPerS:       -100.0,   // server clock falling behind
+            offsetStdDevUs:    GoodOffsetSigmaUs,
+            driftStdDevUsPerS: GoodDriftSigma,
+            previousSmoothedRatio: 1.0);
+
+        Assert.True(step.RateRatio > 1.0, $"got {step.RateRatio:F6}");
+    }
+
+    [Fact]
+    public void ComputeRateRatio_HighOffsetSigma_SkipsResampler()
+    {
+        var step = PlaybackEngine.ComputeRateRatio(
+            scheduleOffsetMs:  -50.0,
+            aheadTargetMs:     50,
+            frameDurationMs:   20.0,
+            driftUsPerS:       100.0,
+            offsetStdDevUs:    50_000.0,  // » OffsetGateStdDevUs
+            driftStdDevUsPerS: GoodDriftSigma,
+            previousSmoothedRatio: 0.9995);
+
+        Assert.True(step.ResamplerSkipped);
+        Assert.Equal(1.0, step.RateRatio);
+        Assert.Equal(1.0, step.SmoothedRatio); // state reset on gate trip
+    }
+
+    [Fact]
+    public void ComputeRateRatio_HighDriftSigma_FallsBackToBaselineOne()
+    {
+        var step = PlaybackEngine.ComputeRateRatio(
+            scheduleOffsetMs:  -50.0,
+            aheadTargetMs:     50,
+            frameDurationMs:   20.0,
+            driftUsPerS:       5000.0,   // big drift, but…
+            offsetStdDevUs:    GoodOffsetSigmaUs,
+            driftStdDevUsPerS: 1000.0,   // …σ_drift too high → ignore it
+            previousSmoothedRatio: 1.0);
+
+        Assert.False(step.DriftTrusted);
+        Assert.Equal(1.0, step.BaselineRatio);
+        Assert.Equal(1.0, step.RateRatio); // EWMA on (target=1.0, prev=1.0) = 1.0
+    }
+
+    [Fact]
+    public void ComputeRateRatio_PerFrameSlewLimit_CapsDelta()
+    {
+        // Huge target swing; smoothed ratio must move by at most MaxRatioDeltaPerFrame (50 ppm).
+        var step = PlaybackEngine.ComputeRateRatio(
+            scheduleOffsetMs:  +500.0,   // wildly late → strong negative trim
+            aheadTargetMs:     50,
+            frameDurationMs:   20.0,
+            driftUsPerS:       0.0,
+            offsetStdDevUs:    GoodOffsetSigmaUs,
+            driftStdDevUsPerS: GoodDriftSigma,
+            previousSmoothedRatio: 1.0);
+
+        // Bounded movement: at most 50 ppm per frame.
+        Assert.InRange(step.SmoothedRatio, 1.0 - 50e-6 - 1e-12, 1.0 + 1e-12);
+    }
+
+    [Fact]
+    public void ComputeRateRatio_HardClamp_PinnedAtBoundary_AndCounted()
+    {
+        // Pretend the previous smoothed ratio was already below the floor; clamp must pull it
+        // back to exactly 1 - MaxRatioDeviation and report saturation.
+        var step = PlaybackEngine.ComputeRateRatio(
+            scheduleOffsetMs:  +500.0,    // negative trim pushes target way below floor
+            aheadTargetMs:     50,
+            frameDurationMs:   20.0,
+            driftUsPerS:       0.0,
+            offsetStdDevUs:    GoodOffsetSigmaUs,
+            driftStdDevUsPerS: GoodDriftSigma,
+            previousSmoothedRatio: 0.9998);  // already at the floor
+
+        Assert.True(step.ClampSaturated);
+        Assert.Equal(1.0 - 0.0002, step.RateRatio, precision: 9);
+    }
+
+    [Fact]
+    public async Task Resampler_Skipped_AcrossFullPipeline_WhenFilterUnhealthy_KeepsRatioAtOne()
+    {
+        // End-to-end pendant of the gate test: UpdateClockState with a huge σ_offset
+        // must keep LastRateRatio at exactly 1.0 even after many frames render.
+        var (engine, renderer, clock) = Build();
+        engine.UpdateClockState(
+            offset:            TimeSpan.Zero,
+            driftUsPerS:       5000.0,
+            offsetStdDevUs:    50_000.0,    // » OffsetGateStdDevUs
+            driftStdDevUsPerS: GoodDriftSigma);
+        engine.Start();
+
+        for (int i = 0; i < 8; i++)
+            engine.Enqueue(clock.UtcNowMicroseconds + i * 20_000L, Frame());
+
+        await PollUntil(() => renderer.Written.Count > 0, TimeSpan.FromSeconds(2));
+
+        Assert.Equal(1.0, engine.LastRateRatio);
+        await engine.DisposeAsync();
+    }
+
+    [Fact]
     public async Task DisposeAsync_StopsEngine()
     {
         var (engine, renderer, _) = Build();

@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet test:*)",
+      "Bash(git status)",
+      "Bash(git add)",
+      "Bash(git commit)",
+      "Bash(git log)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(gh *)",
+      "Bash(gh pr *)",
+      "Bash(docker *)",
+      "Bash(docker-compose *)",
+      "Bash(ls *)",
+      "Bash(cd *)",
+      "Bash(cat *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(source *)"
+
+    ]
+  }
+}

@@ -51,8 +51,9 @@ public sealed partial class StatsPage : Page
                 ForgetCountText.Text = ClockStats.ForgetCount.ToString();
                 break;
             case nameof(ClockStatsViewModel.DriftUsPerS):
+            case nameof(ClockStatsViewModel.DriftStdDevUsPerS):
             case nameof(ClockStatsViewModel.DriftIsSignificant):
-                DriftText.Text = FormatDrift(ClockStats.DriftUsPerS, ClockStats.DriftIsSignificant);
+                DriftText.Text = FormatDrift(ClockStats.DriftUsPerS, ClockStats.DriftStdDevUsPerS, ClockStats.DriftIsSignificant);
                 break;
         }
     }
@@ -85,6 +86,9 @@ public sealed partial class StatsPage : Page
             case nameof(NowPlayingViewModel.StatRateRatio):
                 RateRatioText.Text = FormatRateRatio(PlaybackStats.StatRateRatio);
                 break;
+            case nameof(NowPlayingViewModel.StatRateRatioClampHits):
+                RateRatioClampHitsText.Text = PlaybackStats.StatRateRatioClampHits.ToString("N0");
+                break;
             case nameof(NowPlayingViewModel.IsClockConverged):
                 ConvergedText.Text = FormatBool(PlaybackStats.IsClockConverged);
                 break;
@@ -100,7 +104,7 @@ public sealed partial class StatsPage : Page
         UpdateCountText.Text     = ClockStats.UpdateCount.ToString();
         LastSyncText.Text        = FormatElapsed(ClockStats.SecondsSinceLastSync);
         ForgetCountText.Text     = ClockStats.ForgetCount.ToString();
-        DriftText.Text           = FormatDrift(ClockStats.DriftUsPerS, ClockStats.DriftIsSignificant);
+        DriftText.Text           = FormatDrift(ClockStats.DriftUsPerS, ClockStats.DriftStdDevUsPerS, ClockStats.DriftIsSignificant);
         QueuedFramesText.Text    = PlaybackStats.StatBufferedFrames.ToString();
         QueuedAudioText.Text     = FormatDuration(PlaybackStats.StatBufferedDuration);
         ChunksReceivedText.Text  = PlaybackStats.StatTotalChunks.ToString("N0");
@@ -109,6 +113,7 @@ public sealed partial class StatsPage : Page
         MinBufferFloorHitsText.Text = PlaybackStats.StatMinBufferFloorHits.ToString("N0");
         AheadTargetText.Text        = $"{PlaybackStats.StatAheadTargetMs} ms";
         RateRatioText.Text          = FormatRateRatio(PlaybackStats.StatRateRatio);
+        RateRatioClampHitsText.Text = PlaybackStats.StatRateRatioClampHits.ToString("N0");
         ConvergedText.Text          = FormatBool(PlaybackStats.IsClockConverged);
         ClockReadyText.Text      = FormatBool(PlaybackStats.IsClockReady);
     }
@@ -130,11 +135,12 @@ public sealed partial class StatsPage : Page
     private static string FormatRateRatio(double ratio)
         => $"{ratio:0.0000}× ({(ratio - 1.0) * 100.0:+0.00;-0.00;0.00}%)";
 
-    private static string FormatDrift(double driftUsPerSec, bool isSignificant)
+    private static string FormatDrift(double driftUsPerSec, double stdDevUsPerSec, bool isSignificant)
     {
-        if (!isSignificant) return "< 2σ (suppressed)";
+        string sigma = $" ±{stdDevUsPerSec:0.00}";
+        if (!isSignificant) return $"< 2σ (suppressed){sigma}";
         return driftUsPerSec >= 0
-            ? $"+{driftUsPerSec:0.00} µs/s"
-            : $"{driftUsPerSec:0.00} µs/s";
+            ? $"+{driftUsPerSec:0.00}{sigma} µs/s"
+            : $"{driftUsPerSec:0.00}{sigma} µs/s";
     }
 }
