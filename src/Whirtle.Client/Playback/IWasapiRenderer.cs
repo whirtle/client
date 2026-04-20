@@ -30,6 +30,13 @@ internal interface IWasapiRenderer : IDisposable
     int  BufferedBytes       { get; }
     bool IsRunning          { get; }
 
+    /// <summary>
+    /// Raised when the underlying audio device stops unexpectedly — for example
+    /// when the selected endpoint is unplugged, disabled, or reset by Windows.
+    /// Stopping the renderer via <see cref="Stop"/> does <b>not</b> fire this event.
+    /// </summary>
+    event EventHandler? RendererFailed;
+
     void Start();
     void Stop();
 
