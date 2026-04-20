@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Steve Peterson
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 // CA2225 requires static factory alternates for implicit operators, but CA1000 bans statics
 // on generic types — the two rules are mutually exclusive here.
