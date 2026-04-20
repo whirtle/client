@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Steve Peterson
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -358,6 +358,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
             _renderThread = null;
         }
 
+        try { await _renderer.FadeOutAsync().ConfigureAwait(false); } catch { }
         try { _renderer.Stop(); }    catch { }
         try { _renderer.Dispose(); } catch { }
         if (_timerResolutionRaised && OperatingSystem.IsWindows())

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Steve Peterson
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 using System.Runtime.Versioning;
 using NAudio.Wave;
@@ -73,6 +73,16 @@ internal sealed class WasapiRenderer : IWasapiRenderer
         _stopRequested = true;
         _wasapiOut.Stop();
         IsRunning = false;
+    }
+
+    public async Task FadeOutAsync(CancellationToken cancellationToken = default)
+    {
+        _provider.FadeOutAndClear();
+        // Poll until the fade completes (typically one WASAPI period, ~10 ms).
+        // Cap at 100 ms so a stuck renderer never stalls shutdown indefinitely.
+        var deadline = Environment.TickCount64 + 100;
+        while (!_provider.IsSilent && Environment.TickCount64 < deadline)
+            await Task.Delay(5, CancellationToken.None).ConfigureAwait(false);
     }
 
     private volatile bool _stopRequested;

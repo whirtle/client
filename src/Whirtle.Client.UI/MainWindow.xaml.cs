@@ -198,6 +198,9 @@ public sealed partial class MainWindow : Window
 
     // ── Server picker flyout (built in code) ──────────────────────────────
 
+    private static string FormatServerLabel(string displayName, string? serverId)
+        => serverId is { Length: >= 4 } id ? $"{displayName} ({id[^4..]})" : displayName;
+
     private void ServerPickerButton_Click(object sender, RoutedEventArgs e)
     {
         _serverPickerFlyout ??= new Flyout { Placement = FlyoutPlacementMode.Top };
@@ -248,8 +251,9 @@ public sealed partial class MainWindow : Window
             panel.Children.Add(CreatePickerSectionHeader("Discovered"));
             foreach (var ep in discovered)
             {
+                var savedMatch = vm.SavedServers.FirstOrDefault(s => s.Host == ep.Host && s.Port == ep.Port);
                 var btn = CreatePickerButton(
-                    ep.DisplayName, "\uECA5", DiscoveredServer_Click,
+                    FormatServerLabel(ep.DisplayName, savedMatch?.ServerId), "\uECA5", DiscoveredServer_Click,
                     isChecked: currentName == ep.DisplayName);
                 btn.Tag = ep;
                 panel.Children.Add(btn);
@@ -323,7 +327,7 @@ public sealed partial class MainWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var serverBtn = CreatePickerButton(saved.DisplayName, "\uECA5", SavedServer_Click, isChecked);
+        var serverBtn = CreatePickerButton(FormatServerLabel(saved.DisplayName, saved.ServerId), "\uECA5", SavedServer_Click, isChecked);
         serverBtn.Tag = saved;
         Grid.SetColumn(serverBtn, 0);
 
