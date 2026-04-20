@@ -172,7 +172,7 @@ public sealed class MdnsAdvertiser : IDisposable
             bool asksForUs = parsed.Questions.Any(q =>
                 string.Equals(q.TrimEnd('.'), ServiceType.TrimEnd('.'), StringComparison.OrdinalIgnoreCase));
 
-            Log.Debug(
+            Log.Verbose(
                 "mDNS: query received from {Remote}: questions=[{Questions}], asksForUs={AsksForUs}",
                 received.RemoteEndPoint,
                 string.Join(", ", parsed.Questions),
