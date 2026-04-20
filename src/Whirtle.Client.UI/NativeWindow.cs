@@ -15,6 +15,10 @@ internal static class NativeWindow
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     internal static extern IntPtr GetForegroundWindow();
 
+    [DllImport("user32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    internal static extern bool SetForegroundWindow(IntPtr hWnd);
+
     internal const int SW_HIDE    = 0;
     internal const int SW_RESTORE = 9;
 }

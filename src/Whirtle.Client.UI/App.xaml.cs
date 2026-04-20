@@ -17,17 +17,18 @@ namespace Whirtle.Client.UI;
 
 public partial class App : Application
 {
-    private MainWindow?          _mainWindow;
-    private StatsWindow?         _statsWindow;
-    private NowPlayingViewModel? _nowPlayingViewModel;
-    private SettingsViewModel?   _settingsViewModel;
-    private LogsViewModel?       _logsViewModel;
-    private InMemorySink?        _logSink;
-    private AppUiStateService?   _uiStateService;
-    private DispatcherQueue?     _dispatcher;
-    private NetworkMonitor?      _networkMonitor;
-    private bool                 _firewallCheckStarted;
-    private bool                 _serverModeStarted;
+    private MainWindow?           _mainWindow;
+    private StatsWindow?          _statsWindow;
+    private NowPlayingViewModel?  _nowPlayingViewModel;
+    private SettingsViewModel?    _settingsViewModel;
+    private LogsViewModel?        _logsViewModel;
+    private InMemorySink?         _logSink;
+    private AppUiStateService?    _uiStateService;
+    private DispatcherQueue?      _dispatcher;
+    private NetworkMonitor?       _networkMonitor;
+    private SingleInstanceGuard?  _singleInstanceGuard;
+    private bool                  _firewallCheckStarted;
+    private bool                  _serverModeStarted;
 
     internal static new App Current => (App)Application.Current;
 
@@ -52,6 +53,13 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (!SingleInstanceGuard.TryBecomePrimary(out _singleInstanceGuard))
+        {
+            Environment.Exit(0);
+            return;
+        }
+        _singleInstanceGuard!.ActivationRequested += BringToFront;
+
         _dispatcher = DispatcherQueue.GetForCurrentThread();
 
         // ── Logging ──────────────────────────────────────────────────────────
@@ -121,6 +129,8 @@ public partial class App : Application
         _mainWindow = new MainWindow();
         _mainWindow.Closed += (_, _) =>
         {
+            _mainWindow = null;     // prevent BringToFront from activating a closed window
+            _singleInstanceGuard?.Dispose();
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             _networkMonitor.PreferredAddressChanged -= OnPreferredAddressChanged;
             _networkMonitor.Dispose();
@@ -146,6 +156,19 @@ public partial class App : Application
         // time the user presses Ctrl+S, which had been stalling the render
         // loop long enough to force max-rate resampling on several frames.
         _dispatcher.TryEnqueue(DispatcherQueuePriority.Low, () => _ = StatsWindow);
+    }
+
+    private void BringToFront()
+    {
+        _dispatcher?.TryEnqueue(() =>
+        {
+            if (_mainWindow is null) return;
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_mainWindow);
+            NativeWindow.ShowWindow(hwnd, NativeWindow.SW_RESTORE);
+            NativeWindow.SetForegroundWindow(hwnd);
+            try { _mainWindow.Activate(); }
+            catch (System.Runtime.InteropServices.COMException) { }
+        });
     }
 
     private static void LogAudioOutputDevices()
