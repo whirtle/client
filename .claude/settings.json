@@ -8,6 +8,7 @@
       "Bash(git log)",
       "Bash(npm *)",
       "Bash(npx *)",
+      "Bash('C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe' pr create --title *')",
       "Bash(gh *)",
       "Bash(gh pr *)",
       "Bash(docker *)",

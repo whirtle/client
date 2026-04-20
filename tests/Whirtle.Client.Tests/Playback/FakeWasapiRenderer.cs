@@ -20,6 +20,10 @@ internal sealed class FakeWasapiRenderer : IWasapiRenderer
 
     public List<short[]> Written { get; } = [];
 
+#pragma warning disable CS0067 // event never fired in tests
+    public event EventHandler? RendererFailed;
+#pragma warning restore CS0067
+
     public void Start()  => IsRunning = true;
     public void Stop()   => IsRunning = false;
     public void ClearBuffer() => Written.Clear();

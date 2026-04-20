@@ -91,6 +91,6 @@ public sealed partial class NowPlayingPage : Page
         }
     }
 
-    private Visibility WaitingVisibility(bool isNotConnected)
-        => isNotConnected ? Visibility.Visible : Visibility.Collapsed;
+    private Visibility WaitingVisibility(bool show)
+        => show ? Visibility.Visible : Visibility.Collapsed;
 }

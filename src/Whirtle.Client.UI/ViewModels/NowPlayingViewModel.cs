@@ -121,13 +121,22 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     // ── Connection ─────────────────────────────────────────────────────────
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsNotConnected), nameof(DisconnectVisibility), nameof(ConnectionInfoSeverity), nameof(TrayTooltip), nameof(IsPlayEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsNotConnected), nameof(DisconnectVisibility), nameof(ConnectionInfoSeverity), nameof(TrayTooltip), nameof(IsPlayEnabled), nameof(ShowWaitingOverlay))]
     private bool _isConnected;
 
     /// <summary>True once the clock is ready for playback — either it converged within the target or the timeout expired.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPlayEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsPlayEnabled), nameof(ShowWaitingOverlay))]
     private bool _isClockReady;
+
+    /// <summary>True while the playback engine is buffering audio (initial fill or recovering from underrun).</summary>
+    [ObservableProperty]
+    private bool _isBufferingPlayback = true;
+
+    /// <summary>True when the selected audio output device stopped unexpectedly (unplugged / disabled).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWaitingOverlay))]
+    private bool _isAudioDeviceLost;
 
     /// <summary>True once the clock actually converged within the target (not just timed out).</summary>
     [ObservableProperty] private bool _isClockConverged;
@@ -301,6 +310,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     public string  MuteButtonTooltip  => IsMuted   ? "Unmute" : "Mute";
     public bool    IsNotConnected     => !IsConnected;
     public bool    IsPlayEnabled      => IsConnected && IsClockReady;
+    public bool    ShowWaitingOverlay => !IsConnected || !IsClockReady || IsAudioDeviceLost;
     public Visibility DisconnectVisibility => IsConnected ? Visibility.Visible : Visibility.Collapsed;
 
     public InfoBarSeverity ConnectionInfoSeverity
@@ -432,14 +442,17 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             _syncer      = new ClockSynchronizer(_protocol);
             _controller  = new ControllerClient(_protocol);
             _player      = new PlayerClient(_protocol, SelectedDevice?.Id, VolumePercent, IsMuted);
+            WirePlayerEvents(_player, endpoint.DisplayName);
             await _player.SendInitialRequestsAsync(
                 _settings.CurrentDeviceFormat,
                 SelectedDevice?.MaxSampleRate ?? 48_000,
                 SelectedDevice?.MaxChannels   ?? 2,
                 SelectedDevice?.MaxBitDepth   ?? 24,
                 token);
-            IsConnected  = true;
-            ConnectionStatus = $"Connected — {endpoint.Host}:{endpoint.Port}";
+            IsBufferingPlayback = true;
+            IsAudioDeviceLost   = false;
+            IsConnected         = true;
+            ConnectionStatus    = "Synchronizing with server";
             _statsTimer.Start();
 
             // Start background tasks — receive loop routes server/time to the syncer.
@@ -474,6 +487,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                     {
                         IsClockReady    = true;
                         IsClockConverged = converged;
+                        if (IsConnected && IsBufferingPlayback)
+                            ConnectionStatus = "Buffering audio";
                     });
                 }, TaskScheduler.Default);
 
@@ -630,6 +645,50 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _controller = null;
     }
 
+    /// <summary>
+    /// Subscribes to <see cref="PlayerClient.PlaybackStateChanged"/> so the waiting
+    /// overlay can track when the engine finishes buffering (or drops back into it).
+    /// <paramref name="displayName"/> is used to format the "Connected — …" status
+    /// once playback is synchronised.
+    /// </summary>
+    private void WirePlayerEvents(PlayerClient player, string? displayName)
+    {
+        player.PlaybackStateChanged += (_, e) =>
+        {
+            _dispatcher.TryEnqueue(() =>
+            {
+                // Don't overwrite the device-lost state with ordinary buffering/error transitions.
+                if (IsAudioDeviceLost) return;
+
+                switch (e.State)
+                {
+                    case "synchronized":
+                        IsBufferingPlayback = false;
+                        if (IsConnected && IsClockReady)
+                            ConnectionStatus = displayName is null
+                                ? "Connected"
+                                : $"Connected — {displayName}";
+                        break;
+                    case "error":
+                        IsBufferingPlayback = true;
+            IsAudioDeviceLost   = false;
+                        if (IsConnected && IsClockReady)
+                            ConnectionStatus = "Buffering audio";
+                        break;
+                }
+            });
+        };
+
+        player.RendererFailed += (_, _) =>
+        {
+            _dispatcher.TryEnqueue(() =>
+            {
+                IsAudioDeviceLost = true;
+                ConnectionStatus  = "Audio device unavailable";
+            });
+        };
+    }
+
     /// <summary>Resets all playback / connection UI state to "not connected".</summary>
     private void ResetPlaybackState()
     {
@@ -657,6 +716,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _clockReady          = false;
         IsClockReady        = false;
         IsClockConverged     = false;
+        IsBufferingPlayback  = true;
+        IsAudioDeviceLost    = false;
         _latestClockStats    = null;
         ClockStats.Reset();
         _supportedCommands   = [];
@@ -721,12 +782,19 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     internal async Task OnNetworkChangedAsync(string newIp)
     {
         Log.Information("Network address changed to {NewIp} — restarting connection", newIp);
+        bool autoReconnect = _settings.ConnectionMode == ConnectionMode.ServerInitiated;
+        if (autoReconnect)
+            ConnectionStatus = "Reconnecting…";
         StopServerInitiatedMode();
         await TearDownSessionAsync();
         ResetPlaybackState();
 
-        if (_settings.ConnectionMode == ConnectionMode.ServerInitiated)
+        if (autoReconnect)
+        {
+            // ResetPlaybackState clobbered the status — restore it while the listener spins up.
+            ConnectionStatus = "Reconnecting…";
             StartServerInitiatedMode();
+        }
         else
             ConnectionStatus = "Network changed — select a server to reconnect";
     }
@@ -752,10 +820,14 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         Log.Information("System resumed from sleep — waiting for network, then reconnecting");
 
+        bool autoReconnect = _settings.ConnectionMode == ConnectionMode.ServerInitiated;
+        if (autoReconnect)
+            ConnectionStatus = "Reconnecting…";
+
         // Give Windows time to re-establish network interfaces.
         await Task.Delay(TimeSpan.FromSeconds(2));
 
-        if (_settings.ConnectionMode == ConnectionMode.ServerInitiated)
+        if (autoReconnect)
         {
             StartServerInitiatedMode();
         }
@@ -798,7 +870,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         Log.Debug("Server-initiated mode starting");
         _serverModeCts   = new CancellationTokenSource();
         _serverModeTask  = RunServerAcceptLoopAsync(_serverModeCts.Token);
-        ConnectionStatus = "Listening for server…";
+        ConnectionStatus = "Waiting for server";
     }
 
     private async Task RunServerAcceptLoopAsync(CancellationToken cancellationToken)
@@ -958,6 +1030,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _syncer      = new ClockSynchronizer(protocol);
         _controller  = new ControllerClient(protocol);
         _player      = new PlayerClient(protocol, SelectedDevice?.Id, VolumePercent, IsMuted);
+        var inboundDisplayName = hello.Name ?? hello.ServerId ?? "Server";
+        WirePlayerEvents(_player, inboundDisplayName);
+        IsBufferingPlayback = true;
         await _player.SendInitialRequestsAsync(
             _settings.CurrentDeviceFormat,
             SelectedDevice?.MaxSampleRate ?? 48_000,
@@ -997,6 +1072,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                 {
                     IsClockReady    = true;
                     IsClockConverged = converged;
+                    if (IsConnected && IsBufferingPlayback)
+                        ConnectionStatus = "Buffering audio";
                 });
             }, TaskScheduler.Default);
 
@@ -1024,7 +1101,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         {
             ServerName       = displayName;
             IsConnected      = true;
-            ConnectionStatus = $"Connected — {displayName}";
+            ConnectionStatus = "Synchronizing with server";
             _statsTimer.Start();
         });
     }
