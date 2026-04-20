@@ -144,6 +144,16 @@ public sealed class PlayerClient : IAsyncDisposable
     /// <summary>Raised when the server sends a <c>set_static_delay</c> command.</summary>
     public event EventHandler<StaticDelayChangedEventArgs>? StaticDelayChanged;
 
+    /// <summary>Raised when the underlying <see cref="PlaybackEngine"/> transitions state.</summary>
+    public event EventHandler<PlaybackStateChangedEventArgs>? PlaybackStateChanged;
+
+    /// <summary>
+    /// Raised when the audio renderer stops unexpectedly — e.g. the output device
+    /// was unplugged or disabled by Windows. The current playback engine is no
+    /// longer usable; playback will resume only when a fresh stream is negotiated.
+    /// </summary>
+    public event EventHandler? RendererFailed;
+
     /// <summary>
     /// Creates a player client that drives the system WASAPI device identified by
     /// <paramref name="deviceId"/> (or the system default when <see langword="null"/>).
@@ -353,12 +363,14 @@ public sealed class PlayerClient : IAsyncDisposable
         var renderer       = _rendererFactory(player.SampleRate, player.Channels);
         _rendererLatencyMs = renderer.LatencyMs;
         _playbackEngine    = new PlaybackEngine(renderer);
-        _playbackEngine.PlaybackStateChanged += async (_, e) =>
+        _playbackEngine.PlaybackStateChanged += async (s, e) =>
         {
             _playerState = e.State;
+            PlaybackStateChanged?.Invoke(s, e);
             try { await SendStateAsync(CancellationToken.None).ConfigureAwait(false); }
             catch { }
         };
+        _playbackEngine.RendererFailed += (s, e) => RendererFailed?.Invoke(s, e);
         if (_clockSynced)
             _playbackEngine.UpdateClockState(_clockOffset, _driftUsPerS, _offsetStdDevUs, _driftStdDevUsPerS);
         _playbackEngine.SetVolume(_volume / 100f);

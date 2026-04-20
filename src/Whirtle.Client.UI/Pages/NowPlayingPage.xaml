@@ -228,7 +228,7 @@
                      Dims just the artwork and transport cards when no session
                      is active. Volume and the Settings / Logs buttons below
                      remain fully accessible.                                 -->
-                <Grid Visibility="{x:Bind WaitingVisibility(ViewModel.IsNotConnected), Mode=OneWay}">
+                <Grid Visibility="{x:Bind WaitingVisibility(ViewModel.ShowWaitingOverlay), Mode=OneWay}">
                     <Rectangle Fill="#CC000000" IsHitTestVisible="False" />
                     <Border
                         HorizontalAlignment="Center"
