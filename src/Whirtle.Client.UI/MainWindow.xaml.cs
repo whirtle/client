@@ -209,13 +209,37 @@ public sealed partial class MainWindow : Window
     {
         var panel = new StackPanel { MinWidth = 220, Spacing = 2 };
 
-        var vm          = NowPlayingViewModel;
-        var currentName = vm.ServerName;
-        var autoMode    = App.Current.SettingsViewModel.ConnectionMode == ConnectionMode.ServerInitiated;
+        var vm            = NowPlayingViewModel;
+        var settings      = App.Current.SettingsViewModel;
+        var currentName   = vm.ServerName;
+        var currentId     = vm.KnownServers.FirstOrDefault(s => s.Name == currentName)?.ServerId;
+        var autoMode      = settings.ConnectionMode == ConnectionMode.ServerInitiated;
+        var pinnedId      = settings.UserSelectedServerId;
 
-        // Automatically connect
+        // Automatically connect (checked when auto-mode and no user-pinned server)
         panel.Children.Add(CreatePickerButton(
-            "Automatically connect", "\uEC05", AutoConnect_Click, isChecked: autoMode && currentName is null));
+            "Automatically connect", "\uEC05", AutoConnect_Click,
+            isChecked: autoMode && pinnedId is null));
+
+        // Known servers — only shown in server-initiated mode, excluding the currently
+        // connected server. Each entry pins the client to that specific server.
+        if (autoMode)
+        {
+            var known = vm.KnownServers.Where(s => s.ServerId != currentId).ToList();
+            if (known.Count > 0)
+            {
+                panel.Children.Add(CreatePickerSectionHeader("Known servers"));
+                foreach (var server in known)
+                {
+                    var btn = CreatePickerButton(
+                        server.Name, "\uE8FD",
+                        KnownServer_Click,
+                        isChecked: pinnedId == server.ServerId);
+                    btn.Tag = server.ServerId;
+                    panel.Children.Add(btn);
+                }
+            }
+        }
 
         // Discovered servers
         var discovered = vm.DiscoveredServers;
@@ -327,6 +351,13 @@ public sealed partial class MainWindow : Window
     {
         _serverPickerFlyout?.Hide();
         _ = NowPlayingViewModel.SetAutoConnectModeCommand.ExecuteAsync(null);
+    }
+
+    private void KnownServer_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string serverId }) return;
+        _serverPickerFlyout?.Hide();
+        _ = NowPlayingViewModel.PinToServerCommand.ExecuteAsync(serverId);
     }
 
     private void DiscoveredServer_Click(object sender, RoutedEventArgs e)

@@ -51,6 +51,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     private readonly ConnectionManager _connectionManager = new();
     private MdnsAdvertiser?           _advertiser;
 
+    // Current session server ID (both client- and server-initiated connections).
+    // Set after a successful handshake; cleared on disconnect.
+    private string? _currentServerId;
+
     // ── Handshake capability declarations ─────────────────────────────────────
 
     private static readonly string[] SupportedRoles =
@@ -277,7 +281,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     /// <summary>
     /// Text shown in the status-bar server button.
     /// Shows the target/connected server name as soon as one is chosen,
-    /// "Automatically connect" when in server-initiated mode with no target,
+    /// the pinned server's name when pinned but not yet connected,
+    /// "Automatically connect" when in server-initiated mode with no pin,
     /// or "Select a server" otherwise.
     /// </summary>
     public string ServerPickerLabel
@@ -285,9 +290,16 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         get
         {
             if (ServerName is not null) return ServerName;
-            return _settings.ConnectionMode == ConnectionMode.ServerInitiated
-                ? "Automatically connect"
-                : "Select a server";
+            if (_settings.ConnectionMode == ConnectionMode.ServerInitiated)
+            {
+                if (_settings.UserSelectedServerId is { } pinnedId)
+                {
+                    var name = KnownServers.FirstOrDefault(s => s.ServerId == pinnedId)?.Name;
+                    return name ?? pinnedId;
+                }
+                return "Automatically connect";
+            }
+            return "Select a server";
         }
     }
 
@@ -320,6 +332,12 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     public ObservableCollection<ServiceEndpoint> DiscoveredServers { get; } = new();
     public ObservableCollection<AudioDeviceInfo> AudioDevices      { get; } = new();
 
+    /// <summary>
+    /// Servers that have completed a handshake (accepted or rejected) in this session.
+    /// Used to populate the server picker in server-initiated mode.
+    /// </summary>
+    public ObservableCollection<KnownServer> KnownServers { get; } = new();
+
     /// <summary>Manually-added servers, persisted in settings.</summary>
     public ObservableCollection<PersistedServer> SavedServers => _settings.SavedServers;
 
@@ -335,10 +353,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _settings         = settings;
         ClockStats        = new ClockStatsViewModel(dispatcher);
 
-        // Keep ServerPickerLabel in sync when connection mode changes in settings.
+        // Keep ServerPickerLabel in sync when connection mode or pin changes in settings.
         _settings.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(SettingsViewModel.ConnectionMode))
+            if (e.PropertyName is nameof(SettingsViewModel.ConnectionMode)
+                               or nameof(SettingsViewModel.UserSelectedServerId))
                 OnPropertyChanged(nameof(ServerPickerLabel));
         };
 
@@ -418,6 +437,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             // the matching saved-server entry so the picker shows it when offline.
             ServerName = hello.Name ?? hello.ServerId ?? endpoint.DisplayName;
             _settings.UpdateServerInfo(hello.ServerId, hello.Name, endpoint.Host, endpoint.Port);
+            _currentServerId = hello.ServerId;
 
             _syncer      = new ClockSynchronizer(_protocol);
             _controller  = new ControllerClient(_protocol);
@@ -520,12 +540,35 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     [RelayCommand]
     private async Task SetAutoConnectModeAsync()
     {
-        _settings.ConnectionMode = ConnectionMode.ServerInitiated;
+        _settings.ConnectionMode     = ConnectionMode.ServerInitiated;
+        _settings.UserSelectedServerId = null;
         ServerName = null;  // Update status bar immediately; don't wait for graceful close
         StopServerInitiatedMode();
         await TearDownSessionAsync();
         ResetPlaybackState();
         StartServerInitiatedMode();
+    }
+
+    /// <summary>
+    /// Pins server-initiated mode to the given server: only connections from that
+    /// server will be accepted going forward. Tears down any current connection
+    /// that is not from the pinned server so the pinned server can reconnect.
+    /// </summary>
+    [RelayCommand]
+    private async Task PinToServerAsync(string serverId)
+    {
+        _settings.UserSelectedServerId = serverId;
+        Log.Information("User pinned to server {ServerId}", serverId);
+
+        // If already connected to the pinned server, nothing more to do.
+        if (_connectionManager.CurrentServerId == serverId)
+            return;
+
+        // Tear down the current connection so the pinned server can reconnect.
+        try { await TearDownSessionAsync(); }
+        catch (Exception ex) { Log.Warning(ex, "Error tearing down session while pinning to {ServerId}", serverId); }
+        ResetPlaybackState();
+        ConnectionStatus = $"Waiting for pinned server…";
     }
 
     /// <summary>
@@ -652,6 +695,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         _positionTimer.Stop();
         _statsTimer.Stop();
         _connectionManager.Clear();
+        _currentServerId     = null;
         IsConnected          = false;
         ConnectionStatus     = "Not connected";
         ServerName           = null;
@@ -930,15 +974,33 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             "Server-initiated: inbound handshake complete: serverId={ServerId}, serverName={ServerName}, reason={Reason}",
             hello.ServerId, hello.Name, hello.ConnectionReason);
 
+        // Record every server that completes a handshake so the picker can list them.
+        AddToKnownServers(hello.ServerId, hello.Name);
+
         // Log the full negotiation context before the decision so that the
         // outcome is traceable in the logs even when the decision seems surprising.
         Log.Debug(
             "Multi-server negotiation: incoming={IncomingId} reason={IncomingReason}, " +
-            "currentServer={CurrentName} storedId={CurrentStoredId}, lastPlayedServer={LastPlayedId}",
+            "currentServer={CurrentName} storedId={CurrentStoredId}, lastPlayedServer={LastPlayedId}, pinnedServer={PinnedId}",
             hello.ServerId, hello.ConnectionReason,
             IsConnected ? ServerName : "(none)",
             _connectionManager.CurrentServerId ?? "(none)",
-            _connectionManager.LastPlayedServerId ?? "(none)");
+            _connectionManager.LastPlayedServerId ?? "(none)",
+            _settings.UserSelectedServerId ?? "(none)");
+
+        // VM-layer pre-check: when the user has pinned a specific server, only
+        // accept connections from that server regardless of the spec rules.
+        var pinned = _settings.UserSelectedServerId;
+        if (pinned is not null && pinned != hello.ServerId)
+        {
+            Log.Information(
+                "Multi-server negotiation: rejected {ServerId} (reason={Reason}) — client is pinned to {PinnedId}",
+                hello.ServerId, hello.ConnectionReason, pinned);
+            try { await protocol.DisconnectAsync("another_server", serverModeCancellation); }
+            catch { /* best-effort */ }
+            await protocol.DisposeAsync();
+            return;
+        }
 
         if (!_connectionManager.ShouldAccept(hello.ServerId, hello.ConnectionReason))
         {
@@ -953,11 +1015,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
         var hadExistingConnection = IsConnected;
         _connectionManager.Accept(hello.ServerId, hello.ConnectionReason);
-        if (hello.ConnectionReason == "playback")
-        {
-            _settings.LastPlayedServerId = hello.ServerId;
-            Log.Debug("Multi-server negotiation: updated last-played server to {ServerId}", hello.ServerId);
-        }
+        _currentServerId = hello.ServerId;
 
         if (hadExistingConnection)
             Log.Information(
@@ -1039,9 +1097,6 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             "Inbound connection accepted: server={ServerId} name={ServerName} reason={Reason}",
             hello.ServerId, hello.Name, hello.ConnectionReason);
 
-        Log.Debug("mDNS: pausing advertising while connected to {ServerId}", hello.ServerId);
-        _advertiser?.Pause();
-
         _dispatcher.TryEnqueue(() =>
         {
             ServerName       = displayName;
@@ -1095,8 +1150,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         Volume = normalised;
         _settings.SaveVolume(normalised, IsMuted);
-        if (_controller is null || IsMuted) return;
-        await _controller.SetVolumeAsync(normalised);
+        var controller = _controller;
+        if (controller is null || IsMuted) return;
+        try { await controller.SetVolumeAsync(normalised); }
+        catch (InvalidOperationException) { /* transport disconnected between check and send */ }
     }
 
     [RelayCommand]
@@ -1190,6 +1247,17 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
                                 // Run the tick timer only when playback is active.
                                 bool playing = _nowPlaying.Progress?.PlaybackSpeed > 0;
+                                if (playing && !IsPlaying)
+                                {
+                                    // First playing transition on this connection — record the
+                                    // last-played server based on actual playback, not hello reason.
+                                    if (_currentServerId is { } cid)
+                                    {
+                                        _settings.LastPlayedServerId         = cid;
+                                        _connectionManager.LastPlayedServerId = cid;
+                                        Log.Debug("Updated last-played server to {ServerId} on playback_state: playing", cid);
+                                    }
+                                }
                                 IsPlaying = playing;
                                 if (playing && !_positionTimer.IsEnabled)
                                     _positionTimer.Start();
@@ -1274,16 +1342,32 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             // clears this during proper shutdown — nulling here is safe because
             // TearDownSessionAsync awaits this task before reassigning it.
             _controller = null;
-
-            // Resume advertising so the server can rediscover this client after
-            // a disconnect. Skip when server mode was intentionally stopped
-            // (_serverModeCts == null) since the advertiser will be disposed.
-            if (_serverModeCts is not null)
-            {
-                Log.Debug("mDNS: resuming advertising after connection ended");
-                _advertiser?.Resume();
-            }
         }
+    }
+
+    // ── Known servers ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Adds or updates the given server in <see cref="KnownServers"/>.
+    /// Must be called from any thread; dispatches to the UI thread internally.
+    /// </summary>
+    private void AddToKnownServers(string? serverId, string? serverName)
+    {
+        if (serverId is null) return;
+        var displayName = serverName ?? serverId;
+        _dispatcher.TryEnqueue(() =>
+        {
+            var existing = KnownServers.FirstOrDefault(s => s.ServerId == serverId);
+            if (existing is not null)
+            {
+                if (existing.Name != displayName)
+                    KnownServers[KnownServers.IndexOf(existing)] = new KnownServer(serverId, displayName);
+            }
+            else
+            {
+                KnownServers.Add(new KnownServer(serverId, displayName));
+            }
+        });
     }
 
     // ── Signal strength ────────────────────────────────────────────────────

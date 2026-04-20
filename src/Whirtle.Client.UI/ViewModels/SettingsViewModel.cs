@@ -103,6 +103,17 @@ public sealed partial class SettingsViewModel : ObservableObject
         set { _lastPlayedServerId = value; Save(); }
     }
 
+    // ── User-selected server (server-initiated mode pin) ──────────────────
+    // When set, only connections from this server are accepted in server-initiated
+    // mode. Cleared when the user switches to "Automatically connect".
+    private string? _userSelectedServerId;
+
+    public string? UserSelectedServerId
+    {
+        get => _userSelectedServerId;
+        set { _userSelectedServerId = value; Save(); }
+    }
+
     // ── Volume / mute (global, persisted) ─────────────────────────────────
     private double _volume  = 0.8;
     private bool   _isMuted;
@@ -326,6 +337,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             _volume                 = saved.Volume  ?? 0.8;
             _isMuted                = saved.IsMuted ?? false;
             _lastPlayedServerId     = saved.LastPlayedServerId;
+            _userSelectedServerId   = saved.UserSelectedServerId;
 
             if (saved.SavedServers is { } servers)
             {
@@ -454,7 +466,8 @@ public sealed partial class SettingsViewModel : ObservableObject
                 _logsWindowHeight,
                 _lastPlayedServerId,
                 _statsWindowX,
-                _statsWindowY);
+                _statsWindowY,
+                _userSelectedServerId);
 
             var json    = JsonSerializer.Serialize(data, JsonOptions);
             var tmpPath = SettingsPath + ".tmp";
@@ -487,7 +500,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         int?                               LogsWindowY        = null,
         int?                               LogsWindowWidth    = null,
         int?                               LogsWindowHeight   = null,
-        string?                            LastPlayedServerId  = null,
-        int?                               StatsWindowX       = null,
-        int?                               StatsWindowY       = null);
+        string?                            LastPlayedServerId    = null,
+        int?                               StatsWindowX         = null,
+        int?                               StatsWindowY         = null,
+        string?                            UserSelectedServerId = null);
 }
