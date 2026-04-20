@@ -53,16 +53,16 @@ public sealed class NowPlayingState
     public void Update(ServerMetadataState state)
     {
         Timestamp   = state.Timestamp ?? Timestamp;
-        Title       = state.Title;
-        Artist      = state.Artist;
-        AlbumArtist = state.AlbumArtist;
-        Album       = state.Album;
-        ArtworkUrl  = state.ArtworkUrl;
-        Year        = state.Year;
-        Track       = state.Track;
+        if (state.Title.IsSet)       Title       = state.Title.Value;
+        if (state.Artist.IsSet)      Artist      = state.Artist.Value;
+        if (state.AlbumArtist.IsSet) AlbumArtist = state.AlbumArtist.Value;
+        if (state.Album.IsSet)       Album       = state.Album.Value;
+        if (state.ArtworkUrl.IsSet)  ArtworkUrl  = state.ArtworkUrl.Value;
+        if (state.Year.IsSet)        Year        = state.Year.Value;
+        if (state.Track.IsSet)       Track       = state.Track.Value;
         Progress    = state.Progress ?? Progress;
-        Repeat      = state.Repeat;
-        Shuffle     = state.Shuffle;
+        if (state.Repeat.IsSet)      Repeat      = state.Repeat.Value;
+        if (state.Shuffle.IsSet)     Shuffle     = state.Shuffle.Value;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 

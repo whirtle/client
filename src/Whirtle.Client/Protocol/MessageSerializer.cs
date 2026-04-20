@@ -24,6 +24,7 @@ internal sealed class MessageSerializer
         PropertyNamingPolicy        = JsonNamingPolicy.SnakeCaseLower,
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
+        Converters                  = { new PartialFieldJsonConverterFactory() },
     };
 
     // Maps wire type strings → CLR types (for deserialisation).

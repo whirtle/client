@@ -433,8 +433,8 @@ public sealed class PlayerClient : IAsyncDisposable
             double? msUntilPlayback = _clockSynced
                 ? (effectiveTimestamp - (_clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds)) / 1_000.0
                 : null;
-            Log.Debug(
-                "Recv Audio chunk: {EncodedBytes} bytes encoded, {BufferedBytes} bytes buffered ({BufferedFrames} frames), {DurationSeconds:F3}s/frame, playsIn={PlaysInMs} ms, serverTs={ServerTs:F3} ms effectiveTs={EffectiveTs:F3} ms",
+            Log.Verbose(
+                "< Audio chunk: {EncodedBytes} bytes encoded, {BufferedBytes} bytes buffered ({BufferedFrames} frames), {DurationSeconds:F3}s/frame, playsIn={PlaysInMs} ms, serverTs={ServerTs:F3} ms effectiveTs={EffectiveTs:F3} ms",
                 chunk.EncodedData.Length,
                 decodedBytes,
                 bufferedFrames,

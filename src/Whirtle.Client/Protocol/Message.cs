@@ -155,18 +155,32 @@ public sealed record ServerStateMessage(
 /// <param name="Timestamp">
 /// Server clock time in microseconds for when this metadata is valid.
 /// </param>
+/// <remarks>
+/// Fields typed as <see cref="PartialField{T}"/> follow the Sendspin partial-update contract:
+/// an absent JSON key leaves the client's existing value unchanged, while an explicit
+/// JSON null clears it. <see cref="PartialField{T}.IsSet"/> is false only for absent fields.
+/// </remarks>
 public sealed record ServerMetadataState(
-    long?            Timestamp   = null,
-    string?          Title       = null,
-    string?          Artist      = null,
-    string?          AlbumArtist = null,
-    string?          Album       = null,
-    Uri?             ArtworkUrl  = null,
-    int?             Year        = null,
-    int?             Track       = null,
-    PlaybackProgress? Progress   = null,
-    string?          Repeat      = null,
-    bool?            Shuffle     = null);
+    long?  Timestamp  = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    PartialField<string?>  Title       = default,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    PartialField<string?>  Artist      = default,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    PartialField<string?>  AlbumArtist = default,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    PartialField<string?>  Album       = default,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    PartialField<Uri?>     ArtworkUrl  = default,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    PartialField<int?>     Year        = default,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    PartialField<int?>     Track       = default,
+    PlaybackProgress?      Progress    = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    PartialField<string?>  Repeat      = default,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    PartialField<bool?>    Shuffle     = default);
 
 /// <summary>
 /// Playback progress snapshot embedded in <see cref="ServerMetadataState"/>.

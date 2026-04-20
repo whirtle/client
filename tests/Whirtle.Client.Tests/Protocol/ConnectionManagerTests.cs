@@ -87,22 +87,22 @@ public class ConnectionManagerTests
         Assert.True(mgr.ShouldAccept("srv-2", "discovery"));
     }
 
-    // ── Accept records last-played for playback connections ──────────────────
+    // ── Accept does not modify LastPlayedServerId (set externally on playback) ──
 
     [Fact]
-    public void Accept_PlaybackReason_SetsLastPlayedServerId()
+    public void Accept_DoesNotSetLastPlayedServerId()
     {
         var mgr = new ConnectionManager();
         mgr.Accept("srv-1", "playback");
 
-        Assert.Equal("srv-1", mgr.LastPlayedServerId);
+        Assert.Null(mgr.LastPlayedServerId);
     }
 
     [Fact]
-    public void Accept_DiscoveryReason_DoesNotOverwriteLastPlayedServerId()
+    public void Accept_DoesNotOverwriteExternallySetLastPlayedServerId()
     {
         var mgr = new ConnectionManager { LastPlayedServerId = "srv-old" };
-        mgr.Accept("srv-new", "discovery");
+        mgr.Accept("srv-new", "playback");
 
         Assert.Equal("srv-old", mgr.LastPlayedServerId);
     }

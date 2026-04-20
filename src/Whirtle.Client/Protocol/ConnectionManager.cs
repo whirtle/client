@@ -83,10 +83,6 @@ public sealed class ConnectionManager
     {
         _currentServerId         = serverId;
         _currentConnectionReason = connectionReason;
-
-        // Track last-played when the server connects for playback.
-        if (connectionReason == "playback" && serverId is not null)
-            LastPlayedServerId = serverId;
     }
 
     /// <summary>

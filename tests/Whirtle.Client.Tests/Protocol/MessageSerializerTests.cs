@@ -97,8 +97,8 @@ public class MessageSerializerTests
             Metadata: new ServerMetadataState(Title: "Track", Artist: "Band"));
         var result = (ServerStateMessage)Roundtrip(original);
 
-        Assert.Equal("Track", result.Metadata!.Title);
-        Assert.Equal("Band",  result.Metadata.Artist);
+        Assert.Equal("Track", result.Metadata!.Title.Value);
+        Assert.Equal("Band",  result.Metadata.Artist.Value);
     }
 
     [Fact]
