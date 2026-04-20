@@ -1396,7 +1396,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             <= 100                          => 2,
             _                              => 0,
         };
-        lines.Add(new SignalInputLine("CPU",
+        lines.Add(new SignalInputLine("Headroom",
             $"{_player.AheadTargetMs} ms target",
             aheadScore < 4));
 
