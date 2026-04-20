@@ -31,7 +31,11 @@ namespace Whirtle.Client.Clock;
 /// </summary>
 public sealed class ClockSynchronizer : IDisposable
 {
-    private static readonly TimeSpan DefaultSyncTimeout = TimeSpan.FromSeconds(10);
+    // Per-round sync timeout — disabled for now while we iterate on rate control.
+    // The timeout logic is still honoured when a finite TimeSpan is passed in
+    // (e.g. from tests); the infinite default just means steady-state sync rounds
+    // wait indefinitely for the server reply rather than giving up at 10 s.
+    private static readonly TimeSpan DefaultSyncTimeout = Timeout.InfiniteTimeSpan;
 
     /// <summary>Default interval between sync rounds.</summary>
     public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(5);

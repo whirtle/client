@@ -204,6 +204,24 @@ public sealed class PlaybackEngine : IAsyncDisposable
         _renderer = renderer;
         _clock    = clock ?? Clock.SystemClock.Instance;
         _buffer   = new JitterBuffer();
+        _renderer.RendererFailed += OnRendererFailed;
+    }
+
+    /// <summary>
+    /// Raised when the underlying <see cref="IWasapiRenderer"/> stops unexpectedly
+    /// (device unplug, endpoint disable, session reset). The engine will have
+    /// already transitioned to <see cref="PlaybackState.Error"/> by the time this
+    /// fires; subscribers should treat it as a hard failure that will not recover
+    /// without user intervention.
+    /// </summary>
+    public event EventHandler? RendererFailed;
+
+    private void OnRendererFailed(object? sender, EventArgs e)
+    {
+        Log.Error("PlaybackEngine: audio renderer stopped unexpectedly (device removed or reset)");
+        try { _cts.Cancel(); } catch { }
+        EnterError();
+        RendererFailed?.Invoke(this, EventArgs.Empty);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
