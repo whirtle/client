@@ -145,7 +145,7 @@ public partial class App : Application
         // shown; focus state doesn't affect XamlRoot availability.
         void OnFirstActivated(object sender, WindowActivatedEventArgs e)
         {
-            _mainWindow!.Activated -= OnFirstActivated;
+            ((Window)sender).Activated -= OnFirstActivated;
             _ = CheckFirewallAsync();
         }
         _mainWindow.Activated += OnFirstActivated;
