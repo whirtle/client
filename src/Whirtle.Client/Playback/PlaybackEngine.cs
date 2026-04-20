@@ -412,7 +412,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
         if (_paused || !_clockOffsetReady)
         {
             if (!_clockOffsetReady)
-                Log.Debug("PlaybackEngine: buffering — waiting for first clock sync");
+                Log.Verbose("PlaybackEngine: buffering — waiting for first clock sync");
             CancelableWait(ct, 5);
             return;
         }
@@ -435,7 +435,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
                 dropped++;
             }
             if (dropped > 0)
-                Log.Debug("PlaybackEngine: discarded {Count} late frames before playback start", dropped);
+                Log.Verbose("PlaybackEngine: discarded {Count} late frames before playback start", dropped);
             int retainedLate = _buffer.CountBefore(threshold);
             if (retainedLate > 0)
             {
@@ -448,7 +448,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
             double headScheduleOffsetMs = _buffer.TryPeekFirstTimestamp(out long headTs)
                 ? ComputeScheduleOffsetMs(headTs)
                 : double.NaN;
-            Log.Debug(
+            Log.Verbose(
                 "PlaybackEngine: buffering complete ({Count} frames, head scheduleOffset={HeadScheduleOffsetMs:F1} ms, target={Target} ms); starting playback",
                 _buffer.Count, headScheduleOffsetMs, -_aheadTargetMs);
             TransitionTo(PlaybackState.Synchronized);
@@ -512,17 +512,17 @@ public sealed class PlaybackEngine : IAsyncDisposable
         // freshly-cleared renderer buffer with a stale _aheadTargetMs.
         if (_paused) return;
 
-        if (Log.IsEnabled(LogEventLevel.Debug))
+        if (Log.IsEnabled(LogEventLevel.Verbose))
         {
-            Log.Debug(
+            Log.Verbose(
                 "PlaybackEngine: precise-pacing dequeueScheduleOffset={DequeueMs:F1} ms, waitMs={WaitMs:F1}, postWaitScheduleOffset={PostMs:F1} ms (target={Target} ms)",
                 dequeueScheduleOffsetMs, waitMs, scheduleOffsetMs, -_aheadTargetMs);
         }
 
-        if (Log.IsEnabled(LogEventLevel.Debug))
+        if (Log.IsEnabled(LogEventLevel.Verbose))
         {
             long serverNowUs = _clock.UtcNowMicroseconds + (long)_clockOffset.TotalMicroseconds;
-            Log.Debug(
+            Log.Verbose(
                 "PlaybackEngine: render buffer={BufferFrames} frames, scheduleOffset={ScheduleOffsetMs:F1} ms " +
                 "(frameTs={FrameTs:F3} ms, estServerNow={ServerNowMs:F3} ms)",
                 _buffer.Count, scheduleOffsetMs,
@@ -553,9 +553,9 @@ public sealed class PlaybackEngine : IAsyncDisposable
                 "drift={DriftUsPerS:+0.0;-0.0} µs/s ±{DriftSigma:F1}, σ_offset={OffsetSigma:F1} µs",
                 step.PreClampRatio, rateRatio, driftUsPerS, driftStdDevUsPerS, offsetStdDevUs);
         }
-        if (resamplerSkipped && Log.IsEnabled(LogEventLevel.Debug))
+        if (resamplerSkipped && Log.IsEnabled(LogEventLevel.Verbose))
         {
-            Log.Debug(
+            Log.Verbose(
                 "PlaybackEngine: skipping resampler (σ_offset={OffsetSigmaUs:F1} µs > gate {GateUs:F0} µs)",
                 offsetStdDevUs, OffsetGateStdDevUs);
         }
@@ -565,9 +565,9 @@ public sealed class PlaybackEngine : IAsyncDisposable
         short[] resampled;
         if (!resamplerSkipped && Math.Abs(rateRatio - 1.0) > 1e-6)
         {
-            if (Log.IsEnabled(LogEventLevel.Debug))
+            if (Log.IsEnabled(LogEventLevel.Verbose))
             {
-                Log.Debug(
+                Log.Verbose(
                     "PlaybackEngine: resampling rateRatio={RateRatio:F6} " +
                     "(baseline={Baseline:F6}, trim={Trim:+0.000000;-0.000000}, " +
                     "scheduleOffset={ScheduleOffsetMs:F1} ms, adjustedOffset={AdjustedOffsetMs:F1} ms, " +
@@ -619,7 +619,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
             {
                 _aheadTargetMs  = Math.Max(_aheadTargetMs - RecoveryStepMs, TargetAheadMs);
                 _recoveryFrames = 0;
-                Log.Debug("PlaybackEngine: audio caught up; reducing ahead target to {AheadTargetMs} ms", _aheadTargetMs);
+                Log.Verbose("PlaybackEngine: audio caught up; reducing ahead target to {AheadTargetMs} ms", _aheadTargetMs);
             }
         }
 
@@ -633,7 +633,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
 
         if (_buffer.Count >= MinBufferFrames)
         {
-            Log.Debug("PlaybackEngine: recovered ({Count} frames buffered); resuming", _buffer.Count);
+            Log.Warning("PlaybackEngine: recovered ({Count} frames buffered); resuming", _buffer.Count);
             _engineMuted = false;
             ApplyMuteState();
             TransitionTo(PlaybackState.Buffering);
