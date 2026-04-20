@@ -33,9 +33,10 @@ internal sealed class FadingWaveProvider : IWaveProvider
     private FadeState _state;
     private int       _fadeFramesRemaining;
 
-    public WaveFormat WaveFormat   => _inner.WaveFormat;
-    public int        BufferLength => _inner.BufferLength;
+    public WaveFormat WaveFormat    => _inner.WaveFormat;
+    public int        BufferLength  => _inner.BufferLength;
     public int        BufferedBytes => _inner.BufferedBytes;
+    public bool       IsSilent      { get { lock (_lock) { return _state == FadeState.Silent; } } }
 
     public FadingWaveProvider(WaveFormat format, int fadeMs = 5)
     {

@@ -358,6 +358,7 @@ public sealed class PlaybackEngine : IAsyncDisposable
             _renderThread = null;
         }
 
+        try { await _renderer.FadeOutAsync().ConfigureAwait(false); } catch { }
         try { _renderer.Stop(); }    catch { }
         try { _renderer.Dispose(); } catch { }
         if (_timerResolutionRaised && OperatingSystem.IsWindows())
