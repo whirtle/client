@@ -5,6 +5,7 @@
     <Platform Name="arm64" />
   </Configurations>
   <Folder Name="/Solution items/">
+    <File Path=".claude/settings.json" />
     <File Path=".gitignore" />
     <File Path="CLAUDE.md" />
     <File Path="LICENSE" />
@@ -18,8 +19,6 @@
   <Project Path="tests/Whirtle.Client.IntegrationTests/Whirtle.Client.IntegrationTests.csproj" />
   <Project Path="tests/Whirtle.Client.Tests/Whirtle.Client.Tests.csproj" />
   <Project Path="UIClientPackaging/UIClientPackaging.wapproj" Type="c7167f0d-bc9f-4e6e-afe1-012c56b48db5" Id="729de123-dc56-41df-bfe4-6e85691f579a">
-    <Platform Solution="*|x86" Project="x86" />
-    <Platform Solution="*|x64" Project="x64" />
     <Platform Solution="*|arm64" Project="ARM64" />
     <Deploy />
   </Project>

@@ -77,11 +77,12 @@ public class NowPlayingStateTests
     }
 
     [Fact]
-    public void Update_NullableFields_AreNullWhenAbsent()
+    public void Update_DoesNotChangeFields_WhenAllAbsent()
     {
         var state = new NowPlayingState();
         state.Update(new ServerMetadataState());
 
+        // A completely absent update on a fresh state leaves all fields at their initial null.
         Assert.Null(state.Title);
         Assert.Null(state.Artist);
         Assert.Null(state.AlbumArtist);
@@ -91,6 +92,32 @@ public class NowPlayingStateTests
         Assert.Null(state.Track);
         Assert.Null(state.Repeat);
         Assert.Null(state.Shuffle);
+    }
+
+    [Fact]
+    public void Update_RetainsPreviousFields_WhenNewStateHasAbsentFields()
+    {
+        var state = new NowPlayingState();
+        state.Update(SampleState(title: "Old Title", artist: "Old Artist"));
+
+        // Only Title changes; Artist is absent → must be retained.
+        state.Update(new ServerMetadataState(Title: "New Title"));
+
+        Assert.Equal("New Title",  state.Title);
+        Assert.Equal("Old Artist", state.Artist);
+    }
+
+    [Fact]
+    public void Update_ClearsField_WhenNewStateExplicitlyNullsIt()
+    {
+        var state = new NowPlayingState();
+        state.Update(SampleState(title: "Title", artist: "Artist"));
+
+        // Artist is present as null → must be cleared.
+        state.Update(new ServerMetadataState(Title: "Title", Artist: null));
+
+        Assert.Null(state.Artist);
+        Assert.Equal("Title", state.Title);
     }
 
     [Fact]
