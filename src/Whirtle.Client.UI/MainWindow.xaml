@@ -23,6 +23,9 @@ Title="Whirtle">
             Grid.RowSpan="2"
             x:Name="TrayIcon"
             ToolTipText="{x:Bind NowPlayingViewModel.TrayTooltip, Mode=OneWay}">
+            <tb:TaskbarIcon.IconSource>
+                <BitmapImage UriSource="ms-appx:///Assets/whirtle.ico" />
+            </tb:TaskbarIcon.IconSource>
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
                     <MenuFlyoutItem Text="Show Whirtle" Click="TrayShow_Click" />
