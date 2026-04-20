@@ -1073,8 +1073,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         Volume = normalised;
         _settings.SaveVolume(normalised, IsMuted);
-        if (_controller is null || IsMuted) return;
-        await _controller.SetVolumeAsync(normalised);
+        var controller = _controller;
+        if (controller is null || IsMuted) return;
+        try { await controller.SetVolumeAsync(normalised); }
+        catch (InvalidOperationException) { /* transport disconnected between check and send */ }
     }
 
     [RelayCommand]

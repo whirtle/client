@@ -75,6 +75,7 @@ public sealed partial class NowPlayingPage : Page
     private async void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
         if (sender is not Slider slider) return;
+        if (!ViewModel.IsConnected) return;
         if (DateTimeOffset.UtcNow - _lastVolumeCommandSent < VolumeThrottle) return;
         _lastVolumeCommandSent = DateTimeOffset.UtcNow;
         await ViewModel.SetVolumeCommand.ExecuteAsync(slider.Value / 100.0);
