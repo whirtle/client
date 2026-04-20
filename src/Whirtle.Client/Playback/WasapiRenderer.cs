@@ -54,10 +54,13 @@ internal sealed class WasapiRenderer : IWasapiRenderer
             : new WasapiOut(NAudio.CoreAudioApi.AudioClientShareMode.Shared, latencyMs);
 
         _wasapiOut.Init(_provider);
+        _wasapiOut.PlaybackStopped += OnWasapiPlaybackStopped;
 
         // Scratch buffer for float conversion (2 × max Opus frame × channels × 4 bytes/float)
         _scratch = new byte[5760 * channels * sizeof(float)];
     }
+
+    public event EventHandler? RendererFailed;
 
     public void Start()
     {
@@ -67,8 +70,23 @@ internal sealed class WasapiRenderer : IWasapiRenderer
 
     public void Stop()
     {
+        _stopRequested = true;
         _wasapiOut.Stop();
         IsRunning = false;
+    }
+
+    private volatile bool _stopRequested;
+
+    private void OnWasapiPlaybackStopped(object? sender, NAudio.Wave.StoppedEventArgs e)
+    {
+        // Only surface the failure when WASAPI stopped on its own (device unplugged,
+        // endpoint disabled, session reset). Stops that we initiated via Stop/Dispose
+        // also fire this event with Exception == null — those are normal teardown.
+        if (_stopRequested || e.Exception is null)
+            return;
+
+        IsRunning = false;
+        RendererFailed?.Invoke(this, EventArgs.Empty);
     }
 
     public void ClearBuffer() => _provider.FadeOutAndClear();
@@ -96,6 +114,8 @@ internal sealed class WasapiRenderer : IWasapiRenderer
 
     public void Dispose()
     {
+        _stopRequested = true;
+        _wasapiOut.PlaybackStopped -= OnWasapiPlaybackStopped;
         _wasapiOut.Stop();
         _wasapiOut.Dispose();
     }
