@@ -289,13 +289,17 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         get
         {
-            if (ServerName is not null) return ServerName;
+            if (ServerName is not null)
+                return _currentServerId is { Length: >= 4 } id
+                    ? $"{ServerName} ({id[^4..]})"
+                    : ServerName;
             if (_settings.ConnectionMode == ConnectionMode.ServerInitiated)
             {
                 if (_settings.UserSelectedServerId is { } pinnedId)
                 {
                     var name = KnownServers.FirstOrDefault(s => s.ServerId == pinnedId)?.Name;
-                    return name ?? pinnedId;
+                    var label = name ?? pinnedId;
+                    return pinnedId.Length >= 4 ? $"{label} ({pinnedId[^4..]})" : label;
                 }
                 return "Automatically connect";
             }
@@ -435,9 +439,9 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
             // Use the server-reported name now that we have it; also cache it on
             // the matching saved-server entry so the picker shows it when offline.
-            ServerName = hello.Name ?? hello.ServerId ?? endpoint.DisplayName;
-            _settings.UpdateServerInfo(hello.ServerId, hello.Name, endpoint.Host, endpoint.Port);
             _currentServerId = hello.ServerId;
+            ServerName       = hello.Name ?? hello.ServerId ?? endpoint.DisplayName;
+            _settings.UpdateServerInfo(hello.ServerId, hello.Name, endpoint.Host, endpoint.Port);
 
             _syncer      = new ClockSynchronizer(_protocol);
             _controller  = new ControllerClient(_protocol);
@@ -509,13 +513,15 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            ServerName = null;
+            ServerName       = null;
+            _currentServerId = null;
             ConnectionStatus = "Disconnected";
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Connection to {Host}:{Port} failed", endpoint.Host, endpoint.Port);
-            ServerName = null;
+            ServerName       = null;
+            _currentServerId = null;
             ConnectionStatus = $"Connection failed: {ex.Message}";
             IsConnected = false;
         }
@@ -540,9 +546,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     [RelayCommand]
     private async Task SetAutoConnectModeAsync()
     {
-        _settings.ConnectionMode     = ConnectionMode.ServerInitiated;
+        _settings.ConnectionMode       = ConnectionMode.ServerInitiated;
         _settings.UserSelectedServerId = null;
-        ServerName = null;  // Update status bar immediately; don't wait for graceful close
+        ServerName       = null;  // Update status bar immediately; don't wait for graceful close
+        _currentServerId = null;
         StopServerInitiatedMode();
         await TearDownSessionAsync();
         ResetPlaybackState();
@@ -699,6 +706,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         IsConnected          = false;
         ConnectionStatus     = "Not connected";
         ServerName           = null;
+        _currentServerId     = null;
         CodecName            = null;
         SampleRate           = null;
         PositionSeconds      = 0;
@@ -1099,6 +1107,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
 
         _dispatcher.TryEnqueue(() =>
         {
+            _currentServerId = hello.ServerId;
             ServerName       = displayName;
             IsConnected      = true;
             ConnectionStatus = "Synchronizing with server";

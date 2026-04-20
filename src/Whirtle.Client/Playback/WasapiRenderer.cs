@@ -75,6 +75,16 @@ internal sealed class WasapiRenderer : IWasapiRenderer
         IsRunning = false;
     }
 
+    public async Task FadeOutAsync(CancellationToken cancellationToken = default)
+    {
+        _provider.FadeOutAndClear();
+        // Poll until the fade completes (typically one WASAPI period, ~10 ms).
+        // Cap at 100 ms so a stuck renderer never stalls shutdown indefinitely.
+        var deadline = Environment.TickCount64 + 100;
+        while (!_provider.IsSilent && Environment.TickCount64 < deadline)
+            await Task.Delay(5, CancellationToken.None).ConfigureAwait(false);
+    }
+
     private volatile bool _stopRequested;
 
     private void OnWasapiPlaybackStopped(object? sender, NAudio.Wave.StoppedEventArgs e)
