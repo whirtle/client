@@ -40,6 +40,13 @@ internal interface IWasapiRenderer : IDisposable
     void Start();
     void Stop();
 
+    /// <summary>
+    /// Fades the current output to silence over the provider's fade window and waits
+    /// for the hardware buffer to drain, then returns.  Call before <see cref="Stop"/>
+    /// so the DAC transitions cleanly instead of cutting off mid-waveform.
+    /// </summary>
+    Task FadeOutAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Writes interleaved 16-bit PCM samples to the hardware output buffer.</summary>
     void Write(ReadOnlySpan<short> samples);
 
