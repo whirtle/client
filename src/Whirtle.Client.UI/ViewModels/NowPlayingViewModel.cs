@@ -1264,8 +1264,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
                                 else if (!playing && _positionTimer.IsEnabled)
                                     _positionTimer.Stop();
 
-                                if (meta.Shuffle is { } shuffleActive) IsShuffleActive = shuffleActive;
-                                if (meta.Repeat  is { } repeatMode)   RepeatMode      = repeatMode;
+                                if (meta.Shuffle.IsSet && meta.Shuffle.Value is { } shuffleActive) IsShuffleActive = shuffleActive;
+                                if (meta.Repeat.IsSet  && meta.Repeat.Value  is { } repeatMode)   RepeatMode      = repeatMode;
                             });
                         }
                         if (msg.Controller is { } ctrl)

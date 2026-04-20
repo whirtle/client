@@ -94,7 +94,7 @@ public class ReceiveAllAsyncTests
 
         var pf  = Assert.IsType<ProtocolFrame>(frames[0]);
         var ssm = Assert.IsType<ServerStateMessage>(pf.Message);
-        Assert.Equal("Track", ssm.Metadata!.Title);
+        Assert.Equal("Track", ssm.Metadata!.Title.Value);
     }
 
     [Fact]
