@@ -123,7 +123,7 @@ public sealed class ProtocolClient : IAsyncDisposable
                 }
                 catch (JsonException ex)
                 {
-                    Log.Warning(ex, "{Tag:l}Skipping malformed message", _serverTag);
+                    Log.Warning(ex, "{Tag:l}Skipping malformed message: {Data:l}", _serverTag, System.Text.Encoding.UTF8.GetString(data));
                     continue;
                 }
                 if (msg is ServerTimeMessage)
