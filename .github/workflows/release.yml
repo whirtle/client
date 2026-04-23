@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags: ['rel-v*']
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    environment: release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Copy AppxPackage tasks into .NET SDK
+        shell: pwsh
+        run: |
+          $vsInstallPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $src = "$vsInstallPath\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage"
+          $sdkVer = (dotnet --version).Trim()
+          $dst = "C:\Program Files\dotnet\sdk\$sdkVer\Microsoft\VisualStudio\v18.0\AppxPackage"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Path "$src\*" -Destination $dst -Recurse
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Derive version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $v = '${{ github.ref_name }}' -replace '^rel-v',''
+          if ($v -notmatch '^\d+\.\d+\.\d+$') {
+            Write-Error "Tag '${{ github.ref_name }}' does not parse to MAJOR.MINOR.PATCH (got '$v')"
+          }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Build release artifacts
+        id: build
+        shell: pwsh
+        run: ./scripts/make-release-artifacts.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Whirtle ${{ steps.version.outputs.version }}
+          files: |
+            ${{ steps.build.outputs.bundle }}
+            ${{ steps.build.outputs.appinstaller }}
+          generate_release_notes: true
+          make_latest: true
