@@ -39,12 +39,15 @@ $buildScript = Join-Path $PSScriptRoot 'build-release.ps1'
 $buildArgs = @{}
 if ($SkipTests) { $buildArgs['SkipTests'] = $true }
 Write-Host "==> Invoking build-release.ps1"
-$builtBundle = & $buildScript @buildArgs | Select-Object -Last 1
+& $buildScript @buildArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-if (-not (Test-Path $builtBundle)) { Write-Error "build-release.ps1 did not produce a bundle" }
+
+$releaseDir = Join-Path $repoRoot 'UIClientPackaging\AppPackages\Release'
+$builtBundle = Get-ChildItem (Join-Path $releaseDir '*.msixbundle') -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+if (-not $builtBundle) { Write-Error "build-release.ps1 did not produce a bundle in $releaseDir" }
 
 # 3. Rename bundle to the version-less filename expected by the .appinstaller URI
-$releaseDir = Split-Path $builtBundle -Parent
 $finalBundle = Join-Path $releaseDir 'Whirtle.msixbundle'
 if (Test-Path $finalBundle) { Remove-Item $finalBundle -Force }
 Move-Item $builtBundle $finalBundle -Force
