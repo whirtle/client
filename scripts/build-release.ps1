@@ -74,6 +74,3 @@ Move-Item $bundle $dest -Force
 Write-Host ""
 Write-Host "==> Build complete."
 Write-Host "    bundle: $dest"
-
-# Emit the final bundle path so callers (release scripts, CI) can locate it.
-return $dest
