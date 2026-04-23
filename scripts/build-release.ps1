@@ -8,15 +8,28 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Locate MSBuild from the latest Visual Studio installation
+# Locate VS (for the AppxPackage MSBuild tasks) and signtool. We build via
+# `dotnet msbuild` so we get MSBuild 18 from the .NET SDK — the wapproj refuses
+# to load under MSBuild 17.
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) {
-    Write-Error "vswhere.exe not found. Install Visual Studio with the 'Desktop development with C++' or 'Universal Windows Platform development' workload."
+    Write-Error "vswhere.exe not found. Install Visual Studio with the 'Universal Windows Platform development' workload."
 }
-$vsInstall = & $vswhere -latest -requires Microsoft.Component.MSBuild -property installationPath
-$msbuild = "$vsInstall\MSBuild\Current\Bin\MSBuild.exe"
-if (-not (Test-Path $msbuild)) {
-    Write-Error "MSBuild.exe not found at: $msbuild"
+$vsInstall = & $vswhere -latest -property installationPath
+$appxSrc = "$vsInstall\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage"
+if (-not (Test-Path $appxSrc)) {
+    Write-Error "AppxPackage MSBuild tasks not found at $appxSrc. Install the VS 'Universal Windows Platform development' workload."
+}
+
+# Copy the AppxPackage tasks into the .NET SDK layout MSBuild 18 looks for
+# (idempotent). Required for wapproj builds under the .NET 10 SDK.
+$sdkVer = (dotnet --version).Trim()
+$dotnetRoot = if ($env:DOTNET_ROOT) { $env:DOTNET_ROOT } else { 'C:\Program Files\dotnet' }
+$appxDst = Join-Path $dotnetRoot "sdk\$sdkVer\Microsoft\VisualStudio\v18.0\AppxPackage"
+if (-not (Test-Path $appxDst)) {
+    Write-Host "==> Copying AppxPackage MSBuild tasks into .NET SDK ($sdkVer)"
+    New-Item -ItemType Directory -Force -Path $appxDst | Out-Null
+    Copy-Item -Path "$appxSrc\*" -Destination $appxDst -Recurse
 }
 
 # Run unit tests
@@ -29,7 +42,7 @@ if (-not $SkipTests) {
 
 # Restore packaging project (wapproj uses NuGet via MSBuild, not dotnet restore)
 Write-Host "==> Restoring UIClientPackaging"
-& $msbuild UIClientPackaging\UIClientPackaging.wapproj /t:Restore /p:Configuration=Release /verbosity:minimal
+dotnet msbuild UIClientPackaging\UIClientPackaging.wapproj /t:Restore /p:Configuration=Release /verbosity:minimal
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Locate signtool.exe from the Windows SDK
@@ -46,7 +59,7 @@ $signingMetadata = Resolve-Path "UIClientPackaging\trusted-signing.json"
 
 # Build a single multi-arch bundle (x64 + arm64)
 Write-Host "==> Building Release package (x64 + arm64)"
-& $msbuild UIClientPackaging\UIClientPackaging.wapproj `
+dotnet msbuild UIClientPackaging\UIClientPackaging.wapproj `
     /p:Configuration=Release `
     /p:Platform=x64 `
     /p:AppxBundle=Always `
