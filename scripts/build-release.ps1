@@ -1,6 +1,7 @@
 #!/usr/bin/env pwsh
-# Builds signed Release msixbundles for x64 and arm64.
-# Requires: Connect-AzAccount or Connect-AzAccount -ServicePrincipal (for Azure Trusted Signing credentials)
+# Builds a signed Release msixbundle containing x64 and arm64 payloads.
+# Requires: Connect-AzAccount (for Azure Trusted Signing credentials) or an ambient
+# Azure credential such as the one provided by azure/login@v2 in GitHub Actions.
 param(
     [switch]$SkipTests
 )
@@ -43,45 +44,36 @@ if (-not $dlib) { Write-Error "Azure.CodeSigning.Dlib.dll not found. Run restore
 
 $signingMetadata = Resolve-Path "UIClientPackaging\trusted-signing.json"
 
-# Build and sign package for each architecture
+# Build a single multi-arch bundle (x64 + arm64)
+Write-Host "==> Building Release package (x64 + arm64)"
+& $msbuild UIClientPackaging\UIClientPackaging.wapproj `
+    /p:Configuration=Release `
+    /p:Platform=x64 `
+    /p:AppxBundle=Always `
+    /p:AppxBundlePlatforms="x64|arm64" `
+    /p:UapAppxPackageBuildMode=SideloadOnly `
+    /verbosity:minimal
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+$bundle = Get-ChildItem "UIClientPackaging\AppPackages\**\UIClientPackaging_*.msixbundle" -Recurse |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+if (-not $bundle) { Write-Error "Could not find built msixbundle" }
+
+Write-Host "==> Signing $(Split-Path $bundle -Leaf)"
+& $signtool sign /v /fd SHA256 `
+    /tr http://timestamp.acs.microsoft.com /td SHA256 `
+    /dlib $dlib /dmdf $signingMetadata `
+    $bundle
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 $releaseDir = "UIClientPackaging\AppPackages\Release"
 New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
-$outputs = @{}
-foreach ($arch in @('x64', 'arm64')) {
-    Write-Host "==> Building Release package ($arch)"
-    & $msbuild UIClientPackaging\UIClientPackaging.wapproj `
-        /p:Configuration=Release `
-        /p:Platform=$arch `
-        /p:AppxBundle=Always `
-        /p:AppxBundlePlatforms=$arch `
-        /p:UapAppxPackageBuildMode=SideloadOnly `
-        /verbosity:minimal
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-    Write-Host "==> Signing ($arch)"
-    $bundle = Get-ChildItem "UIClientPackaging\AppPackages\**\UIClientPackaging_*_${arch}.msixbundle" -Recurse |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
-    if (-not $bundle) { Write-Error "Could not find built msixbundle for $arch" }
-
-    $renamed = $bundle -replace 'UIClientPackaging_', 'Whirtle_'
-    $renamedLeaf = Split-Path $renamed -Leaf
-    Write-Host "Renaming: $bundle"
-    Write-Host "      To: $renamedLeaf"
-    Rename-Item $bundle $renamedLeaf
-    $bundle = Join-Path (Split-Path $bundle -Parent) $renamedLeaf
-
-    & $signtool sign /v /fd SHA256 `
-        /tr http://timestamp.acs.microsoft.com /td SHA256 `
-        /dlib $dlib /dmdf $signingMetadata `
-        $bundle
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-    $dest = Join-Path $releaseDir (Split-Path $bundle -Leaf)
-    Move-Item $bundle $dest -Force
-    $outputs[$arch] = $dest
-}
+$dest = Join-Path $releaseDir (Split-Path $bundle -Leaf)
+Move-Item $bundle $dest -Force
 
 Write-Host ""
 Write-Host "==> Build complete."
-Write-Host "    x64:   $($outputs['x64'])"
-Write-Host "    arm64: $($outputs['arm64'])"
+Write-Host "    bundle: $dest"
+
+# Emit the final bundle path so callers (release scripts, CI) can locate it.
+return $dest
