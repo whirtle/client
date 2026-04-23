@@ -40,9 +40,18 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-# Restore packaging project (wapproj uses NuGet via MSBuild, not dotnet restore)
-Write-Host "==> Restoring UIClientPackaging"
-dotnet msbuild UIClientPackaging\UIClientPackaging.wapproj /t:Restore /p:Configuration=Release /verbosity:minimal
+# Restore + build the packaging project in a single invocation.
+# `-restore` runs MSBuild's Restore target first (which pulls NuGet packages for
+# the wapproj — `dotnet restore` silently skips wapprojs).
+Write-Host "==> Building Release package (x64 + arm64)"
+dotnet msbuild UIClientPackaging\UIClientPackaging.wapproj `
+    -restore `
+    -p:Configuration=Release `
+    -p:Platform=x64 `
+    -p:AppxBundle=Always `
+    -p:AppxBundlePlatforms="x64|arm64" `
+    -p:UapAppxPackageBuildMode=SideloadOnly `
+    -v:minimal
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Locate signtool.exe from the Windows SDK
@@ -53,20 +62,9 @@ if (-not $signtool) { Write-Error "signtool.exe not found. Install the Windows S
 # Locate the Trusted Signing dlib from the restored NuGet package
 $dlib = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.trusted.signing.client\*\bin\x64\Azure.CodeSigning.Dlib.dll" |
     Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
-if (-not $dlib) { Write-Error "Azure.CodeSigning.Dlib.dll not found. Run restore first." }
+if (-not $dlib) { Write-Error "Azure.CodeSigning.Dlib.dll not found after restore." }
 
 $signingMetadata = Resolve-Path "UIClientPackaging\trusted-signing.json"
-
-# Build a single multi-arch bundle (x64 + arm64)
-Write-Host "==> Building Release package (x64 + arm64)"
-dotnet msbuild UIClientPackaging\UIClientPackaging.wapproj `
-    /p:Configuration=Release `
-    /p:Platform=x64 `
-    /p:AppxBundle=Always `
-    /p:AppxBundlePlatforms="x64|arm64" `
-    /p:UapAppxPackageBuildMode=SideloadOnly `
-    /verbosity:minimal
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $bundle = Get-ChildItem "UIClientPackaging\AppPackages\**\UIClientPackaging_*.msixbundle" -Recurse |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
