@@ -1,0 +1,57 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  integration-tests:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Pre-install sendspin
+        run: uv tool install sendspin
+
+      - name: Verify sendspin server starts
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath uvx -ArgumentList 'sendspin','serve','--demo' -PassThru -WindowStyle Hidden
+          try {
+            $deadline = (Get-Date).AddSeconds(15)
+            $ready = $false
+            while ((Get-Date) -lt $deadline) {
+              try {
+                $tcp = [System.Net.Sockets.TcpClient]::new()
+                $tcp.ConnectAsync('127.0.0.1', 8927).Wait(500) | Out-Null
+                if ($tcp.Connected) { $ready = $true; $tcp.Close(); break }
+              } catch { }
+              Start-Sleep -Milliseconds 200
+            }
+            if (-not $ready) { throw 'sendspin server did not start listening on port 8927' }
+          } finally {
+            if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          }
+
+      - name: Restore
+        run: |
+          dotnet restore src/Whirtle.Client/Whirtle.Client.csproj
+          dotnet restore tests/Whirtle.Client.IntegrationTests/Whirtle.Client.IntegrationTests.csproj
+
+      - name: Build
+        run: dotnet build tests/Whirtle.Client.IntegrationTests/Whirtle.Client.IntegrationTests.csproj --no-restore --configuration Release
+
+      - name: Run integration tests
+        run: dotnet test tests/Whirtle.Client.IntegrationTests/Whirtle.Client.IntegrationTests.csproj --no-build --no-restore --configuration Release --logger "console;verbosity=detailed"
