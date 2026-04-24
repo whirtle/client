@@ -58,8 +58,6 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Whirtle ${{ steps.version.outputs.version }}
-          files: |
-            ${{ steps.build.outputs.bundle }}
-            ${{ steps.build.outputs.appinstaller }}
+          files: ${{ steps.build.outputs.artifacts }}
           generate_release_notes: true
           make_latest: true

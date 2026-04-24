@@ -2,12 +2,12 @@
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
     Version="{VERSION}"
-    Uri="https://github.com/{OWNER}/{REPO}/releases/latest/download/Whirtle.appinstaller">
+    Uri="https://github.com/{OWNER}/{REPO}/releases/latest/download/Whirtle-{ARCH}.appinstaller">
   <MainBundle
     Name="app.whirtle.client"
     Version="{VERSION}"
     Publisher="CN=Steven Peterson, O=Steven Peterson, L=Bloomington, S=Minnesota, C=US"
-    Uri="https://github.com/{OWNER}/{REPO}/releases/latest/download/Whirtle.msixbundle" />
+    Uri="https://github.com/{OWNER}/{REPO}/releases/latest/download/Whirtle-{ARCH}.msixbundle" />
   <UpdateSettings>
     <OnLaunch HoursBetweenUpdateChecks="24" />
     <AutomaticBackgroundTask />
