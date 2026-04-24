@@ -16,20 +16,27 @@ if (-not (Test-Path $vswhere)) {
     Write-Error "vswhere.exe not found. Install Visual Studio with the 'Universal Windows Platform development' workload."
 }
 $vsInstall = & $vswhere -latest -property installationPath
-$appxSrc = "$vsInstall\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage"
-if (-not (Test-Path $appxSrc)) {
-    Write-Error "AppxPackage MSBuild tasks not found at $appxSrc. Install the VS 'Universal Windows Platform development' workload."
-}
 
-# Copy the AppxPackage tasks into the .NET SDK layout MSBuild 18 looks for
-# (idempotent). Required for wapproj builds under the .NET 10 SDK.
+# Copy the MSBuild extensions needed to build a wapproj into the .NET SDK
+# layout (idempotent). Required under the .NET 10 SDK (MSBuild 18) because
+# VS 2022 only ships MSBuild 17 and the wapproj refuses to load under 17.
 $sdkVer = (dotnet --version).Trim()
 $dotnetRoot = if ($env:DOTNET_ROOT) { $env:DOTNET_ROOT } else { 'C:\Program Files\dotnet' }
-$appxDst = Join-Path $dotnetRoot "sdk\$sdkVer\Microsoft\VisualStudio\v18.0\AppxPackage"
-if (-not (Test-Path $appxDst)) {
-    Write-Host "==> Copying AppxPackage MSBuild tasks into .NET SDK ($sdkVer)"
-    New-Item -ItemType Directory -Force -Path $appxDst | Out-Null
-    Copy-Item -Path "$appxSrc\*" -Destination $appxDst -Recurse
+$sdkMsbuildRoot = Join-Path $dotnetRoot "sdk\$sdkVer"
+
+$msbuildExtensions = @(
+    @{ Src = "$vsInstall\MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage"; Dst = Join-Path $sdkMsbuildRoot 'Microsoft\VisualStudio\v18.0\AppxPackage' },
+    @{ Src = "$vsInstall\MSBuild\Microsoft\DesktopBridge";                  Dst = Join-Path $sdkMsbuildRoot 'Microsoft\DesktopBridge' }
+)
+foreach ($ext in $msbuildExtensions) {
+    if (-not (Test-Path $ext.Src)) {
+        Write-Error "Required MSBuild extension not found at $($ext.Src). Install the VS 'Universal Windows Platform development' workload."
+    }
+    if (-not (Test-Path $ext.Dst)) {
+        Write-Host "==> Copying $(Split-Path $ext.Src -Leaf) MSBuild extension into .NET SDK ($sdkVer)"
+        New-Item -ItemType Directory -Force -Path $ext.Dst | Out-Null
+        Copy-Item -Path "$($ext.Src)\*" -Destination $ext.Dst -Recurse
+    }
 }
 
 # Run unit tests
