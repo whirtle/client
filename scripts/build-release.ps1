@@ -68,8 +68,19 @@ foreach ($arch in @('x64', 'arm64')) {
         -p:AppxBundle=Always `
         -p:AppxBundlePlatforms=$arch `
         -p:UapAppxPackageBuildMode=SideloadOnly `
+        -p:UseAppHost=true `
+        -p:SelfContained=false `
         -v:minimal
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    if ($LASTEXITCODE -ne 0) {
+        $publishDir = "src\Whirtle.Client.UI\bin\$arch\Release\net10.0-windows10.0.19041.0\win-$arch\msixpublish"
+        if (Test-Path $publishDir) {
+            Write-Host "==> Contents of $publishDir after failed build:"
+            Get-ChildItem $publishDir -Recurse -Force | Select-Object -ExpandProperty FullName | ForEach-Object { Write-Host "    $_" }
+        } else {
+            Write-Host "==> $publishDir does not exist"
+        }
+        exit $LASTEXITCODE
+    }
 
     # Locate the Trusted Signing dlib (restored into ~/.nuget/packages by -restore above).
     $dlib = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.trusted.signing.client\*\bin\x64\Azure.CodeSigning.Dlib.dll" |
